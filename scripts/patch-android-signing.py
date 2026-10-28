@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Qalb CI/CD — android/app/build.gradle me release signing config inject karta hai.
 # key.properties (workflow me bana) se keystore load hota hai.
-# Idempotent: agar pehle se patch hai to kuch nahi karta.
+# Idempotent: jo pehle se hai wo skip karta hai, jo missing hai wo add karta hai.
 
 import re
 import sys
@@ -38,34 +38,54 @@ def main() -> int:
         return 1
 
     src = GRADLE.read_text()
-    if "key.properties" in src and "signingConfigs.release" in src:
-        print("[patch] signing config pehle se maujood hai — skip")
-        return 0
+    changed = False
 
     # 1) keystore properties load block — plugin line ke baad
-    m = re.search(r"^apply plugin: 'com\.android\.application'.*$", src, re.M)
-    if not m:
-        print("[patch] com.android.application plugin line nahi mili", file=sys.stderr)
-        return 1
     if "keystoreProperties" not in src:
+        m = re.search(r"^apply plugin: 'com\.android\.application'.*$", src, re.M)
+        if not m:
+            print("[patch] com.android.application plugin line nahi mili", file=sys.stderr)
+            return 1
         src = src[: m.end()] + "\n" + LOAD_BLOCK + src[m.end():]
+        changed = True
 
     # 2) signingConfigs.release — android { block ke andar
-    m = re.search(r"^android \{$", src, re.M)
-    if not m:
-        print("[patch] android { block nahi mila", file=sys.stderr)
-        return 1
     if "signingConfigs {" not in src:
+        m = re.search(r"^android \{$", src, re.M)
+        if not m:
+            print("[patch] android { block nahi mila", file=sys.stderr)
+            return 1
         src = src[: m.end()] + "\n" + SIGNING_CONFIG_BLOCK + src[m.end():]
+        changed = True
 
-    # 3) release buildType → signingConfig release
-    src = src.replace(
-        "signingConfig signingConfigs.debug",
-        "signingConfig signingConfigs.release",
-    )
+    # 3) release buildType ko signingConfig release dena
+    #    Capacitor 8 template me 'signingConfig signingConfigs.debug' line
+    #    hoti hi nahi — isliye dono cases handle karo:
+    if "signingConfig signingConfigs.release" not in src:
+        if "signingConfig signingConfigs.debug" in src:
+            # purana template: debug -> release replace
+            src = src.replace(
+                "signingConfig signingConfigs.debug",
+                "signingConfig signingConfigs.release",
+            )
+        else:
+            # naya template: release { ke andar khud insert karo
+            src, n = re.subn(
+                r"(buildTypes \{\s*\n\s*release \{)",
+                r"\1\n            signingConfig signingConfigs.release",
+                src,
+                count=1,
+            )
+            if n == 0:
+                print("[patch] buildTypes.release block nahi mila", file=sys.stderr)
+                return 1
+        changed = True
 
-    GRADLE.write_text(src)
-    print("[patch] release signing config inject ho gaya")
+    if changed:
+        GRADLE.write_text(src)
+        print("[patch] release signing config inject ho gaya")
+    else:
+        print("[patch] signing config pehle se maujood hai — skip")
     return 0
 
 
