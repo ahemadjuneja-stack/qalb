@@ -42,6 +42,9 @@ env:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # gh release create + auto-update publish ke liye write permission chahiye
+    permissions:
+      contents: write
     steps:
       # ── 1. Checkout + environment ─────────────────────────────────
       - name: Checkout
@@ -53,11 +56,12 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Java 17 (Android build + keytool)
+      # Capacitor 8 ke liye JDK 21 ZAROORI hai (library VERSION_21 target karti hai)
+      - name: Setup Java 21 (Android build + keytool)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Install dependencies
         run: npm ci || npm install
