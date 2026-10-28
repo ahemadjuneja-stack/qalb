@@ -156,14 +156,14 @@ jobs:
               -keyalg RSA -keysize 2048 -validity 10000 \
               -storetype PKCS12 \
               -storepass qalb-auto-store-2026 \
-              -keypass qalb-auto-key-2026 \
+              -keypass qalb-auto-store-2026 \
               -dname "CN=Qalb App, OU=Qalb, O=Qalb, L=Karachi, C=PK"
             echo "Signing: keystore Firestore ci_private/keystore me save ho rahi hai..."
             jq -n --arg b64 "$(base64 -w0 "$KS")" \
               '{fields: {
                  keystoreBase64: {stringValue: $b64},
                  storePassword:  {stringValue: "qalb-auto-store-2026"},
-                 keyPassword:    {stringValue: "qalb-auto-key-2026"},
+                 keyPassword:    {stringValue: "qalb-auto-store-2026"},
                  keyAlias:       {stringValue: "qalb"},
                  updatedAt:      {timestampValue: (now | todateiso8601)}
                }}' > /tmp/ks-doc.json
@@ -184,7 +184,7 @@ jobs:
           storeFile=qalb-upload.keystore
           storePassword=qalb-auto-store-2026
           keyAlias=qalb
-          keyPassword=qalb-auto-key-2026
+          keyPassword=qalb-auto-store-2026
           EOF
 
       - name: Inject signing config into build.gradle
