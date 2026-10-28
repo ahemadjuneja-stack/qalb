@@ -37,7 +37,7 @@ public class UpdaterPlugin extends Plugin {
     private volatile HttpURLConnection activeConnection = null;
 
     private File apkDir() {
-        Context ctx = requireContext();
+        Context ctx = getContext();
         File dir = ctx.getExternalFilesDir("apk");
         if (dir == null) dir = new File(ctx.getFilesDir(), "apk");
         if (!dir.exists()) dir.mkdirs();
@@ -188,7 +188,7 @@ public class UpdaterPlugin extends Plugin {
         }
         try {
             Activity activity = getActivity();
-            Context ctx = activity != null ? activity : requireContext();
+            Context ctx = activity != null ? activity : getContext();
             File apk = new File(path);
             if (!apk.exists()) {
                 call.reject("APK file missing: " + path);
@@ -229,9 +229,9 @@ public class UpdaterPlugin extends Plugin {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Intent i = new Intent(
                         android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + requireContext().getPackageName()));
+                        Uri.parse("package:" + getContext().getPackageName()));
                 i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                requireContext().startActivity(i);
+                getContext().startActivity(i);
             }
             call.resolve();
         } catch (Exception e) {
