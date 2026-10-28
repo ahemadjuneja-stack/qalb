@@ -2,8 +2,9 @@
 import { APP_BUILD } from '@/lib/app-build'
 
 // Firestore project id — APK me REST API se version/products/playlists isi se aate hain
-// (GitHub Actions build me ye env se set hota hai — aapke GCP project ka id)
-const FB_PROJECT = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'shivam-2bace'
+// (GitHub Actions build me ye service-account JSON se AUTO set hota hai —
+//  yahan ka default sirf local dev ke liye hai; apna naya project id chaho to badal dein)
+const FB_PROJECT = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'qalb-app'
 
 export const QALB = {
   name: 'Qalb',

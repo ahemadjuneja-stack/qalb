@@ -24,12 +24,14 @@ app ko "naya update available" dikhta hai → user tap kare, APK install.
 
 ---
 
-## Part A — Firestore Database (Firebase console me, ~5 minute)
+## Part A — Naya Firebase Project (~5 minute)
 
-1. [console.firebase.google.com](https://console.firebase.google.com) → apna project kholo
-   (e.g. `Shivam` / `shivam-2bace`)
-2. Left menu → **Build → Firestore Database** → **Create database** → **Production mode** →
-   region: `asia-south1` (ya jo chale) → **Enable**
+1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project**
+   → naam: `qalb-app` (ya jo chaho) → **Create**
+   *(ye bilkul alag naya project hoga — purane "Shivam" / "My First Project" projects
+   ko choona nahi hai, kuch mix nahi hoga)*
+2. Is naye project me: Left menu → **Build → Firestore Database** → **Create database** →
+   **Production mode** → region: `asia-south1` (ya jo chale) → **Enable**
 3. **Rules** tab me yeh paste karein (sirf public READ, likhna sirf service account se):
 
 ```
@@ -54,20 +56,26 @@ service cloud.firestore {
 
 ## Part B — Service Account JSON → GitHub Secret (~5 minute)
 
-### B1. JSON key download karein (GCP console)
+### B1. JSON key download karein
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → upar project select:
-   apna project (e.g. `Shivam` / `shivam-2bace`)
+**Aasan tareeqa (Firebase console se, phone pe best):**
+
+1. [console.firebase.google.com](https://console.firebase.google.com) → **naya Qalb project**
+   select karein
+2. Upar ⚙️ **Project settings → Service accounts** → **Generate new private key** →
+   **Generate key** → JSON file download ho jayegi
+
+**Ya GCP console se:**
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → upar project selector se
+   **naya Qalb project** select karein
 2. Left menu ☰ → **IAM & Admin → Service Accounts**
-3. List me `firebase-adminsdk-fbsvc@<project-id>.iam.gserviceaccount.com` pe click karein
-   *(ye account Firebase banate waqt khud bana hota hai — isme **Firebase Admin** +
-   **Storage Admin** roles pehle se hote hain, kuch add karne ki zaroorat nahi)*
+3. `firebase-adminsdk-fbsvc@<naya-project-id>.iam.gserviceaccount.com` pe click karein
+   *(ye account Firebase project banne pe khud bana hota hai — Firebase Admin +
+   Storage Admin roles pehle se hote hain)*
 4. Upar **KEYS** tab → **ADD KEY → Create new key** → **JSON** → **CREATE**
-5. JSON file download ho jayegi — **is file ko kahin commit/upload nahi karna!**
 
-> Agar aap GCP → IAM & Admin → Service Accounts me ye account na dekhein to Firebase
-> Console → ⚙️ Project settings → **Service accounts** → **Generate new private key**
-> se bhi JSON mil jati hai.
+> ⚠️ JSON file ko kahin commit/upload NAHI karna — sirf GitHub Secret me paste hogi (B2).
 
 ### B2. GitHub Secret me paste karein
 
