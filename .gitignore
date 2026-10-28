@@ -52,3 +52,12 @@ prompt
 server.log
 # Skills directory
 /skills/
+# ── Sandbox / local — GitHub pe push NAHI honge ──
+.env
+.env.local
+/upload/
+/download/
+/db/
+*.db
+*.sqlite
+.api-routes-backup
