@@ -1,11 +1,15 @@
 'use client'
 
 // Qalb — Step 5: In-App Auto Updater Hook
-// Firestore (yahan /api/app-version) se latest version compare karta hai.
-// Version mismatch par update prompt dikhta hai; native build me APK install intent.
+// Version check ki 2 raahein:
+//   • Native APK → Firestore REST DIRECT (appVersions/latest) — server ki zaroorat nahi
+//   • Web preview → /api/app-version (Prisma mirror), fallback Firestore REST
+// Version mismatch par update prompt dikhta hai; native me APK install intent.
 
 import { useCallback, useEffect, useState } from 'react'
 import { QALB } from '@/lib/qalb'
+import { fetchAppVersionFromFirestore } from '@/lib/remote-data'
+import { isNativeCapacitor } from '@/lib/downloads'
 import type { AppVersionInfo } from '@/lib/types'
 
 interface UseAppUpdateReturn {
@@ -26,10 +30,25 @@ export function useAppUpdate(autoCheck = false): UseAppUpdateReturn {
   const checkForUpdate = useCallback(async (): Promise<AppVersionInfo | null> => {
     setChecking(true)
     try {
-      const res = await fetch('/api/app-version', { cache: 'no-store' })
-      if (!res.ok) return null
-      const latest = (await res.json()) as AppVersionInfo
-      if (latest.versionCode > QALB.currentVersionCode) {
+      let latest: AppVersionInfo | null = null
+
+      if (isNativeCapacitor()) {
+        // APK → Firestore REST direct (offline of hosted backend bhi update milta hai)
+        latest = await fetchAppVersionFromFirestore()
+      }
+
+      if (!latest) {
+        // web preview / hosted API path
+        const res = await fetch(`${QALB.apiBase}/api/app-version`, { cache: 'no-store' })
+        if (res.ok) latest = (await res.json()) as AppVersionInfo
+      }
+
+      if (!latest) {
+        // last resort — Firestore (agar API deploy nahi hai magar Firebase hai)
+        latest = await fetchAppVersionFromFirestore()
+      }
+
+      if (latest && latest.versionCode > QALB.currentVersionCode) {
         setUpdate(latest)
         return latest
       }

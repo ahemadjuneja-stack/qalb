@@ -7,6 +7,7 @@ import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play } from 'lucid
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { usePlayerStore } from '@/lib/player-store'
+import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
 
@@ -32,9 +33,9 @@ export function HomeView() {
   const { toast } = useToast()
 
   useEffect(() => {
-    fetch('/api/playlists')
-      .then((r) => r.json())
-      .then((d) => setPlaylists(d.playlists ?? []))
+    // hosted API pehle, APK me Firestore REST fallback (remote-data.ts)
+    fetchPlaylistsSmart()
+      .then((p) => setPlaylists(p))
       .catch(() => setPlaylists([]))
   }, [])
 

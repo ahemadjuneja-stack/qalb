@@ -1,4 +1,5 @@
 // Qalb — app-wide constants
+import { APP_BUILD } from '@/lib/app-build'
 
 export const QALB = {
   name: 'Qalb',
@@ -6,10 +7,18 @@ export const QALB = {
   // Store: WhatsApp ordering number (yahan apna business number daalein)
   whatsappNumber: '923001234567',
   // In-app updater: current running build (CI/CD isse compare karta hai)
-  currentVersionCode: 1,
-  currentVersionName: '1.0.0',
+  // GitHub Actions har build pe app-build.ts generate karta hai (versionCode = run_number)
+  currentVersionCode: APP_BUILD.versionCode,
+  currentVersionName: APP_BUILD.versionName,
   // GCS bucket jahan GitHub Actions signed APK upload karta hai
   apkBucketUrl: 'https://storage.googleapis.com/qalb-builds/releases',
+
+  // ── Backend wiring (APK me Firebase direct + hosted API dono support) ──
+  // Hosted web backend ka base URL (empty = same-origin, web preview me aisa hi)
+  // APK build me GitHub repo VARIABLE API_BASE_URL set hota hai
+  apiBase: (process.env.NEXT_PUBLIC_API_BASE ?? '').replace(/\/$/, ''),
+  // Firestore project id — APK me REST API se version/products/playlists isi se aate hain
+  firebaseProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'qalb-app',
 } as const
 
 export const PRAYER_CITIES = [

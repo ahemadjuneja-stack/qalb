@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Star, MessageCircle, PackageX, BadgePercent } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { fetchProductsSmart } from '@/lib/remote-data'
 import { STORE_CATEGORIES, QALB } from '@/lib/qalb'
 import type { QalbProduct } from '@/lib/types'
 
@@ -19,9 +20,9 @@ export function StoreView() {
   const { toast } = useToast()
 
   useEffect(() => {
-    fetch('/api/products')
-      .then((r) => r.json())
-      .then((d) => setProducts(d.products ?? []))
+    // hosted API pehle, APK me Firestore REST fallback (remote-data.ts)
+    fetchProductsSmart()
+      .then((p) => setProducts(p))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false))
   }, [])
