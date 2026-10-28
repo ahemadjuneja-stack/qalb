@@ -1,14 +1,14 @@
-# Qalb — CI/CD Setup Guide (Firebase + GitHub Actions + Cloud Storage)
+# Qalb — CI/CD Setup Guide (Firebase + GitHub Releases)
 
-**Ek line me:** `git push origin main` → GitHub Actions signed APK banata hai → Google Cloud
-Storage pe upload hota hai → Firestore me naya version publish hota hai → aapke installed
-app ko "naya update available" dikhta hai → user tap kare, APK install.
+**Ek line me:** `git push origin main` → GitHub Actions signed APK banata hai → **GitHub
+Release** me attach hoti hai → Firestore me naya version + download link publish hota hai
+→ aapke installed app ko "naya update available" dikhta hai → user tap kare, APK install.
 
 ```
-┌─────────────┐     ┌──────────────────┐     ┌───────────────┐     ┌────────────┐
-│  git push    │ ──▶ │ GitHub Actions   │ ──▶ │ Cloud Storage │ ──▶ │ Firestore  │
-│  (main)      │     │ signed APK build │     │ (APK file)    │     │ appVersions│
-└─────────────┘     └──────────────────┘     └───────────────┘     └─────┬──────┘
+┌─────────────┐     ┌──────────────────┐     ┌────────────────┐     ┌────────────┐
+│  git push    │ ──▶ │ GitHub Actions   │ ──▶ │ GitHub Release │ ──▶ │ Firestore  │
+│  (main)      │     │ signed APK build │     │ (APK hosting)  │     │ appVersions│
+└─────────────┘     └──────────────────┘     └────────────────┘     └─────┬──────┘
                                                                           │
                                               ┌───────────────────────────▼──────┐
                                               │ Installed Qalb app (APK)         │
@@ -17,10 +17,11 @@ app ko "naya update available" dikhta hai → user tap kare, APK install.
                                               └──────────────────────────────────┘
 ```
 
-> 🪄 **Naya (auto-magic) version:** Ab pipeline khud GCS bucket banati hai, khud signing
-> keystore generate + save karti hai, aur Firebase project id bhi khud detect karti hai.
-> Aapko sirf **2 cheezein** manually karni hain — **Firestore Database** (Part A) aur
-> **1 GitHub Secret** (Part B). Baaki sab automatic!
+> 🪄 **Auto-magic version:** Pipeline khud signing keystore generate + save karti hai,
+> Firebase project id khud detect karti hai, APK khud GitHub Release pe daal deti hai.
+> **GCS bucket / Cloud Storage kahin use nahi hota** (billing ke jhanjhat se mukti) —
+> sab **GitHub Releases** pe, bilkul free. Aapko sirf **2 cheezein** manually karni hain —
+> **Firestore Database** (Part A) aur **1 GitHub Secret** (Part B). Baaki sab automatic!
 
 ---
 
@@ -32,17 +33,20 @@ app ko "naya update available" dikhta hai → user tap kare, APK install.
    ko choona nahi hai, kuch mix nahi hoga)*
 2. Is naye project me: Left menu → **Build → Firestore Database** → **Create database** →
    **Production mode** → region: `asia-south1` (ya jo chale) → **Enable**
-3. **Rules** tab me yeh paste karein (sirf public READ, likhna sirf service account se):
+3. **Rules** tab me repo ki `firestore.rules` file ka content paste karein
+   (sirf public READ, `ci_private` poora blocked, likhna sirf service account se):
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /appVersions/{doc}    { allow read: if true; allow write: if false; }
-    match /playlists/{doc}      { allow read: if true; allow write: if false; }
-    match /tracks/{doc}         { allow read: if true; allow write: if false; }
-    match /products/{doc}       { allow read: if true; allow write: if false; }
+    match /appVersions/{doc}    { allow read: if true;  allow write: if false; }
+    match /playlists/{doc}      { allow read: if true;  allow write: if false; }
+    match /tracks/{doc}         { allow read: if true;  allow write: if false; }
+    match /products/{doc}       { allow read: if true;  allow write: if false; }
+    match /ci_private/{doc}     { allow read: if false; allow write: if false; }
     match /users/{uid}          { allow read, write: if request.auth != null; }
+    match /{document=**}        { allow read, write: if false; }
   }
 }
 ```
@@ -51,6 +55,11 @@ service cloud.firestore {
 
 > APK ke andar ka app isi Firestore se version + playlists + products uthata hai —
 > koi alag server chalana zaroori NAHI hai.
+
+> 📌 **Firestore me sirf text/records** — playlists, tracks ki list, products, orders,
+> version info. Ek doc 1 MiB se chhota. **Audio/images/video Firestore me kabhi nahi** —
+> unhe file storage me rakho aur Firestore me sirf unka URL. Reads kam karne ke liye
+> queries me `limit()` lagao, poora collection bar bar mat padho.
 
 ---
 
@@ -71,8 +80,6 @@ service cloud.firestore {
    **naya Qalb project** select karein
 2. Left menu ☰ → **IAM & Admin → Service Accounts**
 3. `firebase-adminsdk-fbsvc@<naya-project-id>.iam.gserviceaccount.com` pe click karein
-   *(ye account Firebase project banne pe khud bana hota hai — Firebase Admin +
-   Storage Admin roles pehle se hote hain)*
 4. Upar **KEYS** tab → **ADD KEY → Create new key** → **JSON** → **CREATE**
 
 > ⚠️ JSON file ko kahin commit/upload NAHI karna — sirf GitHub Secret me paste hogi (B2).
@@ -90,47 +97,47 @@ service cloud.firestore {
 | Variable | Value |
 |---|---|
 | `API_BASE_URL` | Hosted backend (e.g. `https://qalb.vercel.app`) — **khali chhod sakte hain** |
-| `FIREBASE_PROJECT_ID` | Zaroorat nahi — workflow JSON se khud detect karta hai |
 
 ---
 
-## Part C — GCS bucket ❌ → AB AUTOMATIC
+## Part C — APK hosting: GitHub Releases ❌ → AB AUTOMATIC
 
-Pehle manually bucket banana padta tha. **Ab workflow khud karti hai:**
-- Pehli build pe `gs://qalb-builds-<project-id>` bucket khud ban jata hai (asia-south1)
-- APK downloads ke liye public read khud set hota hai
-- Naam me `<project-id>` isliye hai ke bucket naam globally unique ho — koi clash nahi
+APK **GitHub Release** me host hoti hai — repo public hai to download link koi bhi khol
+sakta hai (bina login, bina billing):
 
-Aapko kuch nahi karna. ✅
+- Har build ka tag: `v1.0.0-<run_number>` (jaise `v1.0.0-27`)
+- Asset: `qalb-v1.0.0.apk`
+- Download link pattern: `https://github.com/<owner>/<repo>/releases/download/<tag>/qalb-v1.0.0.apk`
+- Yahi link Firestore `appVersions/latest.apkUrl` me jata hai — app isi se update download karti hai
+
+> ⚠️ **Repo PUBLIC hona zaroori hai!** Private repo me release download link bina login
+> ke 404 deta hai. Check karo: repo → **Settings → General → neeche Danger Zone →
+> Change visibility → Public**.
 
 ---
 
-## Part D — Signing Keystore ❌ → AB AUTOMATIC
+## Part D — Signing Keystore ❌ → AB AUTOMATIC (Firestore me)
 
-Pehle keytool se keystore banake base64 karke 4 secrets daalne padte the. **Ab workflow
-khud karti hai:**
+Pehle keystore GCS bucket me jati thi — ab **Firestore ke private doc
+`ci_private/keystore`** me base64 hoti hai:
+
 - Pehli build pe keystore generate hoti hai (`keytool`, PKCS12, 10000 din valid)
-- Private bucket `gs://qalb-keys-<project-id>/keys/keystore.jks` me save hoti hai
-- Har agli build **wahi keystore** download karti hai → same signature → app updates
+- Base64 hoke `ci_private/keystore` doc me save hoti hai (~5KB — 1MiB limit se door)
+- Har agli build **wahi keystore** wapas uthati hai → same signature → app updates
   smoothly install hote hain
+- `ci_private` collection **security rules me fully blocked** hai — client se koi nahi
+  padh sakta, sirf service account (admin access) hi kar sakta hai
 
-> ⚠️ **Important:** Private bucket (`qalb-keys-...`) ko kabhi public NAHI karna — wahi
-> aapki app ki asli chaabi hai. Use kho kar dobara banane par purane users ke phones me
-> update install nahi hogi (signature mismatch).
+> ⚠️ **Important:** Ye doc kabhi delete mat karna aur rules me `ci_private` kabhi open
+> mat karna — wahi aapki app ki asli chaabi hai. Kho gayi to purane users ke phones me
+> update install nahi hogi (signature mismatch). Backup chahiye to Firestore console se
+> doc export karke kahin safe rakho.
 
 ### (Optional / Advanced) Apna keystore dena ho to
 
-Chaho to apne PC pe `keytool -genkeypair` se keystore banake ye 4 secrets bhi de sakte ho —
-ye auto keystore ko override kar denge:
-
-| Secret | Value |
-|---|---|
-| `ANDROID_KEYSTORE_BASE64` | keystore file ka base64 |
-| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
-| `ANDROID_KEY_ALIAS` | alias (e.g. `qalb`) |
-| `ANDROID_KEY_PASSWORD` | key password |
-
-**Recommended:** Simple rakhna hai to ye 4 secrets bilkul set na karein — auto mode hi best hai.
+Chaho to future me khud keystore bana ke `ci_private/keystore` doc ke
+`keystoreBase64` field me base64 daal sakte ho — workflow wahi use karega. Passwords
+workflow me fixed hain (`qalb-auto-store-2026` / `qalb-auto-key-2026`, alias `qalb`).
 
 ---
 
@@ -164,7 +171,8 @@ git add . && git commit -m "Naye kalam add kiye + store fix" && git push origin 
 Bas! Pipeline khud:
 - `versionCode = github.run_number` (har push pe automatic +1)
 - `versionName = package.json` ka version
-- APK banata hai, sign karta hai, GCS + Firestore + GitHub Release teeno pe daal deta hai
+- APK banata hai, sign karta hai, **GitHub Release** pe daalta hai
+- Firestore `appVersions/latest` me naya version + download link publish karta hai
 
 ## 📲 App me update kaise aata hai
 
@@ -172,14 +180,15 @@ Bas! Pipeline khud:
    (ya app launch pe auto-check bhi laga sakte hain — `useAppUpdate(true)`)
 2. App Firestore se `appVersions/latest` doc uthata hai — **direct REST se, koi server nahi**
 3. `versionCode (Firestore) > versionCode (installed)` → **Update card** dikhta hai
-4. "Update Download Karein (APK)" tap → APK download → Android install prompt
+4. "Update Download Karein (APK)" tap → native downloader (progress %, retry) →
+   APK download → Android install prompt
    *(pehli baar "Install unknown apps" permission maangega — normal hai)*
 
 ## 🔍 Verify karne ke liye
 
-- **Actions tab** — workflow ka green tick + APK artifact
-- **GCS** — `gs://qalb-builds-<project-id>/releases/` me naya APK
-- **Firestore** — `appVersions/latest` doc me naya versionCode/apkUrl
+- **Actions tab** — workflow ka green tick
+- **Releases page** — naya release `v1.0.0-<run_number>` + APK asset attached
+- **Firestore** — `appVersions/latest` doc me naya versionCode + GitHub apkUrl
 - **App** — Profile → Check → "Naya version: x.y.z" card
 
 ## 🧯 Troubleshooting
@@ -188,7 +197,8 @@ Bas! Pipeline khud:
 |---|---|
 | Workflow fail: `GCP_SERVICE_ACCOUNT_JSON` missing | Part B — 1 secret zaroori hai |
 | Firestore publish fail (403) | Firebase service account (`firebase-adminsdk-...`) use karein — isme Firebase Admin hota hai. Custom SA ho to `Datastore User` role dein |
-| GCS upload / bucket banane me fail (403) | Service account ko project-level `Storage Admin` chahiye (firebase-adminsdk me default hota hai) |
+| Release download link 404 deta hai | Repo **public** hai? Settings → Danger Zone → Change visibility → Public |
+| Keystore save fail ho rahi hai | `ci_private` collection pe rules admin write allow karte hain (service account). Firestore DB created hai na? Part A dobara dekho |
 | App me update nahi dikh raha | Firestore doc ka versionCode installed se bara hai? App ko restart karke Check dabayein |
 | Install blocked | Settings → Install unknown apps → browser/manager ko allow |
 | Version same reh gaya | Push ke baad run_number hi versionCode hai — naya push = naya code |

@@ -15,9 +15,8 @@ export const QALB = {
   // GitHub Actions har build pe app-build.ts generate karta hai (versionCode = run_number)
   currentVersionCode: APP_BUILD.versionCode,
   currentVersionName: APP_BUILD.versionName,
-  // GCS bucket jahan GitHub Actions signed APK upload karta hai
-  // (workflow khud bucket banata hai: qalb-builds-<project-id> — globally unique naam)
-  apkBucketUrl: `https://storage.googleapis.com/qalb-builds-${FB_PROJECT}/releases`,
+  // APK hosting: GitHub Releases (workflow apkUrl Firestore me publish karta hai)
+  githubRepo: 'ahemadjuneja-stack/qalb',
 
   // ── Backend wiring (APK me Firebase direct + hosted API dono support) ──
   // Hosted web backend ka base URL (empty = same-origin, web preview me aisa hi)

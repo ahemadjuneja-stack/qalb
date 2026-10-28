@@ -7,23 +7,24 @@ name: Build & Release Qalb APK
 #    git push origin main
 #      → Next.js static export (out/)
 #      → Capacitor Android sync
-#      → Signed release APK (keystore AUTO-managed — see "Signing" step)
-#      → APK upload → Google Cloud Storage (gs://qalb-builds-<project-id>)
-#      → Version publish → Firestore appVersions/latest
-#      → GitHub Release (APK attach)
+#      → Signed release APK (keystore Firestore ci_private/keystore se)
+#      → GitHub Release (APK yahin host hoti hai — repo public)
+#      → Firestore appVersions/latest publish (apkUrl = GitHub Release link)
 #      → Installed apps ko Profile > Check par naya version dikhega
 #
-#  AUTO-MAGIC (kuch bhi manually banane ki zaroorat nahi):
-#    • GCS bucket "qalb-builds-<project-id>" khud ban jata hai + public read
-#    • Signing keystore pehli build pe khud generate hoti hai aur private
-#      bucket "qalb-keys-<project-id>" me save rehti hai (same signature har build)
-#    • Firebase project id service account JSON se auto detect hota hai
+#  DESIGN NOTES:
+#    • GCS bucket KAHIN use nahi hota (billing 403 issue) — sab GitHub
+#      Release + Firestore pe. Zero extra kharcha.
+#    • Keystore Firestore ke PRIVATE doc `ci_private/keystore` me base64
+#      me hoti hai (security rules se fully blocked — sirf service account).
+#      Chhoti file hai (~5KB), 1MiB doc limit se door door tak nahi.
+#    • Firebase project id service account JSON se auto-detect hota hai
 #    • versionCode = github.run_number (har push pe +1)
+#    • Audio/images jaisi badi files KABHI Firestore me nahi — storage pe
+#      rakh ke Firestore me sirf URL.
 #
 #  SIRF 1 SECRET CHAHIYE:
 #    GCP_SERVICE_ACCOUNT_JSON = Firebase service account ka JSON (raw paste)
-#    (optional: apna keystore dena ho to ANDROID_KEYSTORE_BASE64 + 3 password
-#     secrets bhi chalte hain — wo override kar denge auto keystore ko)
 # ═══════════════════════════════════════════════════════════════════
 
 on:
@@ -36,13 +37,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # GCS bucket jahan APK upload hota hai — runtime pe qalb-builds-<project-id> set hota hai
   NEXT_PUBLIC_API_BASE: ${{ vars.API_BASE_URL }}
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
-    # gh release create + auto-update publish ke liye write permission chahiye
+    # GitHub Release create + commit notes read karne ke liye
     permissions:
       contents: write
     steps:
@@ -50,10 +50,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      # Capacitor CLI ko Node >= 22 chahiye
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # Capacitor 8 ke liye JDK 21 ZAROORI hai (library VERSION_21 target karti hai)
@@ -92,7 +93,7 @@ jobs:
           } as const
           EOF
 
-      # ── 3. GCP auth (sab se pehle — bucket + keystore isi se chalta hai) ──
+      # ── 3. GCP auth — SIRF Firestore (version publish + keystore doc) ──
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -101,61 +102,15 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Resolve Firebase project id + bucket names
+      - name: Resolve Firebase project id
         run: |
           FPID=$(echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' | jq -r .project_id)
+          if [ -z "$FPID" ] || [ "$FPID" = "null" ]; then
+            echo "❌ GCP_SERVICE_ACCOUNT_JSON secret me project_id nahi mila — secret dobara check karo"
+            exit 1
+          fi
           echo "FPID=$FPID" >> "$GITHUB_ENV"
-          echo "GCS_BUCKET=qalb-builds-$FPID" >> "$GITHUB_ENV"
-          echo "GCS_KEY_BUCKET=qalb-keys-$FPID" >> "$GITHUB_ENV"
           echo "Firebase project: $FPID"
-          echo "APK bucket:       qalb-builds-$FPID (public read)"
-          echo "Keys bucket:      qalb-keys-$FPID (private)"
-
-      # Bucket khud ban jata hai — Part C manual nahi karna!
-      # NOTE: gcloud storage use karte hain (gsutil mb me -ub jaisa flag tha hi nahi)
-      - name: Ensure buckets exist (APK public read + keys private)
-        run: |
-          set -e
-          if [ -z "$FPID" ]; then
-            echo "❌ FPID khali hai — 'Resolve Firebase project id' step fail hua tha"
-            exit 1
-          fi
-          if [ -z "$GCS_BUCKET" ]; then
-            echo "❌ GCS_BUCKET khali hai"
-            exit 1
-          fi
-          echo "GCP account: $(gcloud config get-value account 2>/dev/null)"
-          echo "Project: $FPID | APK bucket: $GCS_BUCKET | Keys bucket: $GCS_KEY_BUCKET"
-
-          create_bucket() {
-            local B=$1
-            if ! gcloud storage buckets describe "gs://${B}" --project="${FPID}" >/dev/null 2>&1; then
-              echo "Bucket ban raha hai: gs://${B}"
-              if ! gcloud storage buckets create "gs://${B}" \
-                --project="${FPID}" \
-                --location=asia-south1 \
-                --uniform-bucket-level-access; then
-                echo ""
-                echo "════════════════════════════════════════════════"
-                echo "❌ BUCKET CREATE FAIL — 2 common reasons:"
-                echo "  1) PERMISSION: console.cloud.google.com → IAM & Admin → IAM →"
-                echo "     firebase-adminsdk@... → pencil → '+ ADD ANOTHER ROLE' →"
-                echo "     'Storage Admin' → SAVE → phir Re-run all jobs"
-                echo "  2) NAAM CONFLICT: bucket ka naam kisi aur ne le liya hoga"
-                echo "════════════════════════════════════════════════"
-                exit 1
-              fi
-            else
-              echo "Bucket pehle se hai: gs://${B}"
-            fi
-          }
-
-          create_bucket "${GCS_BUCKET}"
-          # Users APK download kar sakein — public READ only
-          gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET}" \
-            --member=allUsers --role=roles/storage.objectViewer || true
-          # Keystore ke liye private bucket (kisi ko public access NAHI)
-          create_bucket "${GCS_KEY_BUCKET}"
 
       # ── 4. Web build (static export for Capacitor) ────────────────
       - name: Build Next.js static export
@@ -175,50 +130,62 @@ jobs:
           npx cap copy android
           npx cap sync android
 
-      # ── 6. Signing (AUTO-managed keystore) ────────────────────────
-      # Priority:
-      #   1. Agar aapne ANDROID_KEYSTORE_BASE64 + password secrets diye hain → wahi
-      #   2. Warna private GCS bucket se pehle wali keystore download
-      #   3. Pehli baar? keytool se nayi keystore + private bucket me backup
-      # NOTE: auto mode me keystore file hi asli chaabi hai — private bucket me
-      #       save rehti hai, har build same signature deti hai (update install OK).
-      - name: Signing setup (auto keystore, secrets override)
+      # ── 6. Signing (keystore Firestore ci_private/keystore me) ────
+      # Pehli build: keytool se keystore banti hai → base64 → Firestore private doc
+      # Baaki builds: wahi doc se wapas → same signature → updates install honge
+      # NOTE: ye doc security rules me fully blocked hai (ci_private) —
+      #       sirf service account (admin) padh/sakta hai.
+      - name: Signing setup (keystore Firestore se)
         run: |
           mkdir -p android/app
           KS="android/app/qalb-upload.keystore"
+          FSTORE="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents"
+          TOKEN=$(gcloud auth print-access-token)
 
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "Signing: aapke GitHub secrets wali keystore use ho rahi hai"
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KS"
-            cat > android/key.properties <<EOF
-          storeFile=qalb-upload.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+          DOC=$(curl -sS -H "Authorization: Bearer $TOKEN" "${FSTORE}/ci_private/keystore")
+          B64=$(echo "$DOC" | jq -r '.fields.keystoreBase64.stringValue // empty')
+
+          if [ -n "$B64" ]; then
+            echo "Signing: purani keystore Firestore se mili (same signature — updates install honge)"
+            echo "$B64" | base64 -d > "$KS"
           else
-            if gcloud storage cp "gs://${GCS_KEY_BUCKET}/keys/keystore.jks" "$KS" 2>/dev/null; then
-              echo "Signing: purani keystore GCS se mili (same signature — updates install honge)"
-            else
-              echo "Signing: pehli build — nayi keystore generate ho rahi hai..."
-              keytool -genkeypair -v \
-                -keystore "$KS" \
-                -alias qalb \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -storetype PKCS12 \
-                -storepass qalb-auto-store-2026 \
-                -keypass qalb-auto-key-2026 \
-                -dname "CN=Qalb App, OU=Qalb, O=Qalb, L=Karachi, C=PK"
-              gcloud storage cp "$KS" "gs://${GCS_KEY_BUCKET}/keys/keystore.jks"
-              echo "Signing: keystore private bucket me save ho gayi (backup done)"
+            echo "Signing: pehli build — nayi keystore generate ho rahi hai..."
+            keytool -genkeypair -v \
+              -keystore "$KS" \
+              -alias qalb \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storetype PKCS12 \
+              -storepass qalb-auto-store-2026 \
+              -keypass qalb-auto-key-2026 \
+              -dname "CN=Qalb App, OU=Qalb, O=Qalb, L=Karachi, C=PK"
+            echo "Signing: keystore Firestore ci_private/keystore me save ho rahi hai..."
+            jq -n --arg b64 "$(base64 -w0 "$KS")" \
+              '{fields: {
+                 keystoreBase64: {stringValue: $b64},
+                 storePassword:  {stringValue: "qalb-auto-store-2026"},
+                 keyPassword:    {stringValue: "qalb-auto-key-2026"},
+                 keyAlias:       {stringValue: "qalb"},
+                 updatedAt:      {timestampValue: (now | todateiso8601)}
+               }}' > /tmp/ks-doc.json
+            HTTP=$(curl -sS -o /tmp/ks-resp.json -w '%{http_code}' -X PATCH \
+              "${FSTORE}/ci_private/keystore" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @/tmp/ks-doc.json)
+            if [ "$HTTP" != "200" ]; then
+              echo "❌ Keystore Firestore me save NAHI hui (HTTP $HTTP):"
+              head -c 500 /tmp/ks-resp.json
+              exit 1
             fi
-            cat > android/key.properties <<EOF
+            echo "Signing: keystore backup done (private doc, rules se blocked)"
+          fi
+
+          cat > android/key.properties <<EOF
           storeFile=qalb-upload.keystore
           storePassword=qalb-auto-store-2026
           keyAlias=qalb
           keyPassword=qalb-auto-key-2026
           EOF
-          fi
 
       - name: Inject signing config into build.gradle
         run: python3 scripts/patch-android-signing.py
@@ -243,22 +210,29 @@ jobs:
              "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           ls -la dist/
 
-      # ── 8. Upload to Google Cloud Storage ─────────────────────────
-      - name: Upload APK to GCS
+      # ── 8. GitHub Release (APK hosting — repo public, direct download) ──
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          APK="dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
-          gcloud storage cp "$APK" "gs://${GCS_BUCKET}/releases/latest/qalb-latest.apk"
-          gcloud storage cp "$APK" "gs://${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
-          # versioned copy bhi rakh te hain — rollback possible
-          APK_URL="https://storage.googleapis.com/${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
+          TAG="v${{ steps.ver.outputs.versionName }}-${{ github.run_number }}"
+          gh release create "$TAG" \
+            --latest \
+            --title "Qalb v${{ steps.ver.outputs.versionName }} (code ${{ github.run_number }})" \
+            --notes "APK build from commit ${{ github.sha }}" \
+            "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" \
+            || gh release upload "$TAG" "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" --clobber
+          APK_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
+          echo "APK download link: $APK_URL"
 
       # ── 9. Publish version to Firestore (appVersions/latest) ──────
       # App isi doc ko poll karta hai — versionCode bara ho to update prompt.
+      # Release BANNE KE BAAD publish hota hai — apkUrl kabhi dead nahi hoga.
       - name: Publish to Firestore appVersions/latest
         run: |
           TOKEN=$(gcloud auth print-access-token)
-          DOC_URL="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents/appVersions/latest?updateMask.fieldPaths=versionCode&updateMask.fieldPaths=versionName&updateMask.fieldPaths=apkUrl&updateMask.fieldPaths=releaseNotes&updateMask.fieldPaths=mandatory&updateMask.fieldPaths=publishedAt"
+          DOC_URL="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents/appVersions/latest"
           RELEASE_NOTES=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }} --jq '.commit.message' | head -1 | cut -c1-500)
           curl -sS -X PATCH "$DOC_URL" \
             -H "Authorization: Bearer $TOKEN" \
@@ -276,14 +250,3 @@ jobs:
             && echo "Firestore updated: v${{ steps.ver.outputs.versionName }} (code ${{ steps.ver.outputs.versionCode }})"
         env:
           GH_TOKEN: ${{ github.token }}
-
-      # ── 10. GitHub Release (backup + rollback) ────────────────────
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="v${{ steps.ver.outputs.versionName }}-${{ github.run_number }}"
-          gh release create "$TAG" \
-            --title "Qalb v${{ steps.ver.outputs.versionName }}" \
-            --notes "APK build from commit ${{ github.sha }}" \
-            "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" || true

@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════
+//  Qalb — Firestore Security Rules
+//
+//  Design:
+//    • Firestore me sirf TEXT/records (playlists, tracks, products,
+//      version info) — audio/images/video KABHI nahi (unki jagah
+//      file storage, Firestore me sirf unka URL).
+//    • ci_private collection = CI keystore + secrets — dono taraf
+//      se BLOCKED (sirf Admin SDK / service account access kar sakta hai).
+//    • Writes public ke liye band — content sirf Firebase console /
+//      service account se update hoga.
+//
+//  Publish kaise karein:
+//    Firebase console → Firestore Database → Rules → ye paste → Publish
+// ═══════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── PUBLIC READ (app in-data direct REST se uthati hai) ──
+    match /appVersions/{doc} { allow read: if true;  allow write: if false; }
+    match /playlists/{doc}   { allow read: if true;  allow write: if false; }
+    match /tracks/{doc}      { allow read: if true;  allow write: if false; }
+    match /products/{doc}    { allow read: if true;  allow write: if false; }
+
+    // ── PRIVATE: CI keystore + secrets — CLIENT KE LIYE POORA BAND ──
+    // (keystore base64 yahin rehti hai — bahar kabhi nahi jayegi)
+    match /ci_private/{doc}  { allow read: if false; allow write: if false; }
+
+    // ── logged-in users ka apna data (future ke liye) ──
+    match /users/{uid}       { allow read, write: if request.auth != null; }
+
+    // ── baaki sab kuch default CLOSED ──
+    match /{document=**}     { allow read, write: if false; }
+  }
+}

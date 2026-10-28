@@ -20,7 +20,7 @@ TypeScript source of truth: `src/lib/firestore-schema.ts`
 {
   "versionCode": 2,
   "versionName": "1.0.1",
-  "apkUrl": "https://storage.googleapis.com/qalb-builds/releases/qalb-v1.0.1.apk",
+  "apkUrl": "https://github.com/ahemadjuneja-stack/qalb/releases/download/v1.0.1-27/qalb-v1.0.1.apk",
   "releaseNotes": "• Bug fixes\n• Naye kalam",
   "mandatory": false,
   "publishedAt": "<serverTimestamp>"
@@ -95,20 +95,15 @@ service cloud.firestore {
 ## CI/CD Pipeline (`.github/workflows/android-release.yml`)
 
 Flow: `push to main` → Next.js static export → `cap sync android` → version bump
-→ **signed APK** (keystore GitHub Secrets se decode hota hai)
-→ **GCS upload** (`gs://qalb-builds/releases/qalb-vX.Y.Z.apk`)
+→ **signed APK** (keystore Firestore `ci_private/keystore` doc se, base64)
+→ **GitHub Release** (`releases/download/<tag>/qalb-vX.Y.Z.apk`)
 → **Firestore update** (`appVersions/latest.apkUrl` + versionCode)
 → In-app updater automatically users ko naya version offer karta hai.
 
 ### Required GitHub Secrets
 | Secret | Purpose |
 |--------|---------|
-| `ANDROID_KEYSTORE_BASE64` | Release keystore (base64) |
-| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
-| `ANDROID_KEY_ALIAS` | Signing key alias |
-| `ANDROID_KEY_PASSWORD` | Key password |
-| `GCS_SERVICE_ACCOUNT_JSON` | GCS upload (bucket: `qalb-builds`) |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Firestore appVersions update |
+| `GCP_SERVICE_ACCOUNT_JSON` | Firestore publish + keystore doc (yahi ek secret kaafi hai) |
 
 ## Android / Capacitor Setup
 

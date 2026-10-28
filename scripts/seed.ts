@@ -294,7 +294,7 @@ async function main() {
     data: {
       versionCode: 2,
       versionName: '1.0.1',
-      apkUrl: 'https://storage.googleapis.com/qalb-builds/releases/qalb-v1.0.1.apk',
+      apkUrl: 'https://github.com/ahemadjuneja-stack/qalb/releases/download/v1.0.1-27/qalb-v1.0.1.apk',
       releaseNotes:
         '• Audio-only mode ki battery optimization behtar hui\n• Naye sufi qawwali playlist add hue\n• Prayer times ki location accuracy fix\n• Ramadan calendar theme',
     },

@@ -9,7 +9,7 @@ export type FSTimestamp = Date
 export interface FirestoreAppVersion {
   versionCode: number // monotonically increasing build number
   versionName: string // "1.0.1"
-  apkUrl: string // GCS: https://storage.googleapis.com/qalb-builds/releases/qalb-v1.0.1.apk
+  apkUrl: string // GitHub Release: https://github.com/<owner>/<repo>/releases/download/<tag>/qalb-vX.Y.Z.apk
   releaseNotes: string | null
   mandatory: boolean
   publishedAt: FSTimestamp
