@@ -17,12 +17,19 @@ app ko "naya update available" dikhta hai → user tap kare, APK install.
                                               └──────────────────────────────────┘
 ```
 
+> 🪄 **Naya (auto-magic) version:** Ab pipeline khud GCS bucket banati hai, khud signing
+> keystore generate + save karti hai, aur Firebase project id bhi khud detect karti hai.
+> Aapko sirf **2 cheezein** manually karni hain — **Firestore Database** (Part A) aur
+> **1 GitHub Secret** (Part B). Baaki sab automatic!
+
 ---
 
-## Part A — Firebase Project (5 minute)
+## Part A — Firestore Database (Firebase console me, ~5 minute)
 
-1. [console.firebase.google.com](https://console.firebase.google.com) → **Add project** → naam: `qalb-app`
-2. Left menu → **Build → Firestore Database** → **Create database** → **Production mode** → region: `asia-south1` (ya jo chale)
+1. [console.firebase.google.com](https://console.firebase.google.com) → apna project kholo
+   (e.g. `Shivam` / `shivam-2bace`)
+2. Left menu → **Build → Firestore Database** → **Create database** → **Production mode** →
+   region: `asia-south1` (ya jo chale) → **Enable**
 3. **Rules** tab me yeh paste karein (sirf public READ, likhna sirf service account se):
 
 ```
@@ -45,82 +52,81 @@ service cloud.firestore {
 
 ---
 
-## Part B — Service Account (GitHub ke liye chaabi)
+## Part B — Service Account JSON → GitHub Secret (~5 minute)
 
-1. Firebase Console ⚙️ **Project settings → Service accounts** → **Generate new private key** → JSON file download hogi.
-   *(ya GCP Console → IAM & Admin → Service Accounts → Create Key)*
-2. Is service account ko **2 roles** chahiye — GCP Console → IAM:
-   - `Datastore User` (Firestore me version publish karne ke liye)
-   - `Storage Object Admin` (sirf aapke bucket pe — GCS → bucket → Permissions)
-3. Is JSON ko aage **GitHub Secret** me daalenge (Part D). Kahin commit NAHI karna!
+### B1. JSON key download karein (GCP console)
 
----
+1. [console.cloud.google.com](https://console.cloud.google.com) → upar project select:
+   apna project (e.g. `Shivam` / `shivam-2bace`)
+2. Left menu ☰ → **IAM & Admin → Service Accounts**
+3. List me `firebase-adminsdk-fbsvc@<project-id>.iam.gserviceaccount.com` pe click karein
+   *(ye account Firebase banate waqt khud bana hota hai — isme **Firebase Admin** +
+   **Storage Admin** roles pehle se hote hain, kuch add karne ki zaroorat nahi)*
+4. Upar **KEYS** tab → **ADD KEY → Create new key** → **JSON** → **CREATE**
+5. JSON file download ho jayegi — **is file ko kahin commit/upload nahi karna!**
 
-## Part C — Google Cloud Storage bucket (APK hosting)
+> Agar aap GCP → IAM & Admin → Service Accounts me ye account na dekhein to Firebase
+> Console → ⚙️ Project settings → **Service accounts** → **Generate new private key**
+> se bhi JSON mil jati hai.
 
-Local terminal ya [Cloud Shell](https://shell.cloud.google.com) me:
+### B2. GitHub Secret me paste karein
 
-```bash
-# 1. Bucket banao (naam globally unique hona chahiye)
-gcloud storage buckets create gs://qalb-builds --location=asia-south1 --uniform-bucket-level-access
+1. Apne GitHub repo me jayein → **Settings → Secrets and variables → Actions**
+2. **New repository secret**:
+   - Name: `GCP_SERVICE_ACCOUNT_JSON`
+   - Secret: JSON file ko text editor me kholo, **poora content copy** karke paste karo
+3. **Add secret** — bas, yahi ek secret kaafi hai!
 
-# 2. Public read do (taake app/users APK download kar sakein)
-gcloud storage buckets add-iam-policy-binding gs://qalb-builds \
-  --member=allUsers --role=roles/storage.objectViewer
-```
-
-- APK URL is shakal me hoga: `https://storage.googleapis.com/qalb-builds/releases/v1.0.1/qalb-v1.0.1.apk`
-- Bucket ka naam alag rakhna ho to `.github/workflows/build-apk.yml` me `GCS_BUCKET:` badal dein,
-  aur `src/lib/qalb.ts` ka `apkBucketUrl` bhi update kar dein.
-
----
-
-## Part D — GitHub Secrets & Variables (repo Settings me)
-
-Repo → **Settings → Secrets and variables → Actions**
-
-### Secrets (New repository secret):
-
-| Secret naam | Value kya daalna hai |
-|---|---|
-| `ANDROID_KEYSTORE_BASE64` | Neeche Part E se — base64 of keystore |
-| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
-| `ANDROID_KEY_ALIAS` | Keystore alias (e.g. `qalb`) |
-| `ANDROID_KEY_PASSWORD` | Key password |
-| `GCP_SERVICE_ACCOUNT_JSON` | Part B wali JSON ka poora content (paste) |
-
-### Variables (Variables tab — optional):
+### (Optional) Variables tab
 
 | Variable | Value |
 |---|---|
-| `API_BASE_URL` | Aapka hosted backend (e.g. `https://qalb.vercel.app`) — khali chhod sakte hain |
-| `FIREBASE_PROJECT_ID` | `qalb-app` |
+| `API_BASE_URL` | Hosted backend (e.g. `https://qalb.vercel.app`) — **khali chhod sakte hain** |
+| `FIREBASE_PROJECT_ID` | Zaroorat nahi — workflow JSON se khud detect karta hai |
 
 ---
 
-## Part E — Signing Keystore (ek dafa, sambhal ke rakhein!)
+## Part C — GCS bucket ❌ → AB AUTOMATIC
 
-```bash
-keytool -genkeypair -v \
-  -keystore qalb-upload.keystore \
-  -alias qalb \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -storetype PKCS12
-```
+Pehle manually bucket banana padta tha. **Ab workflow khud karti hai:**
+- Pehli build pe `gs://qalb-builds-<project-id>` bucket khud ban jata hai (asia-south1)
+- APK downloads ke liye public read khud set hota hai
+- Naam me `<project-id>` isliye hai ke bucket naam globally unique ho — koi clash nahi
 
-- Password yaad rakhein — **yahi har update me same hona chahiye**, warna Android app update
-  install hi nahi karega (signature mismatch).
-- Keystore file ka backup rakhein (Drive/USB) — kho gayi to Play Store pe naya app banana padega.
-
-```bash
-# GitHub secret ke liye base64:
-base64 -w0 qalb-upload.keystore        # Linux
-base64 -i qalb-upload.keystore         # macOS
-```
+Aapko kuch nahi karna. ✅
 
 ---
 
-## Part F — Pehla build (one-time local init)
+## Part D — Signing Keystore ❌ → AB AUTOMATIC
+
+Pehle keytool se keystore banake base64 karke 4 secrets daalne padte the. **Ab workflow
+khud karti hai:**
+- Pehli build pe keystore generate hoti hai (`keytool`, PKCS12, 10000 din valid)
+- Private bucket `gs://qalb-keys-<project-id>/keys/keystore.jks` me save hoti hai
+- Har agli build **wahi keystore** download karti hai → same signature → app updates
+  smoothly install hote hain
+
+> ⚠️ **Important:** Private bucket (`qalb-keys-...`) ko kabhi public NAHI karna — wahi
+> aapki app ki asli chaabi hai. Use kho kar dobara banane par purane users ke phones me
+> update install nahi hogi (signature mismatch).
+
+### (Optional / Advanced) Apna keystore dena ho to
+
+Chaho to apne PC pe `keytool -genkeypair` se keystore banake ye 4 secrets bhi de sakte ho —
+ye auto keystore ko override kar denge:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | keystore file ka base64 |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | alias (e.g. `qalb`) |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+**Recommended:** Simple rakhna hai to ye 4 secrets bilkul set na karein — auto mode hi best hai.
+
+---
+
+## Part E — Pehla build (one-time local init)
 
 Android project folder commit karna best hai. Apne machine pe ek dafa:
 
@@ -164,7 +170,7 @@ Bas! Pipeline khud:
 ## 🔍 Verify karne ke liye
 
 - **Actions tab** — workflow ka green tick + APK artifact
-- **GCS** — `gs://qalb-builds/releases/` me naya APK
+- **GCS** — `gs://qalb-builds-<project-id>/releases/` me naya APK
 - **Firestore** — `appVersions/latest` doc me naya versionCode/apkUrl
 - **App** — Profile → Check → "Naya version: x.y.z" card
 
@@ -172,9 +178,9 @@ Bas! Pipeline khud:
 
 | Masla | Hal |
 |---|---|
-| `EADDRINUSE` / gradle fail: signing | Part E ke 3 secrets dobara check karein — base64 me newline na ho |
-| Firestore publish fail (403) | Service account ko `Datastore User` role diya hai? (Part B) |
-| GCS upload fail (403) | `Storage Object Admin` role bucket pe diya hai? (Part B) |
+| Workflow fail: `GCP_SERVICE_ACCOUNT_JSON` missing | Part B — 1 secret zaroori hai |
+| Firestore publish fail (403) | Firebase service account (`firebase-adminsdk-...`) use karein — isme Firebase Admin hota hai. Custom SA ho to `Datastore User` role dein |
+| GCS upload / bucket banane me fail (403) | Service account ko project-level `Storage Admin` chahiye (firebase-adminsdk me default hota hai) |
 | App me update nahi dikh raha | Firestore doc ka versionCode installed se bara hai? App ko restart karke Check dabayein |
 | Install blocked | Settings → Install unknown apps → browser/manager ko allow |
 | Version same reh gaya | Push ke baad run_number hi versionCode hai — naya push = naya code |

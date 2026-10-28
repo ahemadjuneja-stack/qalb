@@ -28,7 +28,7 @@ export function ProfileView() {
   const [name, setName] = useState('Zaire')
   const [editing, setEditing] = useState(false)
   const [downloads, setDownloads] = useState<SavedDownload[]>([])
-  const [city, setCity] = useState(PRAYER_CITIES[0])
+  const [city, setCity] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
   const recents = usePlayerStore((s) => s.recents)
   const { toast } = useToast()

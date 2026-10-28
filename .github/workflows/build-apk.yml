@@ -7,11 +7,23 @@ name: Build & Release Qalb APK
 #    git push origin main
 #      → Next.js static export (out/)
 #      → Capacitor Android sync
-#      → Signed release APK (keystore from GitHub Secrets)
-#      → APK upload → Google Cloud Storage (gs://qalb-builds/releases)
+#      → Signed release APK (keystore AUTO-managed — see "Signing" step)
+#      → APK upload → Google Cloud Storage (gs://qalb-builds-<project-id>)
 #      → Version publish → Firestore appVersions/latest
 #      → GitHub Release (APK attach)
 #      → Installed apps ko Profile > Check par naya version dikhega
+#
+#  AUTO-MAGIC (kuch bhi manually banane ki zaroorat nahi):
+#    • GCS bucket "qalb-builds-<project-id>" khud ban jata hai + public read
+#    • Signing keystore pehli build pe khud generate hoti hai aur private
+#      bucket "qalb-keys-<project-id>" me save rehti hai (same signature har build)
+#    • Firebase project id service account JSON se auto detect hota hai
+#    • versionCode = github.run_number (har push pe +1)
+#
+#  SIRF 1 SECRET CHAHIYE:
+#    GCP_SERVICE_ACCOUNT_JSON = Firebase service account ka JSON (raw paste)
+#    (optional: apna keystore dena ho to ANDROID_KEYSTORE_BASE64 + 3 password
+#     secrets bhi chalte hain — wo override kar denge auto keystore ko)
 # ═══════════════════════════════════════════════════════════════════
 
 on:
@@ -24,10 +36,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # GCS bucket jahan APK upload hota hai (ek dafa bana lein — guide: docs/CICD_SETUP.md)
-  GCS_BUCKET: qalb-builds
-  # App ke JS constants (web preview ke liye default)
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
+  # GCS bucket jahan APK upload hota hai — runtime pe qalb-builds-<project-id> set hota hai
   NEXT_PUBLIC_API_BASE: ${{ vars.API_BASE_URL }}
 
 jobs:
@@ -44,7 +53,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Java 17 (Android build)
+      - name: Setup Java 17 (Android build + keytool)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -79,16 +88,50 @@ jobs:
           } as const
           EOF
 
-      # ── 3. Web build (static export for Capacitor) ────────────────
+      # ── 3. GCP auth (sab se pehle — bucket + keystore isi se chalta hai) ──
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Resolve Firebase project id + bucket names
+        run: |
+          FPID=$(echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' | jq -r .project_id)
+          echo "FPID=$FPID" >> "$GITHUB_ENV"
+          echo "GCS_BUCKET=qalb-builds-$FPID" >> "$GITHUB_ENV"
+          echo "GCS_KEY_BUCKET=qalb-keys-$FPID" >> "$GITHUB_ENV"
+          echo "Firebase project: $FPID"
+          echo "APK bucket:       qalb-builds-$FPID (public read)"
+          echo "Keys bucket:      qalb-keys-$FPID (private)"
+
+      # Bucket khud ban jata hai — Part C manual nahi karna!
+      - name: Ensure buckets exist (APK public read + keys private)
+        run: |
+          if ! gsutil ls -b "gs://${GCS_BUCKET}" >/dev/null 2>&1; then
+            echo "Bucket ban raha hai: gs://${GCS_BUCKET}"
+            gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${GCS_BUCKET}"
+          fi
+          # Users APK download kar sakein — public READ only
+          gsutil iam ch roles/storage.objectViewer:allUsers "gs://${GCS_BUCKET}" || true
+          # Keystore ke liye private bucket (kisi ko public access NAHI)
+          if ! gsutil ls -b "gs://${GCS_KEY_BUCKET}" >/dev/null 2>&1; then
+            echo "Keys bucket ban raha hai: gs://${GCS_KEY_BUCKET}"
+            gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${GCS_KEY_BUCKET}"
+          fi
+
+      # ── 4. Web build (static export for Capacitor) ────────────────
       - name: Build Next.js static export
         run: |
           # Mobile build me server API routes nahi hote — APK Firestore REST
           # + hosted API (NEXT_PUBLIC_API_BASE) use karta hai. Isliye api/
           # folder temporarily hata ke export lete hain.
           mv src/app/api .api-routes-backup
-          MOBILE_BUILD=1 npx next build
+          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" npx next build
 
-      # ── 4. Capacitor Android project ──────────────────────────────
+      # ── 5. Capacitor Android project ──────────────────────────────
       - name: Capacitor sync
         run: |
           if [ ! -d android ]; then
@@ -97,16 +140,50 @@ jobs:
           npx cap copy android
           npx cap sync android
 
-      # ── 5. Signing setup (secrets → keystore + key.properties) ────
-      - name: Decode keystore & write key.properties
+      # ── 6. Signing (AUTO-managed keystore) ────────────────────────
+      # Priority:
+      #   1. Agar aapne ANDROID_KEYSTORE_BASE64 + password secrets diye hain → wahi
+      #   2. Warna private GCS bucket se pehle wali keystore download
+      #   3. Pehli baar? keytool se nayi keystore + private bucket me backup
+      # NOTE: auto mode me keystore file hi asli chaabi hai — private bucket me
+      #       save rehti hai, har build same signature deti hai (update install OK).
+      - name: Signing setup (auto keystore, secrets override)
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/qalb-upload.keystore
-          cat > android/key.properties <<EOF
+          mkdir -p android/app
+          KS="android/app/qalb-upload.keystore"
+
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "Signing: aapke GitHub secrets wali keystore use ho rahi hai"
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KS"
+            cat > android/key.properties <<EOF
           storeFile=qalb-upload.keystore
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+          else
+            if gsutil -q cp "gs://${GCS_KEY_BUCKET}/keys/keystore.jks" "$KS"; then
+              echo "Signing: purani keystore GCS se mili (same signature — updates install honge)"
+            else
+              echo "Signing: pehli build — nayi keystore generate ho rahi hai..."
+              keytool -genkeypair -v \
+                -keystore "$KS" \
+                -alias qalb \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -storetype PKCS12 \
+                -storepass qalb-auto-store-2026 \
+                -keypass qalb-auto-key-2026 \
+                -dname "CN=Qalb App, OU=Qalb, O=Qalb, L=Karachi, C=PK"
+              gsutil cp "$KS" "gs://${GCS_KEY_BUCKET}/keys/keystore.jks"
+              echo "Signing: keystore private bucket me save ho gayi (backup done)"
+            fi
+            cat > android/key.properties <<EOF
+          storeFile=qalb-upload.keystore
+          storePassword=qalb-auto-store-2026
+          keyAlias=qalb
+          keyPassword=qalb-auto-key-2026
+          EOF
+          fi
 
       - name: Inject signing config into build.gradle
         run: python3 scripts/patch-android-signing.py
@@ -117,7 +194,7 @@ jobs:
           sed -i "s/versionCode [0-9]*/versionCode ${{ steps.ver.outputs.versionCode }}/" "$BGRADLE"
           sed -i "s/versionName \".*\"/versionName \"${{ steps.ver.outputs.versionName }}\"/" "$BGRADLE"
 
-      # ── 6. Signed APK build ───────────────────────────────────────
+      # ── 7. Signed APK build ───────────────────────────────────────
       - name: Gradle assembleRelease
         run: |
           cd android
@@ -131,15 +208,7 @@ jobs:
              "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           ls -la dist/
 
-      # ── 7. Upload to Google Cloud Storage ─────────────────────────
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
-
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
+      # ── 8. Upload to Google Cloud Storage ─────────────────────────
       - name: Upload APK to GCS
         run: |
           APK="dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
@@ -149,13 +218,12 @@ jobs:
           APK_URL="https://storage.googleapis.com/${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
 
-      # ── 8. Publish version to Firestore (appVersions/latest) ──────
+      # ── 9. Publish version to Firestore (appVersions/latest) ──────
       # App isi doc ko poll karta hai — versionCode bara ho to update prompt.
       - name: Publish to Firestore appVersions/latest
         run: |
-          PROJECT_ID=$(echo '${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}' | jq -r .project_id)
           TOKEN=$(gcloud auth print-access-token)
-          DOC_URL="https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/appVersions/latest?updateMask.fieldPaths=versionCode&updateMask.fieldPaths=versionName&updateMask.fieldPaths=apkUrl&updateMask.fieldPaths=releaseNotes&updateMask.fieldPaths=mandatory&updateMask.fieldPaths=publishedAt"
+          DOC_URL="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents/appVersions/latest?updateMask.fieldPaths=versionCode&updateMask.fieldPaths=versionName&updateMask.fieldPaths=apkUrl&updateMask.fieldPaths=releaseNotes&updateMask.fieldPaths=mandatory&updateMask.fieldPaths=publishedAt"
           RELEASE_NOTES=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }} --jq '.commit.message' | head -1 | cut -c1-500)
           curl -sS -X PATCH "$DOC_URL" \
             -H "Authorization: Bearer $TOKEN" \
@@ -174,7 +242,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # ── 9. GitHub Release (backup + rollback) ─────────────────────
+      # ── 10. GitHub Release (backup + rollback) ────────────────────
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,6 +1,10 @@
 // Qalb — app-wide constants
 import { APP_BUILD } from '@/lib/app-build'
 
+// Firestore project id — APK me REST API se version/products/playlists isi se aate hain
+// (GitHub Actions build me ye env se set hota hai — aapke GCP project ka id)
+const FB_PROJECT = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'shivam-2bace'
+
 export const QALB = {
   name: 'Qalb',
   tagline: 'Dil se dil tak — paak kalaam',
@@ -11,14 +15,14 @@ export const QALB = {
   currentVersionCode: APP_BUILD.versionCode,
   currentVersionName: APP_BUILD.versionName,
   // GCS bucket jahan GitHub Actions signed APK upload karta hai
-  apkBucketUrl: 'https://storage.googleapis.com/qalb-builds/releases',
+  // (workflow khud bucket banata hai: qalb-builds-<project-id> — globally unique naam)
+  apkBucketUrl: `https://storage.googleapis.com/qalb-builds-${FB_PROJECT}/releases`,
 
   // ── Backend wiring (APK me Firebase direct + hosted API dono support) ──
   // Hosted web backend ka base URL (empty = same-origin, web preview me aisa hi)
   // APK build me GitHub repo VARIABLE API_BASE_URL set hota hai
   apiBase: (process.env.NEXT_PUBLIC_API_BASE ?? '').replace(/\/$/, ''),
-  // Firestore project id — APK me REST API se version/products/playlists isi se aate hain
-  firebaseProjectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? 'qalb-app',
+  firebaseProjectId: FB_PROJECT,
 } as const
 
 export const PRAYER_CITIES = [

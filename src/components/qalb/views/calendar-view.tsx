@@ -66,7 +66,7 @@ function fallbackHijri(): HijriDate {
 }
 
 export function CalendarView() {
-  const [location, setLocation] = useState(PRAYER_CITIES[0])
+  const [location, setLocation] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [data, setData] = useState<PrayerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [pickerOpen, setPickerOpen] = useState(false)
