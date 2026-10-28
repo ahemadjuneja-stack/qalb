@@ -114,17 +114,32 @@ jobs:
       # Bucket khud ban jata hai — Part C manual nahi karna!
       - name: Ensure buckets exist (APK public read + keys private)
         run: |
-          if ! gsutil ls -b "gs://${GCS_BUCKET}" >/dev/null 2>&1; then
-            echo "Bucket ban raha hai: gs://${GCS_BUCKET}"
-            gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${GCS_BUCKET}"
-          fi
+          echo "GCP account: $(gcloud config get-value account 2>/dev/null)"
+          create_bucket() {
+            local B=$1
+            if ! gsutil ls -b "gs://${B}" >/dev/null 2>&1; then
+              echo "Bucket ban raha hai: gs://${B}"
+              if ! gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${B}"; then
+                echo ""
+                echo "════════════════════════════════════════════════"
+                echo "❌ SERVICE ACCOUNT KE PAAS BUCKET BANANE KI PERMISSION NAHI HAI"
+                echo ""
+                echo "FIX (2 minute, one-time):"
+                echo "  1. console.cloud.google.com kholo → upar se project '$FPID' select karo"
+                echo "  2. Left menu: IAM & Admin → IAM"
+                echo "  3. firebase-adminsdk@... wala account dhundo → pencil (edit) icon"
+                echo "  4. '+ ADD ANOTHER ROLE' → 'Storage Admin' type karo → select → SAVE"
+                echo "  5. GitHub Actions me is run ko 'Re-run all jobs' karo — bas ho gaya!"
+                echo "════════════════════════════════════════════════"
+                exit 1
+              fi
+            fi
+          }
+          create_bucket "${GCS_BUCKET}"
           # Users APK download kar sakein — public READ only
           gsutil iam ch roles/storage.objectViewer:allUsers "gs://${GCS_BUCKET}" || true
           # Keystore ke liye private bucket (kisi ko public access NAHI)
-          if ! gsutil ls -b "gs://${GCS_KEY_BUCKET}" >/dev/null 2>&1; then
-            echo "Keys bucket ban raha hai: gs://${GCS_KEY_BUCKET}"
-            gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${GCS_KEY_BUCKET}"
-          fi
+          create_bucket "${GCS_KEY_BUCKET}"
 
       # ── 4. Web build (static export for Capacitor) ────────────────
       - name: Build Next.js static export
