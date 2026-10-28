@@ -118,8 +118,9 @@ jobs:
           # Mobile build me server API routes nahi hote — APK Firestore REST
           # + hosted API (NEXT_PUBLIC_API_BASE) use karta hai. Isliye api/
           # folder temporarily hata ke export lete hain.
+          # YT_API_KEY (GitHub secret, optional) → APK me direct YouTube search
           mv src/app/api .api-routes-backup
-          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" npx next build
+          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" npx next build
 
       # ── 5. Capacitor Android project ──────────────────────────────
       - name: Capacitor sync

@@ -11,6 +11,7 @@
 // sirf public-read rules chahiye, koi server zaroori nahi.
 
 import { QALB } from '@/lib/qalb'
+import { BUNDLED_PLAYLISTS } from '@/lib/bundled-library'
 import type { AppVersionInfo, QalbProduct, QalbPlaylist, QalbTrack } from '@/lib/types'
 
 // ── Firestore REST helpers ───────────────────────────────────────
@@ -183,9 +184,11 @@ export async function fetchPlaylistsSmart(): Promise<QalbPlaylist[]> {
       )
       .map(({ _featured, _sortOrder, ...p }) => p)
 
-    return playlists
+    // Firestore khali hai → bundled starter library (APK first install)
+    return playlists.length > 0 ? playlists : BUNDLED_PLAYLISTS
   } catch {
-    return []
+    // Network/rules fail → bhi bundled dikha do, app kabhi khali na lage
+    return BUNDLED_PLAYLISTS
   }
 }
 
@@ -215,6 +218,37 @@ export async function fetchProductsSmart(category?: string): Promise<QalbProduct
       products = products.filter((p) => p.category === category)
     }
     return products.sort((a, b) => Number(b.featured) - Number(a.featured) || b.rating - a.rating)
+  } catch {
+    return []
+  }
+}
+
+// ── 4. Track search (Firestore REST — APK ka search fallback) ────
+
+function tokenize(q: string): string[] {
+  return q
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 2)
+}
+
+export async function searchTracksFromFirestore(q: string): Promise<QalbTrack[]> {
+  try {
+    const docs = await fsListDocs('tracks')
+    const toks = tokenize(q)
+    const tracks = docs.map((doc) => toTrack(unwrapDoc(doc)))
+    const scored = tracks
+      .map((t) => {
+        const hay = `${t.title} ${t.artist} ${t.tags ?? ''}`.toLowerCase()
+        const score = toks.reduce((acc, tok) => acc + (hay.includes(tok) ? 1 : 0), 0)
+        return { t, score }
+      })
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score || (b.t.playCount ?? 0) - (a.t.playCount ?? 0))
+      .slice(0, 12)
+      .map(({ t }) => t)
+    return scored
   } catch {
     return []
   }

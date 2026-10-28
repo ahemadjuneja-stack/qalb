@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
+import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
 
@@ -46,12 +47,8 @@ export function HomeView() {
     setGuardian(null)
     setPhase('validating')
     try {
-      const vRes = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      })
-      const validation = (await vRes.json()) as SearchValidationResult
+      // APK-safe chain: hosted API → device-side rules (search-client.ts)
+      const validation = await validateSmart(q)
       setGuardian(validation)
 
       if (!validation.valid) {
@@ -60,18 +57,23 @@ export function HomeView() {
       }
 
       setPhase('searching')
-      const sRes = await fetch(
-        `/api/youtube-search?q=${encodeURIComponent(validation.refinedQuery || q)}`
-      )
-      const data = await sRes.json()
-      setResults(data.tracks ?? [])
-      setResultSource(data.source ?? '')
+      // APK-safe chain: hosted API → YouTube direct → Firestore → bundled
+      const data = await youtubeSearchSmart(validation.refinedQuery || q)
+      setResults(data.tracks)
+      setResultSource(data.source)
       setPhase('results')
+
+      if (data.tracks.length === 0) {
+        toast({
+          title: 'Koi result nahi mila',
+          description: 'Dusre keywords se search karein — jaise "Tajdar-e-Haram naat".',
+        })
+      }
     } catch {
       setPhase('blocked')
       setGuardian({
         valid: false,
-        reason: 'Network masla — dobara koshish karein.',
+        reason: 'Search me masla hua — dobara koshish karein.',
         refinedQuery: null,
         category: null,
         provider: 'rules',
@@ -87,10 +89,10 @@ export function HomeView() {
       <header className="flex items-center justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-400/80">
-            ٱلسَّلَامُ عَلَيْكُمْ
+            Assalam-o-Alaikum
           </p>
           <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-emerald-50">
-            Qalb <span className="text-emerald-400">قلب</span>
+            Qalb
           </h1>
           <p className="text-xs text-emerald-200/50">Naat • Hamd • Sufi Qawwali • Nasheed</p>
         </div>
@@ -211,9 +213,9 @@ export function HomeView() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
               Results ({results.length})
             </h2>
-            {resultSource === 'library' && (
+            {(resultSource === 'library' || resultSource === 'bundled') && (
               <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300/70">
-                verified library
+                {resultSource === 'library' ? 'verified library' : 'starter library'}
               </span>
             )}
           </div>
