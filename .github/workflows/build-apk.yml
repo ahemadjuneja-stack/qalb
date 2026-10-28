@@ -112,32 +112,48 @@ jobs:
           echo "Keys bucket:      qalb-keys-$FPID (private)"
 
       # Bucket khud ban jata hai — Part C manual nahi karna!
+      # NOTE: gcloud storage use karte hain (gsutil mb me -ub jaisa flag tha hi nahi)
       - name: Ensure buckets exist (APK public read + keys private)
         run: |
+          set -e
+          if [ -z "$FPID" ]; then
+            echo "❌ FPID khali hai — 'Resolve Firebase project id' step fail hua tha"
+            exit 1
+          fi
+          if [ -z "$GCS_BUCKET" ]; then
+            echo "❌ GCS_BUCKET khali hai"
+            exit 1
+          fi
           echo "GCP account: $(gcloud config get-value account 2>/dev/null)"
+          echo "Project: $FPID | APK bucket: $GCS_BUCKET | Keys bucket: $GCS_KEY_BUCKET"
+
           create_bucket() {
             local B=$1
-            if ! gsutil ls -b "gs://${B}" >/dev/null 2>&1; then
+            if ! gcloud storage buckets describe "gs://${B}" --project="${FPID}" >/dev/null 2>&1; then
               echo "Bucket ban raha hai: gs://${B}"
-              if ! gsutil mb -p "$FPID" -l asia-south1 -ub "gs://${B}"; then
+              if ! gcloud storage buckets create "gs://${B}" \
+                --project="${FPID}" \
+                --location=asia-south1 \
+                --uniform-bucket-level-access; then
                 echo ""
                 echo "════════════════════════════════════════════════"
-                echo "❌ SERVICE ACCOUNT KE PAAS BUCKET BANANE KI PERMISSION NAHI HAI"
-                echo ""
-                echo "FIX (2 minute, one-time):"
-                echo "  1. console.cloud.google.com kholo → upar se project '$FPID' select karo"
-                echo "  2. Left menu: IAM & Admin → IAM"
-                echo "  3. firebase-adminsdk@... wala account dhundo → pencil (edit) icon"
-                echo "  4. '+ ADD ANOTHER ROLE' → 'Storage Admin' type karo → select → SAVE"
-                echo "  5. GitHub Actions me is run ko 'Re-run all jobs' karo — bas ho gaya!"
+                echo "❌ BUCKET CREATE FAIL — 2 common reasons:"
+                echo "  1) PERMISSION: console.cloud.google.com → IAM & Admin → IAM →"
+                echo "     firebase-adminsdk@... → pencil → '+ ADD ANOTHER ROLE' →"
+                echo "     'Storage Admin' → SAVE → phir Re-run all jobs"
+                echo "  2) NAAM CONFLICT: bucket ka naam kisi aur ne le liya hoga"
                 echo "════════════════════════════════════════════════"
                 exit 1
               fi
+            else
+              echo "Bucket pehle se hai: gs://${B}"
             fi
           }
+
           create_bucket "${GCS_BUCKET}"
           # Users APK download kar sakein — public READ only
-          gsutil iam ch roles/storage.objectViewer:allUsers "gs://${GCS_BUCKET}" || true
+          gcloud storage buckets add-iam-policy-binding "gs://${GCS_BUCKET}" \
+            --member=allUsers --role=roles/storage.objectViewer || true
           # Keystore ke liye private bucket (kisi ko public access NAHI)
           create_bucket "${GCS_KEY_BUCKET}"
 
@@ -181,7 +197,7 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
           else
-            if gsutil -q cp "gs://${GCS_KEY_BUCKET}/keys/keystore.jks" "$KS"; then
+            if gcloud storage cp "gs://${GCS_KEY_BUCKET}/keys/keystore.jks" "$KS" 2>/dev/null; then
               echo "Signing: purani keystore GCS se mili (same signature — updates install honge)"
             else
               echo "Signing: pehli build — nayi keystore generate ho rahi hai..."
@@ -193,7 +209,7 @@ jobs:
                 -storepass qalb-auto-store-2026 \
                 -keypass qalb-auto-key-2026 \
                 -dname "CN=Qalb App, OU=Qalb, O=Qalb, L=Karachi, C=PK"
-              gsutil cp "$KS" "gs://${GCS_KEY_BUCKET}/keys/keystore.jks"
+              gcloud storage cp "$KS" "gs://${GCS_KEY_BUCKET}/keys/keystore.jks"
               echo "Signing: keystore private bucket me save ho gayi (backup done)"
             fi
             cat > android/key.properties <<EOF
@@ -231,8 +247,8 @@ jobs:
       - name: Upload APK to GCS
         run: |
           APK="dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
-          gsutil cp "$APK" "gs://${GCS_BUCKET}/releases/latest/qalb-latest.apk"
-          gsutil cp "$APK" "gs://${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
+          gcloud storage cp "$APK" "gs://${GCS_BUCKET}/releases/latest/qalb-latest.apk"
+          gcloud storage cp "$APK" "gs://${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           # versioned copy bhi rakh te hain — rollback possible
           APK_URL="https://storage.googleapis.com/${GCS_BUCKET}/releases/v${{ steps.ver.outputs.versionName }}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
