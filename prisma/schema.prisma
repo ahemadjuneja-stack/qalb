@@ -1,0 +1,83 @@
+// Qalb — Islamic Devotional Media Platform
+// Local Prisma schema (SQLite) — mirrors the Firestore schema in docs/FIRESTORE_SCHEMA.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Media Library ────────────────────────────────────────────────
+
+model Track {
+  id              String   @id @default(cuid())
+  videoId         String   @unique // YouTube video ID
+  title           String
+  artist          String
+  category        String // NAAT | HAMD | QAWWALI | NASHEED
+  tags            String   @default("") // comma separated keywords
+  thumbnailUrl    String?
+  durationSeconds Int      @default(0)
+  playCount       Int      @default(0)
+  trending        Boolean  @default(false)
+  verified        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  playlistItems   PlaylistItem[]
+}
+
+model Playlist {
+  id           String         @id @default(cuid())
+  slug         String         @unique
+  name         String
+  description  String?
+  coverEmoji   String         @default("🕌")
+  accentColor  String         @default("#10B981")
+  featured     Boolean        @default(false)
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  items        PlaylistItem[]
+}
+
+model PlaylistItem {
+  id         String   @id @default(cuid())
+  playlistId String
+  trackId    String
+  position   Int      @default(0)
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track      Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId, trackId])
+}
+
+// ── Islamic Store ────────────────────────────────────────────────
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  price         Int // PKR
+  originalPrice Int?
+  category      String // ATTAR | TASBEEH | PRAYER_MAT | BOOKS | CAPS | GIFTS
+  emoji         String   @default("🎁")
+  gradient      String   @default("from-emerald-800 to-emerald-950")
+  rating        Float    @default(4.6)
+  reviews       Int      @default(0)
+  inStock       Boolean  @default(true)
+  featured      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+// ── CI/CD Auto Updater (Firestore: appVersions collection) ───────
+
+model AppVersion {
+  id           String   @id @default(cuid())
+  versionCode  Int      @unique // e.g. 2
+  versionName  String // e.g. "1.0.1"
+  apkUrl       String // Google Cloud Storage signed URL
+  releaseNotes String?
+  mandatory    Boolean  @default(false)
+  publishedAt  DateTime @default(now())
+}
