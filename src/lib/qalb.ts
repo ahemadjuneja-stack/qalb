@@ -10,7 +10,8 @@ export const QALB = {
   name: 'Qalb',
   tagline: 'Dil se dil tak — paak kalaam',
   // Store: WhatsApp ordering number (yahan apna business number daalein)
-  whatsappNumber: '923001234567',
+  // Indian app — +91 number (placeholder, apna asli number daal dein)
+  whatsappNumber: '919876543210',
   // In-app updater: current running build (CI/CD isse compare karta hai)
   // GitHub Actions har build pe app-build.ts generate karta hai (versionCode = run_number)
   currentVersionCode: APP_BUILD.versionCode,
@@ -25,21 +26,21 @@ export const QALB = {
   firebaseProjectId: FB_PROJECT,
 } as const
 
+// Prayer cities — INDIA ONLY (Qalb Indian Sunni Hanafi app hai)
+// Timings Aladhan API se aate hain: method=1 + school=1 (Hanafi Asr)
 export const PRAYER_CITIES = [
-  { city: 'Karachi', country: 'Pakistan', flag: '🇵🇰' },
-  { city: 'Lahore', country: 'Pakistan', flag: '🇵🇰' },
-  { city: 'Islamabad', country: 'Pakistan', flag: '🇵🇰' },
-  { city: 'Peshawar', country: 'Pakistan', flag: '🇵🇰' },
   { city: 'Delhi', country: 'India', flag: '🇮🇳' },
   { city: 'Mumbai', country: 'India', flag: '🇮🇳' },
   { city: 'Hyderabad', country: 'India', flag: '🇮🇳' },
-  { city: 'Dhaka', country: 'Bangladesh', flag: '🇧🇩' },
-  { city: 'Dubai', country: 'UAE', flag: '🇦🇪' },
-  { city: 'Riyadh', country: 'Saudi Arabia', flag: '🇸🇦' },
-  { city: 'Makkah', country: 'Saudi Arabia', flag: '🇸🇦' },
-  { city: 'London', country: 'United Kingdom', flag: '🇬🇧' },
-  { city: 'New York', country: 'United States', flag: '🇺🇸' },
-  { city: 'Toronto', country: 'Canada', flag: '🇨🇦' },
+  { city: 'Lucknow', country: 'India', flag: '🇮🇳' },
+  { city: 'Kolkata', country: 'India', flag: '🇮🇳' },
+  { city: 'Bhopal', country: 'India', flag: '🇮🇳' },
+  { city: 'Ahmedabad', country: 'India', flag: '🇮🇳' },
+  { city: 'Bengaluru', country: 'India', flag: '🇮🇳' },
+  { city: 'Chennai', country: 'India', flag: '🇮🇳' },
+  { city: 'Jaipur', country: 'India', flag: '🇮🇳' },
+  { city: 'Srinagar', country: 'India', flag: '🇮🇳' },
+  { city: 'Patna', country: 'India', flag: '🇮🇳' },
 ] as const
 
 export const STORE_CATEGORIES = [

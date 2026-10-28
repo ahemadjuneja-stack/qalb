@@ -19,7 +19,7 @@ export interface FirestoreAppVersion {
 export interface FirestoreProduct {
   name: string
   description: string
-  price: number // PKR
+  price: number // INR (₹)
   originalPrice: number | null
   category: 'ATTAR' | 'TASBEEH' | 'PRAYER_MAT' | 'BOOKS' | 'CAPS' | 'GIFTS'
   emoji: string

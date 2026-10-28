@@ -1,5 +1,5 @@
 // Qalb — GET /api/youtube-search?q=<refined query>
-// 1) YOUTUBE_API_KEY env set ho → YouTube Data API v3 (embeddable videos, PK/UR biased)
+// 1) YOUTUBE_API_KEY env set ho → YouTube Data API v3 (embeddable videos, IN/UR biased)
 // 2) warna local verified library se keyword search (offline sandbox fallback)
 // Response 1h in-memory cache me save hota hai.
 
@@ -30,7 +30,7 @@ async function searchYouTubeDataApi(q: string): Promise<QalbTrack[] | null> {
     url.searchParams.set('maxResults', '15')
     url.searchParams.set('q', q)
     url.searchParams.set('relevanceLanguage', 'ur')
-    url.searchParams.set('regionCode', 'PK')
+    url.searchParams.set('regionCode', 'IN')
     url.searchParams.set('safeSearch', 'strict')
     url.searchParams.set('key', key)
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })

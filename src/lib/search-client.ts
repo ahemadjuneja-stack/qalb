@@ -78,7 +78,7 @@ async function searchYouTubeDirect(q: string): Promise<QalbTrack[]> {
     url.searchParams.set('maxResults', '15')
     url.searchParams.set('q', q)
     url.searchParams.set('relevanceLanguage', 'ur')
-    url.searchParams.set('regionCode', 'PK')
+    url.searchParams.set('regionCode', 'IN')
     url.searchParams.set('safeSearch', 'strict')
     url.searchParams.set('key', key)
     const res = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) })

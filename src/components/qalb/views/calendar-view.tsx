@@ -1,7 +1,12 @@
 'use client'
 
 // Qalb — Calendar Tab: Hijri date + 5 Prayer timings + live countdown (Aladhan API)
-// Fallback: browser Intl islamic calendar + approximate timings (offline-safe)
+// SUNNI HANAFI (India): method=1 (Fajr/Isha 18°) + school=1 (HANAFI Asr)
+// Hijri date: LOCAL RUAYAT adjust (-2..+2) — Hindustan me chand aksar
+// Saudi se 1 din baad dikhta hai, isliye default -1. User +/- buttons se
+// apne local masjid calendar ke hisaab se align kar sakta hai (Hanafi maslak:
+// local ruyat-e-hilal hi asal hai).
+// Offline fallback: browser Intl islamic calendar (adjust ke saath)
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapPin, MoonStar, Loader2, Sunrise, Sun, Sunset, Moon, CloudMoon, AlarmClock } from 'lucide-react'
@@ -9,6 +14,7 @@ import { PRAYER_CITIES } from '@/lib/qalb'
 import type { AladhanTimings, HijriDate, PrayerData } from '@/lib/types'
 
 const LOCATION_KEY = 'qalb_location_v1'
+const HIJRI_ADJUST_KEY = 'qalb_hijri_adjust_v1'
 const PRAYER_ORDER: (keyof AladhanTimings)[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 const PRAYER_ICONS = {
@@ -32,25 +38,34 @@ function parseTime(t: string): string {
   return m ? `${m[1].padStart(2, '0')}:${m[2]}` : t
 }
 
-function fallbackHijri(): HijriDate {
+function hijriWithAdjust(offsetDays: number): HijriDate {
   try {
-    const fmt = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+    // Offset gregorian date pe apply hota hai → Intl islamic calendar se
+    // hijri nikalta hai (saare month/year rollover automatic handle)
+    const target = new Date()
+    target.setDate(target.getDate() + offsetDays)
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
-    })
-    const parts = fmt.formatToParts(new Date())
+    }).formatToParts(target)
     const day = parts.find((p) => p.type === 'day')?.value ?? ''
-    const month = parts.find((p) => p.type === 'month')?.value ?? ''
+    const monthEn = parts.find((p) => p.type === 'month')?.value ?? ''
     const year = parts.find((p) => p.type === 'year')?.value ?? ''
+    // numeric month (badge ke liye)
+    const numParts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      month: 'numeric',
+    }).formatToParts(target)
+    const monthNumber = Number(numParts.find((p) => p.type === 'month')?.value ?? 0)
     return {
       day,
-      monthNumber: 0,
-      monthEn: month,
+      monthNumber,
+      monthEn,
       monthAr: '',
       year,
+      // hijri weekday = aaj ka hi din hai (shifted date ka nahi)
       weekdayEn: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(new Date()),
-      designation: 'Islamic (browser calendar)',
+      designation: 'Islamic calendar (local ruyat adjust)',
     }
   } catch {
     return {
@@ -71,6 +86,8 @@ export function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
+  // Sunni Hanafi: local ruyat adjust — Hindustan me chand aksar 1 din baad
+  const [hijriAdjust, setHijriAdjust] = useState<number>(-1)
 
   useEffect(() => {
     // localStorage read → async (cascading render se bachne ke liye)
@@ -89,10 +106,34 @@ export function CalendarView() {
     return () => clearTimeout(t)
   }, [])
 
+  useEffect(() => {
+    // saved hijri adjust load karo
+    const t = setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(HIJRI_ADJUST_KEY)
+        if (raw !== null && !Number.isNaN(Number(raw))) setHijriAdjust(Number(raw))
+      } catch {
+        /* default -1 */
+      }
+    }, 0)
+    return () => clearTimeout(t)
+  }, [])
+
+  useEffect(() => {
+    // adjust change → persist
+    try {
+      window.localStorage.setItem(HIJRI_ADJUST_KEY, String(hijriAdjust))
+    } catch {
+      /* ignore */
+    }
+  }, [hijriAdjust])
+
   const fetchPrayerData = useCallback(async (city: typeof location) => {
     setLoading(true)
     try {
-      const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city.city)}&country=${encodeURIComponent(city.country)}&method=1`
+      // Sunni Hanafi India: method=1 (Univ. of Islamic Sciences — Fajr/Isha 18°)
+      // school=1 → HANAFI Asr (Shafi standard se alag — ye zaroori hai)
+      const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city.city)}&country=${encodeURIComponent(city.country)}&method=1&school=1`
       const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
       if (!res.ok) throw new Error('aladhan failed')
       const json = await res.json()
@@ -106,15 +147,7 @@ export function CalendarView() {
         Maghrib: parseTime(d.timings.Maghrib),
         Isha: parseTime(d.timings.Isha),
       }
-      const hijri: HijriDate = {
-        day: d.date?.hijri?.day ?? '',
-        monthNumber: d.date?.hijri?.month?.number ?? 0,
-        monthEn: d.date?.hijri?.month?.en ?? '',
-        monthAr: d.date?.hijri?.month?.ar ?? '',
-        year: d.date?.hijri?.year ?? '',
-        weekdayEn: d.date?.hijri?.weekday?.en ?? '',
-        designation: 'Aladhan API',
-      }
+      const hijri: HijriDate = hijriWithAdjust(0) // placeholder — render par hijriAdjust ke saath override hota hai
       setData({
         timings,
         hijri,
@@ -123,10 +156,10 @@ export function CalendarView() {
         city: `${city.city}, ${city.country}`,
       })
     } catch {
-      // offline fallback — browser hijri + static approximate timings
+      // offline fallback — browser hijri (adjust render par lagta hai) + static approximate timings
       setData({
         timings: { Fajr: '05:15', Sunrise: '06:35', Dhuhr: '12:30', Asr: '16:00', Maghrib: '18:10', Isha: '19:30' },
-        hijri: fallbackHijri(),
+        hijri: hijriWithAdjust(0),
         gregorian: new Date().toLocaleDateString('en-GB'),
         timezone: 'local',
         city: `${city.city}, ${city.country}`,
@@ -175,6 +208,13 @@ export function CalendarView() {
     }
   }
 
+  // render par hijri hamesha local ruyat adjust ke saath dikhta hai
+  const view = useMemo(
+    () => (data ? { ...data, hijri: hijriWithAdjust(hijriAdjust) } : null),
+    [data, hijriAdjust]
+  )
+  const clampAdjust = (v: number) => Math.max(-2, Math.min(2, v))
+
   return (
     <div className="space-y-5 px-4 pb-8 pt-5">
       {/* header */}
@@ -182,8 +222,11 @@ export function CalendarView() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-extrabold text-emerald-50">
             <MoonStar className="h-5 w-5 text-emerald-400" /> Islamic Calendar
+            <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d4a937]">
+              Sunni Hanafi
+            </span>
           </h1>
-          <p className="text-xs text-emerald-200/50">Hijri date aur namaz ke auqaat</p>
+          <p className="text-xs text-emerald-200/50">Hijri date aur namaz ke auqaat — Hindustan</p>
         </div>
         <button
           type="button"
@@ -221,7 +264,7 @@ export function CalendarView() {
         <div className="flex h-56 items-center justify-center">
           <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
         </div>
-      ) : data ? (
+      ) : view ? (
         <>
           {/* hijri card */}
           <section
@@ -230,15 +273,43 @@ export function CalendarView() {
           >
             <div className="absolute -right-6 -top-8 text-[110px] leading-none opacity-15">🕌</div>
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-900/70">
-              {data.hijri.weekdayEn || 'Hijri'}
+              {view.hijri.weekdayEn || 'Hijri'}
             </p>
             <p className="mt-1 text-3xl font-extrabold tracking-tight">
-              {data.hijri.day} {data.hijri.monthEn} {data.hijri.year} AH
+              {view.hijri.day} {view.hijri.monthEn} {view.hijri.year} AH
             </p>
-            {data.hijri.monthAr && <p className="text-lg font-bold opacity-80">{data.hijri.monthAr}</p>}
             <p className="mt-1 text-[12px] font-semibold opacity-75">
-              {data.gregorian} • {data.city}
+              {view.gregorian} • {view.city}
             </p>
+            {/* local ruyat adjust (Hanafi maslak) */}
+            <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-emerald-950/25 px-3 py-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
+                Chand adjust
+              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHijriAdjust((a) => clampAdjust(a - 1))}
+                  disabled={hijriAdjust <= -2}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-950/40 text-sm font-bold transition hover:bg-emerald-950/60 disabled:opacity-30"
+                  aria-label="Hijri date ek din peeche"
+                >
+                  −
+                </button>
+                <span className="min-w-9 text-center font-mono text-xs font-bold">
+                  {hijriAdjust > 0 ? `+${hijriAdjust}` : hijriAdjust}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setHijriAdjust((a) => clampAdjust(a + 1))}
+                  disabled={hijriAdjust >= 2}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-950/40 text-sm font-bold transition hover:bg-emerald-950/60 disabled:opacity-30"
+                  aria-label="Hijri date ek din aage"
+                >
+                  +
+                </button>
+              </div>
+            </div>
           </section>
 
           {/* countdown */}
@@ -293,7 +364,9 @@ export function CalendarView() {
                       <p className={`text-sm font-bold ${isNext ? 'text-emerald-300' : 'text-emerald-50'}`}>
                         {PRAYER_NAMES_UR[name]}
                       </p>
-                      <p className="text-[10px] text-emerald-200/40">{name}</p>
+                      <p className="text-[10px] text-emerald-200/40">
+                        {name === 'Asr' ? `${name} (Hanafi)` : name}
+                      </p>
                     </div>
                   </div>
                   <p
@@ -301,7 +374,7 @@ export function CalendarView() {
                       isNext ? 'text-emerald-300' : 'text-emerald-100/80'
                     }`}
                   >
-                    {data.timings[name]}
+                    {view.timings[name]}
                   </p>
                 </div>
               )
@@ -309,7 +382,7 @@ export function CalendarView() {
           </section>
 
           <p className="text-center text-[10px] text-emerald-200/30">
-            Source: {data.hijri.designation} • Timezone: {data.timezone}
+            Namaz: Aladhan API — Asr Hanafi method • Timezone: {view.timezone}
           </p>
         </>
       ) : null}

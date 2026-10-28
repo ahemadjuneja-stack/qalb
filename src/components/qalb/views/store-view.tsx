@@ -9,8 +9,8 @@ import { fetchProductsSmart } from '@/lib/remote-data'
 import { STORE_CATEGORIES, QALB } from '@/lib/qalb'
 import type { QalbProduct } from '@/lib/types'
 
-function pkr(n: number): string {
-  return `₨ ${n.toLocaleString('en-PK')}`
+function inr(n: number): string {
+  return `₹ ${n.toLocaleString('en-IN')}`
 }
 
 export function StoreView() {
@@ -35,7 +35,7 @@ export function StoreView() {
   const featured = useMemo(() => products.filter((p) => p.featured), [products])
 
   function orderOnWhatsapp(product: QalbProduct) {
-    const msg = `Assalam-o-Alaikum! 🕌\nMujhe *${product.name}* (${pkr(product.price)}) order karna hai — Qalb Store se.`
+    const msg = `Assalam-o-Alaikum! 🕌\nMujhe *${product.name}* (${inr(product.price)}) order karna hai — Qalb Store se.`
     const url = `https://wa.me/${QALB.whatsappNumber}?text=${encodeURIComponent(msg)}`
     window.open(url, '_blank', 'noopener')
     toast({
@@ -80,7 +80,7 @@ export function StoreView() {
                 </div>
                 <div className="p-3">
                   <p className="truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
-                  <p className="mt-0.5 text-[11px] font-bold text-emerald-400">{pkr(p.price)}</p>
+                  <p className="mt-0.5 text-[11px] font-bold text-emerald-400">{inr(p.price)}</p>
                   <button
                     type="button"
                     onClick={() => orderOnWhatsapp(p)}
@@ -148,10 +148,10 @@ export function StoreView() {
                     <span className="text-emerald-200/35">({p.reviews})</span>
                   </div>
                   <div className="mt-1 flex items-baseline gap-1.5">
-                    <span className="text-[13px] font-extrabold text-emerald-400">{pkr(p.price)}</span>
+                    <span className="text-[13px] font-extrabold text-emerald-400">{inr(p.price)}</span>
                     {p.originalPrice && (
                       <span className="text-[10.5px] text-emerald-200/35 line-through">
-                        {pkr(p.originalPrice)}
+                        {inr(p.originalPrice)}
                       </span>
                     )}
                   </div>
