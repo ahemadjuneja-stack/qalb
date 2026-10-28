@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Qalb</string>
+    <string name="title_activity_main">Qalb</string>
+    <string name="package_name">com.qalb.app</string>
+    <string name="custom_url_scheme">com.qalb.app</string>
+</resources>

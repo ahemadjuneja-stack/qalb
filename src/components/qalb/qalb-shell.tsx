@@ -13,6 +13,7 @@ import { PlayerView } from '@/components/qalb/views/player-view'
 import { CalendarView } from '@/components/qalb/views/calendar-view'
 import { StoreView } from '@/components/qalb/views/store-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
+import { UpdatePopup } from '@/components/qalb/update-popup'
 
 export function QalbShell() {
   const [tab, setTab] = useState<QalbTab>('home')
@@ -35,6 +36,7 @@ export function QalbShell() {
       </div>
 
       {/* global floating layers */}
+      <UpdatePopup />
       <MiniPlayer />
       <FullPlayerModal />
       <BottomNav active={tab} onChange={setTab} />
