@@ -9,7 +9,6 @@ import {
   Trash2,
   RefreshCw,
   CloudDownload,
-  MapPin,
   Info,
   BadgeCheck,
   Smartphone,
@@ -21,18 +20,16 @@ import { useToast } from '@/hooks/use-toast'
 import { usePlayerStore } from '@/lib/player-store'
 import { useAppUpdate } from '@/hooks/use-app-update'
 import { getDownloads, removeDownload, isNativeCapacitor } from '@/lib/downloads'
-import { PRAYER_CITIES, QALB } from '@/lib/qalb'
+import { QALB } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import type { SavedDownload } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
-const LOCATION_KEY = 'qalb_location_v1'
 
 export function ProfileView() {
   const [name, setName] = useState('Zaire')
   const [editing, setEditing] = useState(false)
   const [downloads, setDownloads] = useState<SavedDownload[]>([])
-  const [city, setCity] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
   const [theme, setTheme] = useState<QalbTheme>('light')
   const recents = usePlayerStore((s) => s.recents)
@@ -46,12 +43,6 @@ export function ProfileView() {
       try {
         const n = window.localStorage.getItem(NAME_KEY)
         if (n) setName(n)
-        const raw = window.localStorage.getItem(LOCATION_KEY)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          const found = PRAYER_CITIES.find((c) => c.city === parsed.city)
-          if (found) setCity(found)
-        }
       } catch {
         /* defaults */
       }
@@ -71,16 +62,6 @@ export function ProfileView() {
       /* ignore */
     }
     toast({ title: `Naam update ho gaya — Assalam-o-Alaikum, ${v}!` })
-  }
-
-  const pickCity = (c: (typeof PRAYER_CITIES)[number]) => {
-    setCity(c)
-    try {
-      window.localStorage.setItem(LOCATION_KEY, JSON.stringify(c))
-    } catch {
-      /* ignore */
-    }
-    toast({ title: `Namaz ke auqaat ab ${c.city} ke liye honge 🕌` })
   }
 
   const switchTheme = (t: QalbTheme) => {
@@ -245,30 +226,6 @@ export function ProfileView() {
             </button>
           </div>
         )}
-      </section>
-
-      {/* prayer location */}
-      <section aria-label="Namaz location" className="card-surface rounded-2xl p-4">
-        <p className="flex items-center gap-2 text-[13px] font-bold text-emerald-50">
-          <MapPin className="h-4 w-4 text-emerald-400" /> Namaz ke auqaat — shehar
-        </p>
-        <div className="thin-scrollbar mt-3 flex max-h-44 flex-wrap gap-2 overflow-y-auto">
-          {PRAYER_CITIES.map((c) => (
-            <button
-              key={`${c.city}-${c.country}`}
-              type="button"
-              onClick={() => pickCity(c)}
-              className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition ${
-                city.city === c.city
-                  ? 'emerald-gradient text-emerald-950'
-                  : 'border border-emerald-400/15 text-emerald-200/70 hover:border-emerald-400/30'
-              }`}
-              aria-pressed={city.city === c.city}
-            >
-              {c.flag} {c.city}
-            </button>
-          ))}
-        </div>
       </section>
 
       {/* downloads */}

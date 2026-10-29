@@ -15,8 +15,10 @@ import { PRAYER_CITIES } from '@/lib/qalb'
 import { getGujchandHijri, type GujchandHijri } from '@/lib/gujchand'
 import type { AladhanTimings, HijriDate, PrayerData } from '@/lib/types'
 
-const LOCATION_KEY = 'qalb_location_v1'
 const HIJRI_ADJUST_KEY = 'qalb_hijri_adjust_v1'
+// LOCATION: FIXED JUNAGADH — city selector hata diya gaya hai (user request).
+// App hamesha Junagadh (Gujarat) ke auqaat dikhayegi.
+const LOCATION = PRAYER_CITIES[0]
 const PRAYER_ORDER: (keyof AladhanTimings)[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha']
 
 const PRAYER_ICONS = {
@@ -83,32 +85,13 @@ function hijriWithAdjust(offsetDays: number): HijriDate {
 }
 
 export function CalendarView() {
-  const [location, setLocation] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [data, setData] = useState<PrayerData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
   // GUJARAT CHAND COMMITTEE hijri — auto (gujchand.com)
   const [gujchand, setGujchand] = useState<GujchandHijri | null>(null)
   // fallback: Sunni Hanafi local ruyat adjust — Hindustan me chand aksar 1 din baad
   const [hijriAdjust, setHijriAdjust] = useState<number>(-1)
-
-  useEffect(() => {
-    // localStorage read → async (cascading render se bachne ke liye)
-    const t = setTimeout(() => {
-      try {
-        const raw = window.localStorage.getItem(LOCATION_KEY)
-        if (raw) {
-          const parsed = JSON.parse(raw)
-          const found = PRAYER_CITIES.find((c) => c.city === parsed.city)
-          if (found) setLocation(found)
-        }
-      } catch {
-        /* default */
-      }
-    }, 0)
-    return () => clearTimeout(t)
-  }, [])
 
   useEffect(() => {
     // saved hijri adjust load karo
@@ -132,7 +115,7 @@ export function CalendarView() {
     }
   }, [hijriAdjust])
 
-  const fetchPrayerData = useCallback(async (city: typeof location) => {
+  const fetchPrayerData = useCallback(async (city: typeof LOCATION) => {
     setLoading(true)
     try {
       // Coordinates wali city → timingsByCoordinates (precise, koi geocoding
@@ -193,8 +176,8 @@ export function CalendarView() {
   }, [])
 
   useEffect(() => {
-    void fetchPrayerData(location)
-  }, [location, fetchPrayerData])
+    void fetchPrayerData(LOCATION)
+  }, [fetchPrayerData])
 
   // live clock
   useEffect(() => {
@@ -220,16 +203,6 @@ export function CalendarView() {
     const ss = String(diff % 60).padStart(2, '0')
     return { nextPrayer: next.name, countdown: `${hh}:${mm}:${ss}`, targetTime: next.at }
   }, [data, now])
-
-  const pickCity = (city: (typeof PRAYER_CITIES)[number]) => {
-    setLocation(city)
-    setPickerOpen(false)
-    try {
-      window.localStorage.setItem(LOCATION_KEY, JSON.stringify(city))
-    } catch {
-      /* ignore */
-    }
-  }
 
   // render par hijri: GUJARAT CHAND COMMITTEE (auto) > local ruyat adjust
   const view = useMemo(() => {
@@ -265,37 +238,14 @@ export function CalendarView() {
           </h1>
           <p className="text-xs text-emerald-200/50">Hijri date aur namaz ke auqaat — Hindustan</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPickerOpen(!pickerOpen)}
-          className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-400/10"
-          aria-label="Shehar badlein"
+        <div
+          className="flex items-center gap-1.5 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-[11px] font-semibold text-emerald-200"
+          aria-label="Namaz location: Junagadh"
         >
           <MapPin className="h-3.5 w-3.5 text-emerald-400" />
-          {location.flag} {location.city}
-        </button>
-      </header>
-
-      {/* city picker */}
-      {pickerOpen && (
-        <div className="card-surface thin-scrollbar max-h-56 overflow-y-auto rounded-2xl p-2" role="listbox" aria-label="Shehar chunein">
-          {PRAYER_CITIES.map((c) => (
-            <button
-              key={`${c.city}-${c.country}`}
-              type="button"
-              role="option"
-              aria-selected={c.city === location.city}
-              onClick={() => pickCity(c)}
-              className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-[13px] transition hover:bg-emerald-400/10 ${
-                c.city === location.city ? 'text-emerald-300' : 'text-emerald-100/80'
-              }`}
-            >
-              <span>{c.flag}</span> {c.city}
-              <span className="ml-auto text-[10px] text-emerald-200/40">{c.country}</span>
-            </button>
-          ))}
+          {LOCATION.flag} {LOCATION.city}
         </div>
-      )}
+      </header>
 
       {loading ? (
         <div className="flex h-56 items-center justify-center">
