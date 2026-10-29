@@ -2,23 +2,26 @@
   "appId": "com.qalb.app",
   "appName": "Qalb",
   "webDir": "out",
-  "backgroundColor": "#060B09",
+  "backgroundColor": "#0A0A0C",
   "android": {
     "allowMixedContent": true,
     "captureInput": true,
     "webContentsDebuggingEnabled": false,
-    "backgroundColor": "#060B09"
+    "backgroundColor": "#0A0A0C"
   },
   "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
     "SplashScreen": {
       "launchShowDuration": 1200,
-      "backgroundColor": "#060B09",
+      "backgroundColor": "#0A0A0C",
       "androidSplashResourceName": "splash",
       "showSpinner": false
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#060B09"
+      "backgroundColor": "#0A0A0C"
     },
     "MediaSession": {
       "enabled": true

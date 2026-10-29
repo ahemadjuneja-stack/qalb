@@ -102,7 +102,7 @@ export function PlayerView() {
               type="button"
               onClick={toggle}
               aria-label={isPlaying ? 'Pause' : 'Play'}
-              className="emerald-gradient flex h-14 w-14 items-center justify-center rounded-full text-emerald-950 shadow-[0_0_28px_-6px_rgba(16,185,129,0.6)] transition hover:scale-105 active:scale-95"
+              className="emerald-gradient flex h-14 w-14 items-center justify-center rounded-full text-emerald-950 shadow-[0_0_28px_-6px_rgba(221,186,95,0.55)] transition hover:scale-105 active:scale-95"
             >
               {isPlaying ? (
                 <Pause className="h-7 w-7 fill-current" />

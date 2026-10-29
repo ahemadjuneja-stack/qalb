@@ -1,26 +1,39 @@
-// Qalb — Smart Search Client Layer (APK-SAFE)
+// Qalb — Smart Search Client Layer (APK-SAFE + UNLIMITED)
 // ─────────────────────────────────────────────────────────────────
 // APK static export hota hai — andar koi Next.js server NAHI hota.
-// Isliye client-side search chain:
 //
-//   VALIDATION:
-//     1. hosted /api/search      (web preview / deployed backend)
-//     2. ruleBasedValidate()     (device pe hi — APK primary)
+// VALIDATION:
+//   1. hosted /api/search      (sirf web — API base set ho)
+//   2. ruleBasedValidate()     (device pe hi — APK primary)
 //
-//   TRACK SEARCH:
-//     1. hosted /api/youtube-search  (web preview)
-//     2. YouTube Data API v3 DIRECT  (device se, NEXT_PUBLIC_YOUTUBE_API_KEY)
+// TRACK SEARCH:
+//   native (APK):
+//     1. YouTube InnerTube/scrape DIRECT — UNLIMITED, koi API key nahi
+//     2. YouTube Data API v3 direct  (agar NEXT_PUBLIC key ho)
 //     3. Firestore REST tracks       (verified library)
 //     4. Bundled starter library     (offline last resort)
+//   web:
+//     1. hosted /api/youtube-search  (server-side InnerTube bhi chalata hai)
+//     2. Firestore → bundled
 //
 // Har step fail hone par agla step chalta hai — "Network masla" kabhi
 // nahi aayega jab tak device pe internet hai.
 
+import { Capacitor } from '@capacitor/core'
 import { QALB } from '@/lib/qalb'
 import { ruleBasedValidate } from '@/lib/search-rules'
 import { searchTracksFromFirestore } from '@/lib/remote-data'
 import { searchBundledLibrary } from '@/lib/bundled-library'
+import { youtubeSearchPage } from '@/lib/youtube-search-source'
 import type { QalbTrack, SearchValidationResult } from '@/lib/types'
+
+function isNative(): boolean {
+  try {
+    return Boolean(Capacitor.isNativePlatform?.())
+  } catch {
+    return false
+  }
+}
 
 // ── 1. Validation ────────────────────────────────────────────────
 
@@ -36,27 +49,30 @@ export async function validateSmart(query: string): Promise<SearchValidationResu
     }
   }
 
-  // 1) hosted AI guardian (sirf web / hosted backend pe chalega)
-  try {
-    const res = await fetch(`${QALB.apiBase}/api/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: q }),
-      signal: AbortSignal.timeout(10000),
-    })
-    if (res.ok) {
-      const data = (await res.json()) as SearchValidationResult
-      if (typeof data.valid === 'boolean') return data
+  // APK me hosted API base khali hota hai → seedha device-side rules
+  // (fast, deterministic, koi network wait nahi)
+  if (!(isNative() && !QALB.apiBase)) {
+    try {
+      const res = await fetch(`${QALB.apiBase}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+        signal: AbortSignal.timeout(6000),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as SearchValidationResult
+        if (typeof data.valid === 'boolean') return data
+      }
+    } catch {
+      /* APK me yahan fail hoga → rules fallback */
     }
-  } catch {
-    /* APK me yahan fail hoga → rules fallback */
   }
 
-  // 2) device-side rule guardian — hamesha kaam karta hai
+  // device-side rule guardian — hamesha kaam karta hai
   return ruleBasedValidate(q)
 }
 
-// ── 2. YouTube Data API direct (device se) ───────────────────────
+// ── 2. YouTube Data API direct (device se — sirf agar key ho) ────
 
 interface YTSearchItem {
   id?: { videoId?: string }
@@ -105,33 +121,61 @@ async function searchYouTubeDirect(q: string): Promise<QalbTrack[]> {
 
 export type SearchSource = 'youtube' | 'cache' | 'library' | 'bundled'
 
+export interface SmartSearchResult {
+  tracks: QalbTrack[]
+  source: SearchSource
+  continuation: string | null // aur results load karne ka token
+}
+
 export async function youtubeSearchSmart(
-  q: string
-): Promise<{ tracks: QalbTrack[]; source: SearchSource }> {
-  // 1) hosted API (web preview / deployed backend, 1h cache bhi wahan hai)
-  try {
-    const res = await fetch(
-      `${QALB.apiBase}/api/youtube-search?q=${encodeURIComponent(q)}`,
-      { signal: AbortSignal.timeout(10000) }
-    )
-    if (res.ok) {
-      const data = (await res.json()) as { tracks?: QalbTrack[]; source?: SearchSource }
-      if (data.tracks?.length) {
-        return { tracks: data.tracks, source: data.source === 'youtube' ? 'youtube' : 'library' }
-      }
-    }
-  } catch {
-    /* APK → next step */
+  q: string,
+  continuation: string | null = null
+): Promise<SmartSearchResult> {
+  // pagination mode → sirf YouTube ka agla page (koi hosted/library nahi)
+  if (continuation) {
+    const page = await youtubeSearchPage(q, continuation)
+    return { tracks: page.tracks, source: 'youtube', continuation: page.continuation }
   }
 
-  // 2) YouTube Data API direct device se (APK me real YouTube search)
-  const yt = await searchYouTubeDirect(q)
-  if (yt.length) return { tracks: yt, source: 'youtube' }
+  if (isNative()) {
+    // APK: UNLIMITED YouTube search — pehle ye (no key, no quota)
+    const page = await youtubeSearchPage(q, null)
+    if (page.tracks.length) {
+      return { tracks: page.tracks, source: 'youtube', continuation: page.continuation }
+    }
+    // backup: Data API (agar YT_API_KEY secret set ho)
+    const yt = await searchYouTubeDirect(q)
+    if (yt.length) return { tracks: yt, source: 'youtube', continuation: null }
+  } else {
+    // web / hosted backend (server-side InnerTube + 1h cache)
+    try {
+      const res = await fetch(
+        `${QALB.apiBase}/api/youtube-search?q=${encodeURIComponent(q)}`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (res.ok) {
+        const data = (await res.json()) as {
+          tracks?: QalbTrack[]
+          source?: SearchSource
+          continuation?: string | null
+        }
+        if (data.tracks?.length) {
+          return {
+            tracks: data.tracks,
+            source: data.source === 'youtube' ? 'youtube' : 'library',
+            continuation: data.continuation ?? null,
+          }
+        }
+      }
+    } catch {
+      /* APK → next step */
+    }
+  }
 
-  // 3) Firestore verified library (REST — rules public read)
+  // Firestore verified library (REST — rules public read)
   const fsTracks = await searchTracksFromFirestore(q)
-  if (fsTracks.length) return { tracks: fsTracks, source: 'library' }
+  if (fsTracks.length) return { tracks: fsTracks, source: 'library', continuation: null }
 
-  // 4) bundled starter library (offline fallback)
-  return { tracks: searchBundledLibrary(q), source: 'bundled' }
+  // bundled starter library (offline fallback)
+  return { tracks: searchBundledLibrary(q), source: 'bundled', continuation: null }
 }

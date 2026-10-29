@@ -222,7 +222,7 @@ export function CalendarView() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-extrabold text-emerald-50">
             <MoonStar className="h-5 w-5 text-emerald-400" /> Islamic Calendar
-            <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#d4a937]">
+            <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#ddba5f]">
               Sunni Hanafi
             </span>
           </h1>
@@ -269,7 +269,7 @@ export function CalendarView() {
           {/* hijri card */}
           <section
             aria-label="Hijri date"
-            className="emerald-gradient relative overflow-hidden rounded-3xl p-5 text-emerald-950 shadow-[0_16px_48px_-16px_rgba(16,185,129,0.5)]"
+            className="emerald-gradient relative overflow-hidden rounded-3xl p-5 text-emerald-950 shadow-[0_16px_48px_-16px_rgba(221,186,95,0.45)]"
           >
             <div className="absolute -right-6 -top-8 text-[110px] leading-none opacity-15">🕌</div>
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-900/70">
@@ -317,14 +317,14 @@ export function CalendarView() {
             <section
               aria-label="Next prayer countdown"
               className="card-surface flex items-center justify-between rounded-2xl border-gold/20 p-4"
-              style={{ borderColor: 'rgba(212,169,55,0.25)' }}
+              style={{ borderColor: 'rgba(221,186,95,0.25)' }}
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#d4a937]/10 text-xl">
-                  <AlarmClock className="h-5 w-5 text-[#d4a937]" />
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ddba5f]/10 text-xl">
+                  <AlarmClock className="h-5 w-5 text-[#ddba5f]" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#d4a937]">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#ddba5f]">
                     Agli Namaz — {PRAYER_NAMES_UR[nextPrayer]}
                   </p>
                   <p className="font-mono text-xl font-bold tabular-nums text-emerald-50">
@@ -349,7 +349,7 @@ export function CalendarView() {
                 <div
                   key={name}
                   className={`card-surface flex items-center justify-between rounded-2xl px-4 py-3 transition ${
-                    isNext ? 'border-emerald-400/40 shadow-[0_0_24px_-8px_rgba(16,185,129,0.4)]' : ''
+                    isNext ? 'border-emerald-400/40 shadow-[0_0_24px_-8px_rgba(221,186,95,0.35)]' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">

@@ -42,6 +42,10 @@ const RETRY_DELAYS = [60_000, 60_000, 60_000, 60_000]
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
+// Permission settings se wapas aane pe auto-install (ek dafa armed hota hai)
+let autoInstallArmed = false
+let autoRetryInitDone = false
+
 function errMsg(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e)
   return m.replace(/^Download error:\s*/i, '')
@@ -86,6 +90,8 @@ export async function checkForUpdateEngine(force = false): Promise<AppVersionInf
   // nahi mila / same version → idle
   if (!latest || latest.versionCode <= QALB.currentVersionCode) {
     // stale APKs clean kar do (space bachao)
+    // NOTE: plugin version-aware hai — pending update ka APK (naya
+    // versionCode) SURAKSHIT rehta hai, sirf purane delete hote hain.
     const plugin = getUpdaterPlugin()
     if (plugin) {
       void plugin
@@ -114,6 +120,52 @@ export async function checkForUpdateEngine(force = false): Promise<AppVersionInf
   // web / purana build → old flow (profile card "Download Karein" → URL open)
   set({ phase: 'idle' })
   return latest
+}
+
+// ── Retry ("Dobara koshish") ─────────────────────────────────────────
+// IMPORTANT: ye checkForUpdateEngine() NAHI call karta — wo same-version
+// case me cleanStale chala ke downloaded APK DELETE kar deta tha, isliye
+// "install hota nahi hai" wala bug banta tha. Ab: APK ready hai to seedha
+// install (permission ab mil gayi hogi), warna download dobara.
+export async function retryEngine(): Promise<void> {
+  const st = useUpdateStore.getState()
+  if (st.phase === 'downloading') return
+  if (!st.info) {
+    void checkForUpdateEngine(true)
+    return
+  }
+
+  const plugin = getUpdaterPlugin()
+  if (plugin) {
+    try {
+      const ready = await plugin.getReadyApk({ versionCode: String(st.info.versionCode) })
+      if (ready?.path) {
+        set({ phase: 'ready', readyPath: ready.path, progress: 100 })
+        void installEngine()
+        return
+      }
+    } catch {
+      /* fallthrough → re-download */
+    }
+  }
+  void startDownload(st.info)
+}
+
+// ── Auto-install on return from permission settings ──────────────────
+// Ek dafa init karo (UpdatePopup mount pe): user settings me "Allow from
+// this source" ON karke wapas aaye to install khud attempt ho jata hai.
+export function initAutoInstallRetry(): void {
+  if (autoRetryInitDone || typeof document === 'undefined') return
+  autoRetryInitDone = true
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    if (!autoInstallArmed) return
+    autoInstallArmed = false
+    // thoda wait — Android activity resume settle ho jaye
+    setTimeout(() => {
+      void installEngine({ openSettings: false })
+    }, 700)
+  })
 }
 
 // ── Download (auto + retry) ──────────────────────────────────────────
@@ -160,7 +212,9 @@ function scheduleRetry(info: AppVersionInfo, attempt: number) {
 }
 
 // ── Install ──────────────────────────────────────────────────────────
-export async function installEngine(): Promise<void> {
+export async function installEngine(
+  opts: { openSettings?: boolean } = {}
+): Promise<void> {
   const st = useUpdateStore.getState()
   if (st.phase === 'downloading') return // already chal raha hai
   if (!st.info) return
@@ -179,15 +233,19 @@ export async function installEngine(): Promise<void> {
   }
 
   try {
-    const res = await plugin.installApk({ path: st.readyPath })
+    const res = await plugin.installApk({
+      path: st.readyPath,
+      openSettings: opts.openSettings !== false,
+    })
     if (res?.needsPermission) {
-      // IMPORTANT: phase 'error' karna zaroori hai — popup sirf error phase me
-      // permission button dikhata hai. Warna silent fail hota tha (install tap pe kuch nahi).
+      // Settings screen khul gayi (ya khulni chahiye thi). Wapas aate hi
+      // auto-install attempt hoga (initAutoInstallRetry listener).
+      autoInstallArmed = true
       set({
         phase: 'error',
         needsPermission: true,
         error:
-          'Settings khul gayi — wahan "Allow from this source" ON karein, phir wapas aake "Dobara koshish" dabayein',
+          'Settings me "Allow from this source" ON karein — wapas aate hi install khud ho jayega',
       })
     }
   } catch (e) {
@@ -197,7 +255,10 @@ export async function installEngine(): Promise<void> {
 
 export function openPermissionSettingsEngine(): void {
   const plugin = getUpdaterPlugin()
-  if (plugin) void plugin.openPermissionSettings().catch(() => {})
+  if (plugin) {
+    autoInstallArmed = true
+    void plugin.openPermissionSettings().catch(() => {})
+  }
 }
 
 export function dismissEngine(): void {

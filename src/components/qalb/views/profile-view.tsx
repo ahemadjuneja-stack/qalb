@@ -105,7 +105,7 @@ export function ProfileView() {
       {/* profile card */}
       <section aria-label="Profile" className="card-surface rounded-3xl p-5">
         <div className="flex items-center gap-4">
-          <div className="emerald-gradient flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_rgba(16,185,129,0.7)]">
+          <div className="emerald-gradient flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_rgba(221,186,95,0.6)]">
             {name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">

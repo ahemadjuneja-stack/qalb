@@ -54,10 +54,14 @@ export const STORE_CATEGORIES = [
 ] as const
 
 export const SEARCH_SUGGESTIONS = [
-  'Tajdar-e-Haram naat',
+  'Tajdar-e-Haram',
+  'Owais Raza Qadri naat',
   'Nusrat Fateh Ali Khan qawwali',
   'Maher Zain nasheed',
+  'Junaid Jamshed naat',
+  'Amjad Sabri kalam',
   'Allah Hoo hamd',
-  'Owais Raza Qadri naat',
+  'Ramzan special naat',
   'sufi kalam',
+  'Madina naat',
 ]

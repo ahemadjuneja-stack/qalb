@@ -3,7 +3,7 @@
 // Qalb — Home Tab: AI Smart Search (Gemini Guardian) + Trending + Playlists
 
 import { useEffect, useState } from 'react'
-import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play } from 'lucide-react'
+import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play, ChevronDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { usePlayerStore } from '@/lib/player-store'
@@ -27,6 +27,9 @@ export function HomeView() {
   const [guardian, setGuardian] = useState<SearchValidationResult | null>(null)
   const [results, setResults] = useState<QalbTrack[]>([])
   const [resultSource, setResultSource] = useState<string>('')
+  const [activeContinuation, setActiveContinuation] = useState<string | null>(null)
+  const [refined, setRefined] = useState('')
+  const [loadingMore, setLoadingMore] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
 
   const playQueue = usePlayerStore((s) => s.playQueue)
@@ -57,10 +60,13 @@ export function HomeView() {
       }
 
       setPhase('searching')
-      // APK-safe chain: hosted API → YouTube direct → Firestore → bundled
-      const data = await youtubeSearchSmart(validation.refinedQuery || q)
+      // APK-safe chain: YouTube unlimited → YT API → Firestore → bundled
+      const usedQuery = validation.refinedQuery || q
+      setRefined(usedQuery)
+      const data = await youtubeSearchSmart(usedQuery)
       setResults(data.tracks)
       setResultSource(data.source)
+      setActiveContinuation(data.continuation)
       setPhase('results')
 
       if (data.tracks.length === 0) {
@@ -78,6 +84,25 @@ export function HomeView() {
         category: null,
         provider: 'rules',
       })
+    }
+  }
+
+  // "Aur Naat load karein" — YouTube continuation se agla page (UNLIMITED)
+  async function loadMore() {
+    if (!activeContinuation || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const data = await youtubeSearchSmart(refined, activeContinuation)
+      setResults((prev) => {
+        const seen = new Set(prev.map((t) => t.videoId))
+        const fresh = data.tracks.filter((t) => !seen.has(t.videoId))
+        return [...prev, ...fresh]
+      })
+      setActiveContinuation(data.continuation)
+    } catch {
+      /* network fail — chup reh, purane results safe hain */
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -116,7 +141,7 @@ export function HomeView() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Naat, hamd ya qawwali search karein…"
             aria-label="Search query"
-            className="w-full rounded-2xl border border-emerald-400/15 bg-[#0c1613] py-3.5 pl-11 pr-28 text-sm text-emerald-50 placeholder:text-emerald-200/35 focus:border-emerald-400/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+            className="w-full rounded-2xl border border-emerald-400/15 bg-[#141419] py-3.5 pl-11 pr-28 text-sm text-emerald-50 placeholder:text-emerald-200/35 focus:border-emerald-400/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
           />
           <button
             type="submit"
@@ -213,17 +238,36 @@ export function HomeView() {
             <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
               Results ({results.length})
             </h2>
-            {(resultSource === 'library' || resultSource === 'bundled') && (
-              <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300/70">
-                {resultSource === 'library' ? 'verified library' : 'starter library'}
-              </span>
-            )}
+            <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300/70">
+              {resultSource === 'youtube'
+                ? 'YouTube — live search'
+                : resultSource === 'library'
+                  ? 'verified library'
+                  : resultSource === 'cache'
+                    ? 'recent search'
+                    : 'starter library'}
+            </span>
           </div>
           <div className="card-surface rounded-2xl p-2">
             {results.map((t, i) => (
               <TrackRow key={`${t.videoId}-${t.id}`} track={t} index={i} queue={results} showIndex={false} />
             ))}
           </div>
+          {activeContinuation && results.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="mx-auto mt-3 flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/5 px-4 py-2 text-[12px] font-bold text-emerald-300 transition hover:bg-emerald-400/15 disabled:opacity-50"
+            >
+              {loadingMore ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              Aur Naat load karein
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setPhase('idle')}

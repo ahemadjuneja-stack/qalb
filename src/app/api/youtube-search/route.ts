@@ -1,11 +1,13 @@
-// Qalb — GET /api/youtube-search?q=<refined query>
-// 1) YOUTUBE_API_KEY env set ho → YouTube Data API v3 (embeddable videos, IN/UR biased)
-// 2) warna local verified library se keyword search (offline sandbox fallback)
+// Qalb — GET /api/youtube-search?q=<query>&cont=<continuation token>
+// 1) YouTube InnerTube (UNLIMITED — koi API key nahi chahiye, server-side)
+// 2) YOUTUBE_API_KEY env set ho → YouTube Data API v3 (embeddable-biased backup)
+// 3) warna local verified library se keyword search (offline sandbox fallback)
 // Response 1h in-memory cache me save hota hai.
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { cacheGet, cacheSet, cacheKey } from '@/lib/search-cache'
+import { youtubeSearchPage } from '@/lib/youtube-search-source'
 import type { QalbTrack } from '@/lib/types'
 
 const CACHE_TTL = 60 * 60 * 1000 // 1h
@@ -111,23 +113,43 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const q = (searchParams.get('q') || '').trim()
-    if (!q) {
+    const cont = searchParams.get('cont')
+    if (!q && !cont) {
       return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
     }
 
-    const key = cacheKey(['yt-search', q])
-    const cached = cacheGet<QalbTrack[]>(key)
-    if (cached) return NextResponse.json({ tracks: cached, source: 'cache' })
-
-    let tracks = await searchYouTubeDataApi(q)
-    let source: 'youtube' | 'library' = 'youtube'
-    if (!tracks) {
-      tracks = await searchLocalLibrary(q)
-      source = 'library'
+    const key = cacheKey(['yt-search', cont ? `cont:${cont}` : q])
+    const cached = cacheGet<{ tracks: QalbTrack[]; continuation: string | null }>(key)
+    if (cached) {
+      return NextResponse.json({
+        tracks: cached.tracks,
+        source: 'cache',
+        continuation: cached.continuation,
+      })
     }
 
-    cacheSet(key, tracks, CACHE_TTL)
-    return NextResponse.json({ tracks, source })
+    // 1) InnerTube — UNLIMITED, no key (server-side fetch, CORS nahi lagta)
+    // 2) cont token ke saath sirf InnerTube hi pagination deta hai
+    const page = await youtubeSearchPage(q, cont)
+    if (page.tracks.length) {
+      cacheSet(key, page, CACHE_TTL)
+      return NextResponse.json({
+        tracks: page.tracks,
+        source: 'youtube',
+        continuation: page.continuation,
+      })
+    }
+
+    // 3) Data API backup (agar key ho) — sirf fresh search ke liye
+    let tracks: QalbTrack[] | null = cont ? null : await searchYouTubeDataApi(q)
+    if (tracks?.length) {
+      cacheSet(key, { tracks, continuation: null }, CACHE_TTL)
+      return NextResponse.json({ tracks, source: 'youtube', continuation: null })
+    }
+
+    // 4) library fallback
+    tracks = cont ? [] : await searchLocalLibrary(q)
+    return NextResponse.json({ tracks, source: 'library', continuation: null })
   } catch (e) {
     console.error('[api/youtube-search] error:', e)
     return NextResponse.json({ tracks: [], source: 'none', error: 'Search failed' }, { status: 500 })

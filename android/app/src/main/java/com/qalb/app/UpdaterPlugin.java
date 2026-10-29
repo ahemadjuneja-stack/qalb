@@ -179,10 +179,12 @@ public class UpdaterPlugin extends Plugin {
         }
     }
 
-    /** Install intent — pehli baar "unknown apps" permission chahiye ho to settings khud khul jati hai */
+    /** Install intent — pehli baar "unknown apps" permission chahiye ho to settings khud khul jati hai
+     *  (openSettings=false → sirf check, settings nahi kholte — auto-retry ke liye) */
     @PluginMethod
     public void installApk(PluginCall call) {
         String path = call.getString("path");
+        boolean openSettings = call.getBoolean("openSettings", true);
         if (path == null) {
             call.reject("path missing");
             return;
@@ -197,19 +199,20 @@ public class UpdaterPlugin extends Plugin {
             }
 
             // Android 8+ par install permission check — nahi hai to SETTINGS SCREEN
-            // KHUD KHOLO (purane build me yahan sirf flag return hota tha jo JS
-            // popup dikhata hi nahi tha — isliye "install" tap pe kuch nahi hota tha)
+            // KHUD KHOLO (openSettings=true ho to; auto-retry me sirf silent check)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 PackageManager pm = ctx.getPackageManager();
                 if (!pm.canRequestPackageInstalls()) {
-                    try {
-                        Intent si = new Intent(
-                                android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                Uri.parse("package:" + ctx.getPackageName()));
-                        si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        ctx.startActivity(si);
-                    } catch (Exception ignored) {
-                        // kuch OEMs pe direct screen nahi milti — JS side button fallback hai
+                    if (openSettings) {
+                        try {
+                            Intent si = new Intent(
+                                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:" + ctx.getPackageName()));
+                            si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            ctx.startActivity(si);
+                        } catch (Exception ignored) {
+                            // kuch OEMs pe direct screen nahi milti — JS side button fallback hai
+                        }
                     }
                     call.resolve(new JSObject()
                             .put("ok", false)
@@ -260,18 +263,30 @@ public class UpdaterPlugin extends Plugin {
         }
     }
 
-    /** Purane versionCode ke APK clean */
+    /** Purane versionCode ke APK clean — keepVc SE BADE ya barabar version wale
+     *  APK SURAKSHIT rehte hain (pending update ka downloaded APK delete nahi hota).
+     *  .part (adhoora download) hamesha delete. */
     @PluginMethod
     public void cleanStale(PluginCall call) {
         String keepVc = call.getString("versionCode");
+        long keepNum = -1;
+        if (keepVc != null) {
+            try { keepNum = Long.parseLong(keepVc.trim()); } catch (Exception ignored) {}
+        }
         try {
             File[] files = apkDir().listFiles();
             if (files != null) {
+                java.util.regex.Pattern p =
+                        java.util.regex.Pattern.compile("qalb-update-(\\d+)\\.apk$");
                 for (File f : files) {
                     String name = f.getName();
-                    boolean isApk = name.endsWith(".apk") || name.endsWith(".part");
-                    boolean isKeep = keepVc != null && name.contains("qalb-update-" + keepVc + ".apk");
-                    if (isApk && !isKeep) f.delete();
+                    if (name.endsWith(".part")) { f.delete(); continue; }
+                    if (!name.endsWith(".apk")) continue;
+                    java.util.regex.Matcher m = p.matcher(name);
+                    long vc = m.find() ? Long.parseLong(m.group(1)) : -1;
+                    // vc < keepNum → purana APK, delete. vc >= keepNum → pending naya, rakho.
+                    if (vc >= 0 && keepNum >= 0 && vc < keepNum) f.delete();
+                    else if (vc < 0 && keepNum >= 0) f.delete(); // unknown naam — stale
                 }
             }
             call.resolve();

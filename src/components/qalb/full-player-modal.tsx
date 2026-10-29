@@ -88,7 +88,7 @@ export function FullPlayerModal() {
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', stiffness: 320, damping: 34 }}
-          className="fixed inset-0 z-[60] overflow-y-auto bg-gradient-to-b from-emerald-950/95 via-[#07110d] to-[#050a08]"
+          className="fixed inset-0 z-[60] overflow-y-auto bg-gradient-to-b from-emerald-950/95 via-[#0c0b08] to-[#080705]"
           role="dialog"
           aria-label="Full player"
         >
@@ -122,7 +122,7 @@ export function FullPlayerModal() {
               <div className="relative mx-auto mt-10 aspect-square w-[min(72vw,300px)]">
                 <div className="absolute inset-[-14%] animate-pulse-glow rounded-full bg-emerald-500/25 blur-3xl" />
                 <div className="h-full w-full animate-spin-slow">
-                  <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-emerald-400/20 shadow-[0_0_60px_-10px_rgba(16,185,129,0.5)]">
+                  <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-emerald-400/20 shadow-[0_0_60px_-10px_rgba(221,186,95,0.45)]">
                     {current.thumbnailUrl ? (
                       <img
                         src={current.thumbnailUrl}
@@ -135,7 +135,7 @@ export function FullPlayerModal() {
                       </div>
                     )}
                     {/* vinyl center */}
-                    <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-emerald-300/30 bg-[#050a08]">
+                    <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-emerald-300/30 bg-[#0a0906]">
                       <span className="text-xl">☪️</span>
                     </div>
                     {/* vinyl grooves */}
@@ -242,7 +242,7 @@ export function FullPlayerModal() {
               type="button"
               aria-label={isPlaying ? 'Pause' : 'Play'}
               onClick={toggle}
-              className="emerald-gradient flex h-[72px] w-[72px] items-center justify-center rounded-full text-emerald-950 shadow-[0_0_36px_-6px_rgba(16,185,129,0.65)] transition hover:scale-105 active:scale-95"
+              className="emerald-gradient flex h-[72px] w-[72px] items-center justify-center rounded-full text-emerald-950 shadow-[0_0_36px_-6px_rgba(221,186,95,0.6)] transition hover:scale-105 active:scale-95"
             >
               {isBuffering ? (
                 <Loader2 className="h-9 w-9 animate-spin" />

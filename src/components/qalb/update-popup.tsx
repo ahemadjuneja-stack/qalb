@@ -11,6 +11,8 @@ import {
   useUpdateStore,
   checkForUpdateEngine,
   installEngine,
+  retryEngine,
+  initAutoInstallRetry,
   dismissEngine,
   openPermissionSettingsEngine,
 } from '@/lib/update-engine'
@@ -25,8 +27,10 @@ export function UpdatePopup() {
 
   // app open pe auto-check + background se wapas aane pe re-check
   // (engine me 3-min throttle hai — isliye har visibility pe bhejna sasta hai)
+  // initAutoInstallRetry: permission settings se wapas aate hi auto-install
   useEffect(() => {
     void checkForUpdateEngine(false)
+    initAutoInstallRetry()
     const onVis = () => {
       if (document.visibilityState === 'visible') void checkForUpdateEngine(false)
     }
@@ -42,7 +46,7 @@ export function UpdatePopup() {
   if (phase === 'downloading') {
     return (
       <div className="fixed inset-x-0 top-0 z-[70] px-3 pt-3">
-        <div className="rounded-2xl border border-emerald-800/60 bg-[#0B120F]/95 p-4 shadow-xl backdrop-blur">
+        <div className="rounded-2xl border border-emerald-800/60 bg-[#12110d]/95 p-4 shadow-xl backdrop-blur">
           <div className="flex items-center justify-between text-xs text-emerald-300/90">
             <span className="font-semibold">Naya version v{verName} aa raha hai…</span>
             <span className="tabular-nums font-bold text-emerald-200">{progress}%</span>
@@ -62,7 +66,7 @@ export function UpdatePopup() {
   if (phase === 'ready' || phase === 'error') {
     return (
       <div className="fixed inset-x-0 bottom-28 z-[70] px-4">
-        <div className="rounded-2xl border border-emerald-700/60 bg-[#0C1411]/97 p-4 shadow-2xl backdrop-blur">
+        <div className="rounded-2xl border border-emerald-700/60 bg-[#14120e]/97 p-4 shadow-2xl backdrop-blur">
           {phase === 'ready' ? (
             <>
               <p className="text-sm font-bold text-emerald-100">
@@ -111,7 +115,7 @@ export function UpdatePopup() {
               )}
               <div className="mt-3 flex gap-2">
                 <button
-                  onClick={() => void checkForUpdateEngine(true)}
+                  onClick={() => void retryEngine()}
                   className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-sm font-bold text-emerald-950 active:scale-95"
                 >
                   Dobara koshish

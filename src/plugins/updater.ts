@@ -13,7 +13,9 @@ export interface UpdateProgressData {
 interface UpdaterPluginShape {
   getReadyApk(o: { versionCode: string }): Promise<{ path: string | null }>
   downloadApk(o: { url: string; versionCode: string }): Promise<{ path: string }>
-  installApk(o: { path: string }): Promise<{ ok: boolean; needsPermission?: boolean }>
+  installApk(
+    o: { path: string; openSettings?: boolean }
+  ): Promise<{ ok: boolean; needsPermission?: boolean }>
   openPermissionSettings(): Promise<void>
   cleanStale(o: { versionCode: string }): Promise<unknown>
   addListener?(

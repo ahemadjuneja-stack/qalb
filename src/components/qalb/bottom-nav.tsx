@@ -41,12 +41,12 @@ export function BottomNav({
               className="relative flex min-h-[3.5rem] flex-1 flex-col items-center justify-center gap-0.5 py-2 outline-none transition active:scale-95"
             >
               {isActive && (
-                <span className="absolute top-0 h-[3px] w-9 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+                <span className="absolute top-0 h-[3px] w-9 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(233,205,126,0.75)]" />
               )}
               <Icon
                 className={`h-[22px] w-[22px] transition-colors ${
                   isActive
-                    ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                    ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(233,205,126,0.55)]'
                     : 'text-emerald-100/40'
                 }`}
               />

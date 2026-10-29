@@ -105,7 +105,7 @@ export function StoreView() {
               onClick={() => setCategory(c.key)}
               className={`shrink-0 rounded-full px-3.5 py-2 text-[12px] font-semibold transition ${
                 category === c.key
-                  ? 'emerald-gradient text-emerald-950 shadow-[0_0_16px_-4px_rgba(16,185,129,0.6)]'
+                  ? 'emerald-gradient text-emerald-950 shadow-[0_0_16px_-4px_rgba(221,186,95,0.55)]'
                   : 'border border-emerald-400/15 bg-emerald-400/5 text-emerald-200/70 hover:border-emerald-400/30'
               }`}
               aria-pressed={category === c.key}
