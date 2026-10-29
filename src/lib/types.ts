@@ -56,6 +56,12 @@ export interface AladhanTimings {
   Asr: string
   Maghrib: string
   Isha: string
+  // Extended auqaat (Other Times tab) — Aladhan API inhe bhi return karta hai
+  Imsak?: string
+  Sunset?: string
+  Midnight?: string
+  Firstthird?: string
+  Lastthird?: string
 }
 
 export interface HijriDate {
