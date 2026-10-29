@@ -112,4 +112,60 @@ public class QalbNativePlugin extends Plugin {
         String m = e.getMessage();
         return m != null ? m : e.getClass().getSimpleName();
     }
+
+    // ── Crash Guard (CrashGuard.java) — boot health + recovery ──────
+
+    /** JS 12 sec stable chal gaya → native boot counter reset */
+    @PluginMethod
+    public void markSessionOk(PluginCall call) {
+        CrashGuard.markSessionOk(getContext());
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void getBootHealth(PluginCall call) {
+        int count = CrashGuard.bootCount(getContext());
+        JSObject res = new JSObject();
+        res.put("bootCount", count);
+        res.put("crashLoop", CrashGuard.crashLoop(getContext()));
+        call.resolve(res);
+    }
+
+    /** Pichli session ka hard-crash stack (JS ise crashLogs me report karega) */
+    @PluginMethod
+    public void getLastNativeCrash(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("crash", CrashGuard.readCrashFile(getContext()));
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void clearNativeCrash(PluginCall call) {
+        CrashGuard.clearCrashFile(getContext());
+        call.resolve();
+    }
+
+    /** WebView storage factory-reset — "uninstall-reinstall" ka in-app replacement */
+    @PluginMethod
+    public void factoryResetWebView(PluginCall call) {
+        JSObject res = new JSObject();
+        try {
+            com.getcapacitor.Bridge bridge = getBridge();
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().clearCache(true);
+                bridge.getWebView().clearFormData();
+                bridge.getWebView().clearHistory();
+                bridge.getWebView().clearSslPreferences();
+            }
+            res.put("ok", true);
+        } catch (Throwable t) {
+            res.put("ok", false);
+        }
+        try {
+            android.webkit.WebStorage.getInstance().deleteAllData();
+            android.webkit.CookieManager.getInstance().removeAllCookies(null);
+        } catch (Throwable ignored) {
+        }
+        call.resolve(res);
+    }
 }

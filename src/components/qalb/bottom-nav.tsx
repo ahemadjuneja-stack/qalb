@@ -19,9 +19,11 @@ const TABS: { key: QalbTab; label: string; icon: React.ComponentType<{ className
 export function BottomNav({
   active,
   onChange,
+  hiddenTabs = [],
 }: {
   active: QalbTab
   onChange: (tab: QalbTab) => void
+  hiddenTabs?: QalbTab[] // remoteConfig se disable hue tabs
 }) {
   return (
     <nav
@@ -29,7 +31,7 @@ export function BottomNav({
       className="glass fixed inset-x-0 bottom-0 z-50 border-t border-emerald-400/10 pb-[env(safe-area-inset-bottom)]"
     >
       <div className="mx-auto flex max-w-md items-stretch justify-around px-1">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.filter(({ key }) => !hiddenTabs.includes(key)).map(({ key, label, icon: Icon }) => {
           const isActive = active === key
           return (
             <button

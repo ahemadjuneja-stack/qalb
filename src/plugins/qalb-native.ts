@@ -11,6 +11,12 @@ export interface QalbNativePluginInterface {
   updatePlayback(options: { title: string; artist: string }): Promise<void>
   stopPlayback(): Promise<void>
   setStatusBarStyle(options: { dark: boolean }): Promise<void>
+  // ── Crash Guard (boot health / recovery) ──
+  markSessionOk(): Promise<void>
+  getBootHealth(): Promise<{ bootCount: number; crashLoop: boolean }>
+  getLastNativeCrash(): Promise<{ crash: string | null }>
+  clearNativeCrash(): Promise<void>
+  factoryResetWebView(): Promise<{ ok: boolean }>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -58,6 +64,58 @@ export async function nativeSetStatusBar(darkTheme: boolean) {
   if (!isNativeApp()) return
   try {
     await QalbNative.setStatusBarStyle({ dark: darkTheme })
+  } catch {
+    /* non-fatal */
+  }
+}
+
+// ── Crash Guard bridge (boot-guard.ts + shell use karte hain) ──────
+
+/** 12 sec stable session ke baad — native boot counter reset */
+export async function nativeMarkSessionOk() {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.markSessionOk()
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Native crash-loop counter (hard crashes jahan JS chalta hi nahi) */
+export async function nativeGetBootHealth(): Promise<{ bootCount: number; crashLoop: boolean } | null> {
+  if (!isNativeApp()) return null
+  try {
+    return await QalbNative.getBootHealth()
+  } catch {
+    return null
+  }
+}
+
+/** Pichli session ka native hard-crash stack (next boot pe report hota hai) */
+export async function nativeGetLastCrash(): Promise<string | null> {
+  if (!isNativeApp()) return null
+  try {
+    const res = await QalbNative.getLastNativeCrash()
+    return res?.crash ?? null
+  } catch {
+    return null
+  }
+}
+
+export async function nativeClearCrash() {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.clearNativeCrash()
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** WebView storage factory-reset — "uninstall-reinstall" ka in-app replacement */
+export async function nativeFactoryResetWebView(): Promise<void> {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.factoryResetWebView()
   } catch {
     /* non-fatal */
   }

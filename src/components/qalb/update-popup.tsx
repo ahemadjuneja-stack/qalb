@@ -41,6 +41,8 @@ export function UpdatePopup() {
   if (!info || (dismissedCode !== null && dismissedCode >= info.versionCode)) return null
 
   const verName = info.versionName
+  // mandatory update = "Baad me" nahi — app tab tak nahi chhodenge
+  const canDismiss = !info.mandatory
 
   // ── 1. Download progress banner (top) ─────────────────────────────
   if (phase === 'downloading') {
@@ -93,12 +95,14 @@ export function UpdatePopup() {
                 >
                   Abhi Install karein
                 </button>
-                <button
-                  onClick={() => dismissEngine()}
-                  className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
-                >
-                  Baad me
-                </button>
+                {canDismiss && (
+                  <button
+                    onClick={() => dismissEngine()}
+                    className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
+                  >
+                    Baad me
+                  </button>
+                )}
               </div>
             </>
           ) : (
@@ -120,12 +124,14 @@ export function UpdatePopup() {
                 >
                   Dobara koshish
                 </button>
-                <button
-                  onClick={() => dismissEngine()}
-                  className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
-                >
-                  Baad me
-                </button>
+                {canDismiss && (
+                  <button
+                    onClick={() => dismissEngine()}
+                    className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
+                  >
+                    Baad me
+                  </button>
+                )}
               </div>
             </>
           )}

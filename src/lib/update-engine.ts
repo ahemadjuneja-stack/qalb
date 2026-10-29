@@ -157,7 +157,14 @@ export async function checkForUpdateEngine(force = false): Promise<AppVersionInf
   set({ info: latest })
 
   // dismissed hai aur force nahi → auto-download nahi (profile card rehne do)
-  if (st.dismissedCode !== null && st.dismissedCode >= latest.versionCode && !force) {
+  // EXCEPTION: mandatory update (remoteConfig/server ka minVersionCode cross
+  // ho chuka) → dismiss maane hi nahi, popup wapas aa hi jayega.
+  if (
+    !latest.mandatory &&
+    st.dismissedCode !== null &&
+    st.dismissedCode >= latest.versionCode &&
+    !force
+  ) {
     set({ phase: 'idle' })
     return latest
   }
