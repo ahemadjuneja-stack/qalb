@@ -2,6 +2,7 @@
 
 // Qalb — Track list row + playing indicator (equalizer bars)
 
+import { memo } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
 import type { QalbTrack } from '@/lib/types'
@@ -16,7 +17,8 @@ export function EqualizerBars() {
   )
 }
 
-export function TrackRow({
+// memo — lambi lists me doosre rows faltu re-render nahi hote (smooth scroll)
+export const TrackRow = memo(function TrackRow({
   track,
   index,
   queue,
@@ -55,7 +57,7 @@ export function TrackRow({
     <button
       type="button"
       onClick={handlePlay}
-      className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-emerald-400/5 active:scale-[0.99]"
+      className="cv-row flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-emerald-400/5 active:scale-[0.99]"
       aria-label={`${track.title} — ${isCurrent && isPlaying ? 'pause' : 'play'}`}
     >
       {showIndex ? (
@@ -71,7 +73,7 @@ export function TrackRow({
       ) : (
         <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
           {track.thumbnailUrl ? (
-            <img src={track.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <img src={track.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <span className="flex h-full w-full items-center justify-center">🕌</span>
           )}
@@ -109,4 +111,4 @@ export function TrackRow({
       </span>
     </button>
   )
-}
+})

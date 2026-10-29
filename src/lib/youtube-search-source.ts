@@ -55,8 +55,8 @@ async function httpGetText(
       const res = await CapacitorHttp.get({
         url,
         headers,
-        connectTimeout: 12000,
-        readTimeout: 20000,
+        connectTimeout: 8000,
+        readTimeout: 12000,
         responseType: 'text',
       })
       if (res.status >= 200 && res.status < 300) {
@@ -84,8 +84,8 @@ async function httpPostJson(
         url,
         headers: { ...headers, 'Content-Type': 'application/json' },
         data: body as Record<string, unknown>,
-        connectTimeout: 12000,
-        readTimeout: 20000,
+        connectTimeout: 8000,
+        readTimeout: 12000,
       })
       if (res.status >= 200 && res.status < 300) return res.data
       return null

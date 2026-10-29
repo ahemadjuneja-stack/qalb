@@ -127,7 +127,7 @@
   --glow: rgba(15, 145, 99, 0.35);
   --shadow-float: rgba(23, 40, 31, 0.18);
   --text-glow-color: rgba(15, 145, 99, 0.22);
-  --glass-bg: rgba(252, 251, 246, 0.86);
+  --glass-bg: rgba(252, 251, 246, 0.93);
   --card-surface-bg: linear-gradient(165deg, #ffffff, #fbfaf3);
   --card-surface-border: rgba(23, 40, 31, 0.08);
   --player-bg: linear-gradient(180deg, #f3f0e4, #ece8d9);
@@ -198,7 +198,7 @@
   --glow: rgba(61, 220, 158, 0.4);
   --shadow-float: rgba(0, 0, 0, 0.7);
   --text-glow-color: rgba(94, 227, 171, 0.35);
-  --glass-bg: rgba(12, 18, 15, 0.82);
+  --glass-bg: rgba(12, 18, 15, 0.91);
   --card-surface-bg: linear-gradient(165deg, rgba(20, 30, 25, 0.92), rgba(11, 16, 13, 0.96));
   --card-surface-border: rgba(61, 220, 158, 0.12);
   --player-bg: linear-gradient(180deg, #0c1511, #060a08);
@@ -229,6 +229,8 @@
       radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(169, 130, 31, 0.05)), transparent 55%);
     background-attachment: fixed;
     overscroll-behavior-y: none;
+    /* Android WebView — native app jaisi tap feel (koi grey flash nahi) */
+    -webkit-tap-highlight-color: transparent;
   }
   .dark body {
     background-image:
@@ -273,10 +275,13 @@
   border-radius: 999px;
 }
 
+/* PERF: backdrop-filter Android WebView me scrolling ke waqt har frame
+   GPU re-blur karta hai = jank. Blur radius kam + bg zyada opaque —
+   look taqreeban same, scroll kaafi smooth. */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(18px) saturate(1.25);
-  -webkit-backdrop-filter: blur(18px) saturate(1.25);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
 }
 
 .text-glow {
@@ -291,8 +296,15 @@
 /* update popup / dialog surfaces */
 .popup-surface {
   background: var(--popup-bg);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.15);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+}
+
+/* Lambi lists (search results / trending) — offscreen rows skip render
+   = smooth scrolling. Row height ~60px fixed hai isliye safe. */
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 60px;
 }
 
 /* full player modal background */

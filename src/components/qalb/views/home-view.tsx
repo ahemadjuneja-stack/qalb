@@ -1,9 +1,9 @@
 'use client'
 
-// Qalb — Home Tab: AI Smart Search (Gemini Guardian) + Trending + Playlists
+// Qalb — Home Tab: Paak Kalaam Search + Trending + Playlists
 
-import { useEffect, useState } from 'react'
-import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play, ChevronDown, Moon, SunMedium } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Search, ShieldCheck, ShieldAlert, Loader2, Play, ChevronDown, Moon, SunMedium } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { usePlayerStore } from '@/lib/player-store'
@@ -14,6 +14,21 @@ import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
 
 type Phase = 'idle' | 'validating' | 'blocked' | 'searching' | 'results'
+
+// Search watchdog — agar network promise atak jaye (CapacitorHttp ka known
+// issue: kabhi-kabhi native promise settle nahi hota) to UI hamesha recover
+// ho. Iske bina search box hamesha ke liye "lock" ho jata tha.
+const SEARCH_WATCHDOG_MS = 15000
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('search-timeout')), ms)
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) }
+    )
+  })
+}
 
 const CATEGORY_CHIPS = [
   { label: 'Naat', query: 'naat sharif' },
@@ -33,6 +48,9 @@ export function HomeView() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
   const [theme, setTheme] = useState<QalbTheme>('dark')
+
+  // har nayi search purani ko supersede karti hai (generation counter)
+  const searchIdRef = useRef(0)
 
   const playQueue = usePlayerStore((s) => s.playQueue)
   const openFull = usePlayerStore((s) => s.openFull)
@@ -54,13 +72,19 @@ export function HomeView() {
 
   async function runSearch(rawQuery: string) {
     const q = rawQuery.trim()
-    if (!q || phase === 'validating' || phase === 'searching') return
+    if (!q) return
+    // NOTE: pehle yahan phase-guard tha — agar koi request atak jati to
+    // search HAMESHA ke liye lock ho jata tha. Ab nayi search purani ko
+    // cancel/supersede karti hai (stale generation ka result discard).
+    const searchId = ++searchIdRef.current
+    const stale = () => searchIdRef.current !== searchId
     setQuery(q)
     setGuardian(null)
     setPhase('validating')
     try {
       // APK-safe chain: hosted API → device-side rules (search-client.ts)
-      const validation = await validateSmart(q)
+      const validation = await withTimeout(validateSmart(q), SEARCH_WATCHDOG_MS)
+      if (stale()) return
       setGuardian(validation)
 
       if (!validation.valid) {
@@ -72,7 +96,8 @@ export function HomeView() {
       // APK-safe chain: YouTube unlimited → YT API → Firestore → bundled
       const usedQuery = validation.refinedQuery || q
       setRefined(usedQuery)
-      const data = await youtubeSearchSmart(usedQuery)
+      const data = await withTimeout(youtubeSearchSmart(usedQuery), SEARCH_WATCHDOG_MS)
+      if (stale()) return
       setResults(data.tracks)
       setResultSource(data.source)
       setActiveContinuation(data.continuation)
@@ -85,13 +110,11 @@ export function HomeView() {
         })
       }
     } catch {
-      setPhase('blocked')
-      setGuardian({
-        valid: false,
-        reason: 'Search me masla hua — dobara koshish karein.',
-        refinedQuery: null,
-        category: null,
-        provider: 'rules',
+      if (stale()) return
+      setPhase('idle')
+      toast({
+        title: 'Search me masla hua',
+        description: 'Network slow hai — dobara try karein.',
       })
     }
   }
@@ -101,7 +124,10 @@ export function HomeView() {
     if (!activeContinuation || loadingMore) return
     setLoadingMore(true)
     try {
-      const data = await youtubeSearchSmart(refined, activeContinuation)
+      const data = await withTimeout(
+        youtubeSearchSmart(refined, activeContinuation),
+        SEARCH_WATCHDOG_MS
+      )
       setResults((prev) => {
         const seen = new Set(prev.map((t) => t.videoId))
         const fresh = data.tracks.filter((t) => !seen.has(t.videoId))
@@ -145,8 +171,8 @@ export function HomeView() {
         </div>
       </header>
 
-      {/* AI search */}
-      <section aria-label="AI Search">
+      {/* search */}
+      <section aria-label="Search">
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -170,9 +196,9 @@ export function HomeView() {
             {phase === 'validating' || phase === 'searching' ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Sparkles className="h-3.5 w-3.5" />
+              <Search className="h-3.5 w-3.5" />
             )}
-            {phase === 'validating' ? 'AI check…' : 'Search'}
+            {phase === 'validating' ? 'Checking…' : 'Search'}
           </button>
         </form>
 
@@ -207,15 +233,12 @@ export function HomeView() {
             )}
             <span>
               <b className="font-semibold">
-                {guardian.valid ? 'AI Guardian approved' : 'Blocked'}:
+                {guardian.valid ? 'Verified' : 'Blocked'}:
               </b>{' '}
               {guardian.reason}
               {guardian.valid && guardian.refinedQuery && (
                 <span className="mt-1 block text-emerald-300/80">
-                  Refined query: <i>“{guardian.refinedQuery}”</i>
-                  <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-400/90">
-                    {guardian.provider}
-                  </span>
+                  Search: <i>“{guardian.refinedQuery}”</i>
                 </span>
               )}
             </span>

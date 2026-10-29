@@ -81,7 +81,7 @@ async function geminiValidate(query: string): Promise<SearchValidationResult | n
       valid: Boolean(parsed.valid),
       category: (parsed.category as SearchValidationResult['category']) ?? null,
       refinedQuery: parsed.valid ? parsed.refinedQuery ?? query : null,
-      reason: parsed.reason || 'Gemini Flash ne validate kiya.',
+      reason: parsed.reason || 'Content verified.',
       provider: 'gemini',
     }
   } catch {
@@ -112,7 +112,7 @@ async function zaiValidate(query: string): Promise<SearchValidationResult | null
       valid: Boolean(parsed.valid),
       category: (parsed.category as SearchValidationResult['category']) ?? null,
       refinedQuery: parsed.valid ? parsed.refinedQuery ?? query : null,
-      reason: parsed.reason || 'AI guardian ne validate kiya.',
+      reason: parsed.reason || 'Content verified.',
       provider: 'zai',
     }
   } catch {
