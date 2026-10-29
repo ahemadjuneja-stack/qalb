@@ -57,8 +57,24 @@ async function fsListDocs(collection: string, signal?: AbortSignal): Promise<FSD
   return json.documents ?? []
 }
 
+// Network promise ko timeout wrap karta hai — CapacitorHttp ka known issue:
+// cold-start pe native promise kabhi-kabhi settle nahi hota (hang) → caller
+// hamesha recover kar sake. AbortSignal.timeout purane WebView me nahi hai,
+// isliye Promise.race pattern (har jagah kaam karta hai).
+export function withNetTimeout<T>(p: Promise<T>, ms = 10_000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('network-timeout')), ms)
+    p.then(
+      (v) => { clearTimeout(t); resolve(v) },
+      (e) => { clearTimeout(t); reject(e) }
+    )
+  })
+}
+
 async function fsGetDoc(collection: string, docId: string): Promise<FSDoc | null> {
-  const res = await fetch(`${FS_BASE()}/${collection}/${docId}`, { cache: 'no-store' })
+  const res = await withNetTimeout(
+    fetch(`${FS_BASE()}/${collection}/${docId}`, { cache: 'no-store' })
+  )
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`firestore ${collection}/${docId}: ${res.status}`)
   return (await res.json()) as FSDoc
@@ -108,21 +124,19 @@ function docIdFrom(name: string | undefined): string {
 // ── 1. App version (in-app updater ka core) ──────────────────────
 
 export async function fetchAppVersionFromFirestore(): Promise<AppVersionInfo | null> {
-  try {
-    const doc = await fsGetDoc('appVersions', 'latest')
-    if (!doc) return null
-    const d = unwrapDoc(doc)
-    if (!d.versionCode && !d.versionName) return null
-    return {
-      versionCode: Number(d.versionCode ?? 0),
-      versionName: String(d.versionName ?? ''),
-      apkUrl: String(d.apkUrl ?? ''),
-      releaseNotes: (d.releaseNotes as string | null) ?? null,
-      mandatory: Boolean(d.mandatory ?? false),
-      publishedAt: String(d.publishedAt ?? ''),
-    }
-  } catch {
-    return null
+  // NOTE: error yahan swallow NAHI karte — update-engine ko fail pata hona
+  // chahiye taake wo auto-retry chala sake (warna "update nahi aata" bug).
+  const doc = await fsGetDoc('appVersions', 'latest')
+  if (!doc) return null
+  const d = unwrapDoc(doc)
+  if (!d.versionCode && !d.versionName) return null
+  return {
+    versionCode: Number(d.versionCode ?? 0),
+    versionName: String(d.versionName ?? ''),
+    apkUrl: String(d.apkUrl ?? ''),
+    releaseNotes: (d.releaseNotes as string | null) ?? null,
+    mandatory: Boolean(d.mandatory ?? false),
+    publishedAt: String(d.publishedAt ?? ''),
   }
 }
 

@@ -7,7 +7,7 @@
 
 import { create } from 'zustand'
 import { QALB } from '@/lib/qalb'
-import { fetchAppVersionFromFirestore } from '@/lib/remote-data'
+import { fetchAppVersionFromFirestore, withNetTimeout } from '@/lib/remote-data'
 import { isNativeCapacitor } from '@/lib/downloads'
 import { getUpdaterPlugin, onDownloadProgress } from '@/plugins/updater'
 import type { AppVersionInfo } from '@/lib/types'
@@ -23,6 +23,8 @@ interface UpdateState {
   needsPermission: boolean
   dismissedCode: number | null
   lastCheckAt: number
+  checkingSince: number // stale 'checking' phase detect karne ke liye
+  lastCheckOk: boolean // false = pichla check network fail hua tha
 }
 
 export const useUpdateStore = create<UpdateState>(() => ({
@@ -34,13 +36,19 @@ export const useUpdateStore = create<UpdateState>(() => ({
   needsPermission: false,
   dismissedCode: null,
   lastCheckAt: 0,
+  checkingSince: 0,
+  lastCheckOk: true,
 }))
 
 const set = useUpdateStore.setState
 const CHECK_THROTTLE_MS = 3 * 60_000 // background re-check max 3 min baad
+const CHECK_FAIL_RETRY_MS = 30_000 // FAIL hua check sirf 30s baad dobara
+const CHECK_RETRY_DELAYS = [20_000, 40_000, 80_000, 160_000] // auto-retry backoff
 const RETRY_DELAYS = [60_000, 60_000, 60_000, 60_000]
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+let checkRetryTimer: ReturnType<typeof setTimeout> | null = null
+let checkAttempt = 0
 
 // Permission settings se wapas aane pe auto-install (ek dafa armed hota hai)
 let autoInstallArmed = false
@@ -58,37 +66,81 @@ function clearRetry() {
   }
 }
 
+function clearCheckRetry() {
+  if (checkRetryTimer) {
+    clearTimeout(checkRetryTimer)
+    checkRetryTimer = null
+  }
+}
+
+// Check fail hone pe auto-retry — app restart ki zaroorat nahi
+function scheduleCheckRetry() {
+  clearCheckRetry()
+  if (checkAttempt >= CHECK_RETRY_DELAYS.length) return
+  const delay = CHECK_RETRY_DELAYS[checkAttempt]
+  checkRetryTimer = setTimeout(() => {
+    checkRetryTimer = null
+    void checkForUpdateEngine(true)
+  }, delay)
+}
+
 // ── Check ────────────────────────────────────────────────────────────
 // force=false → background auto-check (3 min throttle, dismissed respect)
 // force=true  → user ne Profile se "Check" dabaya (dismiss ignore, turant)
 export async function checkForUpdateEngine(force = false): Promise<AppVersionInfo | null> {
   const st = useUpdateStore.getState()
-  if (st.phase === 'checking' || st.phase === 'downloading') return st.info
-  if (!force && Date.now() - st.lastCheckAt < CHECK_THROTTLE_MS) return st.info
+  // stuck-checking recovery — CapacitorHttp ka known issue: cold-start pe
+  // native promise kabhi-kabhi settle nahi hota. 25s+ purana 'checking'
+  // phase stale mana jayega, naya check allow.
+  const checkingStale = st.phase === 'checking' && Date.now() - st.checkingSince > 25_000
+  if ((st.phase === 'checking' || st.phase === 'downloading') && !checkingStale) return st.info
+  // FAIL hua check 30s baad retry ho sakta hai; successful check 3 min throttle
+  const throttleMs = st.lastCheckOk ? CHECK_THROTTLE_MS : CHECK_FAIL_RETRY_MS
+  if (!force && Date.now() - st.lastCheckAt < throttleMs) return st.info
 
-  set({ phase: 'checking', error: null })
+  clearCheckRetry()
+  set({ phase: 'checking', error: null, checkingSince: Date.now() })
 
   let latest: AppVersionInfo | null = null
+  let failed = false
   try {
-    // 1) native APK → Firestore REST direct
+    // 1) native APK → Firestore REST direct (10s timeout ke sath)
     if (isNativeCapacitor()) latest = await fetchAppVersionFromFirestore()
 
-    // 2) web preview / hosted API
+    // 2) web preview / hosted API (10s timeout ke sath)
     if (!latest) {
-      const res = await fetch(`${QALB.apiBase}/api/app-version`, { cache: 'no-store' })
+      const res = await withNetTimeout(
+        fetch(`${QALB.apiBase}/api/app-version`, { cache: 'no-store' })
+      )
       if (res.ok) latest = (await res.json()) as AppVersionInfo
     }
 
     // 3) last resort — Firestore REST
     if (!latest) latest = await fetchAppVersionFromFirestore()
   } catch {
-    /* network fail — niche handle */
+    failed = true
   }
 
-  set({ lastCheckAt: Date.now() })
+  // check FAIL hua (network cold-start / hang) → chhote backoff pe auto-retry.
+  // Pehle fail pe bhi 3-min throttle lagta tha + koi retry nahi tha — isliye
+  // user ko app band karke dobara kholna padta tha. Ab engine khud recover.
+  if (!latest) {
+    set({ phase: 'idle', info: null, lastCheckAt: Date.now(), lastCheckOk: !failed })
+    if (failed) {
+      checkAttempt++
+      scheduleCheckRetry()
+    } else {
+      checkAttempt = 0
+    }
+    return null
+  }
 
-  // nahi mila / same version → idle
-  if (!latest || latest.versionCode <= QALB.currentVersionCode) {
+  // successful check → throttle normal, retry counter reset
+  set({ lastCheckAt: Date.now(), lastCheckOk: true, checkingSince: 0 })
+  checkAttempt = 0
+
+  // same/older version → idle
+  if (latest.versionCode <= QALB.currentVersionCode) {
     // stale APKs clean kar do (space bachao)
     // NOTE: plugin version-aware hai — pending update ka APK (naya
     // versionCode) SURAKSHIT rehta hai, sirf purane delete hote hain.
