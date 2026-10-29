@@ -20,7 +20,8 @@ import com.getcapacitor.CapacitorWebView;
 public class KeepAliveWebView extends CapacitorWebView {
 
     public KeepAliveWebView(Context context) {
-        super(context);
+        // Capacitor 8 me CapacitorWebView ka sirf (Context, AttributeSet) constructor hai
+        this(context, null);
     }
 
     public KeepAliveWebView(Context context, AttributeSet attrs) {

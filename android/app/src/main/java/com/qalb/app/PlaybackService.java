@@ -159,7 +159,8 @@ public class PlaybackService extends Service {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setCategory(NotificationCompat.CATEGORY_MEDIA)
+                // NOTE: API 36 me Notification.CATEGORY_MEDIA constant REMOVE ho chuka hai
+                // (androidx NotificationCompat se bhi) — isliye category set nahi karte
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
