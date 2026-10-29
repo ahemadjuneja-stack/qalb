@@ -27,20 +27,35 @@ export const QALB = {
 } as const
 
 // Prayer cities — INDIA ONLY (Qalb Indian Sunni Hanafi app hai)
+// DEFAULT: JUNAGADH (Gujarat) — user base wahi hai.
 // Timings Aladhan API se aate hain: method=1 + school=1 (Hanafi Asr)
+// Coordinates precise timings dete hain — city-name geocoding se behtar.
+export interface PrayerCity {
+  city: string
+  country: string
+  flag: string
+  lat: number
+  lng: number
+}
+
 export const PRAYER_CITIES = [
-  { city: 'Delhi', country: 'India', flag: '🇮🇳' },
-  { city: 'Mumbai', country: 'India', flag: '🇮🇳' },
-  { city: 'Hyderabad', country: 'India', flag: '🇮🇳' },
-  { city: 'Lucknow', country: 'India', flag: '🇮🇳' },
-  { city: 'Kolkata', country: 'India', flag: '🇮🇳' },
-  { city: 'Bhopal', country: 'India', flag: '🇮🇳' },
-  { city: 'Ahmedabad', country: 'India', flag: '🇮🇳' },
-  { city: 'Bengaluru', country: 'India', flag: '🇮🇳' },
-  { city: 'Chennai', country: 'India', flag: '🇮🇳' },
-  { city: 'Jaipur', country: 'India', flag: '🇮🇳' },
-  { city: 'Srinagar', country: 'India', flag: '🇮🇳' },
-  { city: 'Patna', country: 'India', flag: '🇮🇳' },
+  { city: 'Junagadh', country: 'India', flag: '🕌', lat: 21.5222, lng: 70.4579 },
+  { city: 'Ahmedabad', country: 'India', flag: '🇮🇳', lat: 23.0225, lng: 72.5714 },
+  { city: 'Surat', country: 'India', flag: '🇮🇳', lat: 21.1702, lng: 72.8311 },
+  { city: 'Rajkot', country: 'India', flag: '🇮🇳', lat: 22.3039, lng: 70.8022 },
+  { city: 'Vadodara', country: 'India', flag: '🇮🇳', lat: 22.3072, lng: 73.1812 },
+  { city: 'Bhavnagar', country: 'India', flag: '🇮🇳', lat: 21.7645, lng: 72.1519 },
+  { city: 'Delhi', country: 'India', flag: '🇮🇳', lat: 28.6139, lng: 77.209 },
+  { city: 'Mumbai', country: 'India', flag: '🇮🇳', lat: 19.076, lng: 72.8777 },
+  { city: 'Hyderabad', country: 'India', flag: '🇮🇳', lat: 17.385, lng: 78.4867 },
+  { city: 'Lucknow', country: 'India', flag: '🇮🇳', lat: 26.8467, lng: 80.9462 },
+  { city: 'Kolkata', country: 'India', flag: '🇮🇳', lat: 22.5726, lng: 88.3639 },
+  { city: 'Bhopal', country: 'India', flag: '🇮🇳', lat: 23.2599, lng: 77.4126 },
+  { city: 'Bengaluru', country: 'India', flag: '🇮🇳', lat: 12.9716, lng: 77.5946 },
+  { city: 'Chennai', country: 'India', flag: '🇮🇳', lat: 13.0827, lng: 80.2707 },
+  { city: 'Jaipur', country: 'India', flag: '🇮🇳', lat: 26.9124, lng: 75.7873 },
+  { city: 'Srinagar', country: 'India', flag: '🇮🇳', lat: 34.0837, lng: 74.7973 },
+  { city: 'Patna', country: 'India', flag: '🇮🇳', lat: 25.5941, lng: 85.1376 },
 ] as const
 
 export const STORE_CATEGORIES = [

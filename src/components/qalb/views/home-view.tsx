@@ -1,9 +1,30 @@
 'use client'
 
-// Qalb — Home Tab: Paak Kalaam Search + Trending + Playlists
+// Qalb — Home Tab (music player style)
+// ─────────────────────────────────────────────────────────────────
+// Aam music apps (Spotify/Wynk/Resso) jaisa layout:
+//   1. Search bar (top)
+//   2. 🔥 Aaj ka Trending — DAILY rotation (verified pool + remote) —
+//      horizontal big cards, roz naye kalaam (YouTube trend jaisa)
+//   3. 🎤 Sunne Wale Kalaamkar — circular artist photos row (tap → search)
+//   4. Category chips (Naat/Hamd/Qawwali/Nasheed)
+//   5. 🎧 Curated Playlists (Firestore/bundled)
+//   6. 💚 Aap ki Playlists (user local — ⋮ se add kiye hue tracks)
+// Har track row par ListPlus button → playlist add sheet.
 
-import { useEffect, useRef, useState } from 'react'
-import { Search, ShieldCheck, ShieldAlert, Loader2, Play, ChevronDown, Moon, SunMedium } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Search,
+  ShieldCheck,
+  ShieldAlert,
+  Loader2,
+  Play,
+  ChevronDown,
+  Moon,
+  SunMedium,
+  ListPlus,
+  Trash2,
+} from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
@@ -12,6 +33,14 @@ import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
+import { buildDailyTrending, todayLabel } from '@/lib/daily-trending'
+import { QALB_ARTISTS, artistInitials } from '@/lib/artists'
+import {
+  listUserPlaylists,
+  deleteUserPlaylist,
+  usePlaylistPicker,
+  type UserPlaylist,
+} from '@/lib/user-playlists'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
 
 type Phase = 'idle' | 'validating' | 'blocked' | 'searching' | 'results'
@@ -50,6 +79,7 @@ export function HomeView() {
   // strict mode: ambiguous query par results sirf Islamic-marker wale
   const [strictMode, setStrictMode] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
+  const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([])
   const [theme, setTheme] = useState<QalbTheme>('light')
 
   // har nayi search purani ko supersede karti hai (generation counter)
@@ -57,7 +87,17 @@ export function HomeView() {
 
   const playQueue = usePlayerStore((s) => s.playQueue)
   const openFull = usePlayerStore((s) => s.openFull)
+  const openPicker = usePlaylistPicker((s) => s.openPicker)
+  const pickerOpen = usePlaylistPicker((s) => s.open)
   const { toast } = useToast()
+
+  // playlists refresh bhi jab sheet band ho (naya track add hua ho)
+  useEffect(() => {
+    if (!pickerOpen) {
+      const t = setTimeout(() => setUserPlaylists(listUserPlaylists()), 250)
+      return () => clearTimeout(t)
+    }
+  }, [pickerOpen])
 
   useEffect(() => {
     // hosted API pehle, APK me Firestore REST fallback (remote-data.ts)
@@ -65,6 +105,8 @@ export function HomeView() {
       .then((p) => setPlaylists(p))
       .catch(() => setPlaylists([]))
     setTheme(getTheme())
+    const t = setTimeout(() => setUserPlaylists(listUserPlaylists()), 0)
+    return () => clearTimeout(t)
   }, [])
 
   const switchTheme = () => {
@@ -149,7 +191,13 @@ export function HomeView() {
     }
   }
 
-  const trending = playlists.find((p) => p.slug === 'trending-kalam')?.tracks ?? []
+  // ── DAILY TRENDING — roz badalta hai (verified pool + remote tracks) ──
+  const remotePoolTracks = useMemo(() => {
+    const out: QalbTrack[] = []
+    for (const p of playlists) out.push(...p.tracks)
+    return out
+  }, [playlists])
+  const dailyTrending = useMemo(() => buildDailyTrending(remotePoolTracks, 10), [remotePoolTracks])
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
@@ -178,33 +226,7 @@ export function HomeView() {
       </header>
       <div className="qalb-divider mt-3" aria-hidden="true" />
 
-      {/* trending — sab se UPAR (user request): search se pehle dikhta hai */}
-      {trending.length > 0 && phase !== 'results' && (
-        <section aria-label="Trending">
-          <div className="mb-2.5 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
-              🔥 Trending Kalam
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                playQueue(trending, 0)
-                toast({ title: 'Trending kalam chal raha hai 🎵' })
-              }}
-              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
-            >
-              <Play className="h-3 w-3 fill-current" /> Sab play
-            </button>
-          </div>
-          <div className="card-surface rounded-2xl p-2">
-            {trending.map((t, i) => (
-              <TrackRow key={t.id} track={t} index={i} queue={trending} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* search */}
+      {/* search — music player style sab se upar */}
       <section aria-label="Search">
         <form
           onSubmit={(e) => {
@@ -365,7 +387,200 @@ export function HomeView() {
         </section>
       )}
 
-      {/* playlists */}
+      {/* 🔥 AAJ KA TRENDING — roz badalta hai — sab se UPAR music cards */}
+      {phase !== 'results' && dailyTrending.tracks.length > 0 && (
+        <section aria-label="Aaj ka Trending">
+          <div className="mb-2.5 flex items-center justify-between">
+            <div>
+              <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+                🔥 Aaj ka Trending
+              </h2>
+              <p className="text-[10px] text-emerald-200/40">
+                {todayLabel()} — roz naye kalaam
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                playQueue(dailyTrending.tracks, 0)
+                openFull()
+                toast({ title: 'Aaj ka trending chal raha hai 🎵' })
+              }}
+              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
+            >
+              <Play className="h-3 w-3 fill-current" /> Sab play
+            </button>
+          </div>
+          {/* horizontal big cards — music player style */}
+          <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+            {dailyTrending.tracks.map((t, i) => (
+              <div
+                key={t.videoId}
+                className="card-surface w-44 shrink-0 overflow-hidden rounded-2xl transition hover:border-emerald-400/30 active:scale-[0.98]"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    playQueue(dailyTrending.tracks, i)
+                    openFull()
+                  }}
+                  className="relative block h-24 w-full"
+                  aria-label={`${t.title} play karein`}
+                >
+                  {t.thumbnailUrl ? (
+                    <img
+                      src={t.thumbnailUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center bg-emerald-950 text-3xl">🕌</span>
+                  )}
+                  <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-[10px] font-extrabold text-gold backdrop-blur">
+                    {i + 1}
+                  </span>
+                  <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950 shadow-lg">
+                    <Play className="h-4 w-4 fill-current" />
+                  </span>
+                </button>
+                <div className="flex items-start gap-1 p-2.5 pt-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12.5px] font-bold leading-tight text-emerald-50">
+                      {t.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10.5px] text-emerald-200/50">{t.artist}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openPicker(t)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-emerald-200/50 transition hover:bg-emerald-400/10 hover:text-emerald-300"
+                    aria-label={`${t.title} playlist me add karein`}
+                  >
+                    <ListPlus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 🎤 POPULAR ARTISTS — circular photos row (music player style) */}
+      {phase !== 'results' && (
+        <section aria-label="Kalaamkar">
+          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+            🎤 Kalaamkar
+          </h2>
+          <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
+            {QALB_ARTISTS.map((a) => (
+              <button
+                key={a.name}
+                type="button"
+                onClick={() => void runSearch(a.query)}
+                className="group flex w-[72px] shrink-0 flex-col items-center gap-1.5"
+                aria-label={`${a.name} ka kalaam search karein`}
+              >
+                <span
+                  className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full border-2 transition group-hover:border-emerald-300/60 group-active:scale-95"
+                  style={{ borderColor: `${a.accent}55` }}
+                >
+                  {a.image ? (
+                    <img
+                      src={a.image}
+                      alt={a.name}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  ) : (
+                    <span
+                      className="flex h-full w-full items-center justify-center text-xl font-extrabold text-emerald-950"
+                      style={{ background: `linear-gradient(135deg, ${a.accent}, ${a.accent}88)` }}
+                    >
+                      {artistInitials(a.name)}
+                    </span>
+                  )}
+                </span>
+                <span className="w-full text-center">
+                  <span className="block truncate text-[10.5px] font-semibold text-emerald-100/85">
+                    {a.name}
+                  </span>
+                  <span className="block truncate text-[9px] text-emerald-200/40">{a.role}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 💚 AAP KI PLAYLISTS — user ki banayi hui (local) */}
+      {userPlaylists.length > 0 && phase !== 'results' && (
+        <section aria-label="Aap ki playlists">
+          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+            💚 Aap ki Playlists
+          </h2>
+          <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+            {userPlaylists.map((p) => (
+              <div
+                key={p.id}
+                className="card-surface w-40 shrink-0 overflow-hidden rounded-2xl p-3 transition hover:border-emerald-400/30 active:scale-[0.98]"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (p.tracks.length === 0) {
+                      toast({ title: 'Playlist khali hai', description: 'Kisi bhi track ke ⋮ se kalaam add karein.' })
+                      return
+                    }
+                    playQueue(p.tracks, 0)
+                    openFull()
+                  }}
+                  className="block w-full text-left"
+                  aria-label={`${p.name} play karein`}
+                >
+                  <div className="relative flex h-24 items-center justify-center rounded-xl text-4xl"
+                    style={{ background: 'rgba(16,185,129,0.13)', border: '1px solid rgba(16,185,129,0.27)' }}
+                  >
+                    {p.tracks.length > 0 && p.tracks[0].thumbnailUrl ? (
+                      <img
+                        src={p.tracks[0].thumbnailUrl}
+                        alt=""
+                        className="absolute inset-0 h-full w-full rounded-xl object-cover opacity-45"
+                        loading="lazy"
+                      />
+                    ) : null}
+                    <span className="relative">{p.emoji}</span>
+                    {p.tracks.length > 0 && (
+                      <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950">
+                        <Play className="h-3.5 w-3.5 fill-current" />
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2.5 truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
+                  <p className="truncate text-[10.5px] text-emerald-200/50">{p.tracks.length} kalam</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteUserPlaylist(p.id)
+                    setUserPlaylists(listUserPlaylists())
+                    toast({ title: `"${p.name}" delete ho gayi` })
+                  }}
+                  className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-red-300/70 transition hover:text-red-300"
+                  aria-label={`${p.name} delete karein`}
+                >
+                  <Trash2 className="h-3 w-3" /> Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 🎧 CURATED PLAYLISTS (Firestore/bundled) */}
       {playlists.length > 0 && phase !== 'results' && (
         <section aria-label="Playlists">
           <h2 className="mb-2.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
@@ -382,8 +597,7 @@ export function HomeView() {
                 }}
                 className="card-surface w-40 shrink-0 overflow-hidden rounded-2xl p-3 text-left transition hover:border-emerald-400/30 active:scale-[0.98]"
               >
-                <div
-                  className="flex h-24 items-center justify-center rounded-xl text-4xl"
+                <div className="flex h-24 items-center justify-center rounded-xl text-4xl"
                   style={{ background: `${p.accentColor}22`, border: `1px solid ${p.accentColor}44` }}
                 >
                   {p.coverEmoji}

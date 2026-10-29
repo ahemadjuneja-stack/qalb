@@ -25,6 +25,7 @@ import { PlayerView } from '@/components/qalb/views/player-view'
 import { CalendarView } from '@/components/qalb/views/calendar-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
+import { AddToPlaylistSheet } from '@/components/qalb/add-to-playlist-sheet'
 import { QalbErrorBoundary } from '@/components/qalb/error-boundary'
 import {
   SafeModeScreen,
@@ -174,6 +175,7 @@ function QalbShellInner({
       <UpdatePopup />
       <MiniPlayer />
       <FullPlayerModal />
+      <AddToPlaylistSheet />
       <BottomNav active={tab} onChange={setTab} hiddenTabs={hiddenTabs} />
     </PlayerProvider>
   )

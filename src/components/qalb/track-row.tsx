@@ -1,10 +1,14 @@
 'use client'
 
 // Qalb — Track list row + playing indicator (equalizer bars)
+// Row me 2 interactive areas: (1) play area — poora row, (2) ⋮ kebab —
+// "playlist me add karein" sheet. NOTE: button-in-button invalid HTML hai
+// isliye outer <div role=group> hai, andar 2 <button>.
 
 import { memo } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { ListPlus, Pause, Play } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
+import { usePlaylistPicker } from '@/lib/user-playlists'
 import type { QalbTrack } from '@/lib/types'
 
 export function EqualizerBars() {
@@ -34,6 +38,7 @@ export const TrackRow = memo(function TrackRow({
   const playQueue = usePlayerStore((s) => s.playQueue)
   const toggle = usePlayerStore((s) => s.toggle)
   const failed = usePlayerStore((s) => s.failedVideoIds)
+  const openPicker = usePlaylistPicker((s) => s.openPicker)
 
   const isActive =
     usePlayerStore.getState().queue[currentIndex]?.videoId === track.videoId &&
@@ -54,61 +59,77 @@ export const TrackRow = memo(function TrackRow({
   }
 
   return (
-    <button
-      type="button"
-      onClick={handlePlay}
-      className="cv-row flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-emerald-400/5 active:scale-[0.99]"
-      aria-label={`${track.title} — ${isCurrent && isPlaying ? 'pause' : 'play'}`}
+    <div
+      role="group"
+      aria-label={`${track.title} — ${track.artist}`}
+      className="cv-row flex w-full items-center gap-3 rounded-xl px-2 py-2 transition hover:bg-emerald-400/5"
     >
-      {showIndex ? (
-        isCurrent ? (
-          <span className="flex w-6 shrink-0 justify-center">
-            {isPlaying ? <EqualizerBars /> : <Play className="h-4 w-4 fill-emerald-400 text-emerald-400" />}
-          </span>
-        ) : (
-          <span className="w-6 shrink-0 text-center text-xs tabular-nums text-emerald-100/30">
-            {index + 1}
-          </span>
-        )
-      ) : (
-        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
-          {track.thumbnailUrl ? (
-            <img src={track.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center">🕌</span>
-          )}
-          <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition hover:opacity-100">
-            <Play className="h-4 w-4 fill-white text-white" />
-          </span>
-        </span>
-      )}
-
-      <span className="min-w-0 flex-1">
-        <span
-          className={`block truncate text-[13.5px] font-semibold leading-snug ${
-            isCurrent ? 'text-emerald-300' : 'text-emerald-50'
-          }`}
-        >
-          {track.title}
-        </span>
-        <span className="block truncate text-[11.5px] text-emerald-200/50">
-          {track.artist}
-          {track.category && track.category !== 'SEARCH' ? ` • ${track.category}` : ''}
-          {isFailed ? ' • embed unavailable' : ''}
-        </span>
-      </span>
-
-      <span
-        role="img"
-        aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-200/60"
+      <button
+        type="button"
+        onClick={handlePlay}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left active:scale-[0.99]"
+        aria-label={`${track.title} — ${isCurrent && isPlaying ? 'pause' : 'play'}`}
       >
-        {isCurrent && isPlaying ? (
-          <Pause className="h-4 w-4 fill-current" />
+        {showIndex ? (
+          isCurrent ? (
+            <span className="flex w-6 shrink-0 justify-center">
+              {isPlaying ? <EqualizerBars /> : <Play className="h-4 w-4 fill-emerald-400 text-emerald-400" />}
+            </span>
+          ) : (
+            <span className="w-6 shrink-0 text-center text-xs tabular-nums text-emerald-100/30">
+              {index + 1}
+            </span>
+          )
         ) : (
-          <Play className="h-4 w-4 fill-current" />
+          <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
+            {track.thumbnailUrl ? (
+              <img src={track.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center">🕌</span>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition hover:opacity-100">
+              <Play className="h-4 w-4 fill-white text-white" />
+            </span>
+          </span>
         )}
-      </span>
-    </button>
+
+        <span className="min-w-0 flex-1">
+          <span
+            className={`block truncate text-[13.5px] font-semibold leading-snug ${
+              isCurrent ? 'text-emerald-300' : 'text-emerald-50'
+            }`}
+          >
+            {track.title}
+          </span>
+          <span className="block truncate text-[11.5px] text-emerald-200/50">
+            {track.artist}
+            {track.category && track.category !== 'SEARCH' ? ` • ${track.category}` : ''}
+            {isFailed ? ' • embed unavailable' : ''}
+          </span>
+        </span>
+
+        <span
+          role="img"
+          aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-200/60"
+        >
+          {isCurrent && isPlaying ? (
+            <Pause className="h-4 w-4 fill-current" />
+          ) : (
+            <Play className="h-4 w-4 fill-current" />
+          )}
+        </span>
+      </button>
+
+      {/* playlist add kebab */}
+      <button
+        type="button"
+        onClick={() => openPicker(track)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-emerald-200/40 transition hover:bg-emerald-400/10 hover:text-emerald-300"
+        aria-label={`${track.title} playlist me add karein`}
+      >
+        <ListPlus className="h-4.5 w-4.5" />
+      </button>
+    </div>
   )
 })

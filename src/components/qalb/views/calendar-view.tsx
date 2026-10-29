@@ -2,15 +2,17 @@
 
 // Qalb — Calendar Tab: Hijri date + 5 Prayer timings + live countdown (Aladhan API)
 // SUNNI HANAFI (India): method=1 (Fajr/Isha 18°) + school=1 (HANAFI Asr)
-// Hijri date: LOCAL RUAYAT adjust (-2..+2) — Hindustan me chand aksar
-// Saudi se 1 din baad dikhta hai, isliye default -1. User +/- buttons se
-// apne local masjid calendar ke hisaab se align kar sakta hai (Hanafi maslak:
-// local ruyat-e-hilal hi asal hai).
-// Offline fallback: browser Intl islamic calendar (adjust ke saath)
+// LOCATION: DEFAULT JUNAGADH (Gujarat) — coordinates se precise timings
+// (city-name geocoding se behtar).
+// Hijri date: GUJARAT CHAND COMMITTEE (gujchand.com) ke hisaab se AUTO —
+// live fetch (native direct / hosted API), offline par last-sync cache.
+// Agar gujchand available nahi → umalqura + LOCAL RUAYAT adjust (-2..+2)
+// — user +/- buttons se align kar sakta hai (Hanafi maslak).
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { MapPin, MoonStar, Loader2, Sunrise, Sun, Sunset, Moon, CloudMoon, AlarmClock } from 'lucide-react'
+import { MapPin, MoonStar, Loader2, Sunrise, Sun, Sunset, Moon, CloudMoon, AlarmClock, BadgeCheck } from 'lucide-react'
 import { PRAYER_CITIES } from '@/lib/qalb'
+import { getGujchandHijri, type GujchandHijri } from '@/lib/gujchand'
 import type { AladhanTimings, HijriDate, PrayerData } from '@/lib/types'
 
 const LOCATION_KEY = 'qalb_location_v1'
@@ -86,7 +88,9 @@ export function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [now, setNow] = useState(() => new Date())
-  // Sunni Hanafi: local ruyat adjust — Hindustan me chand aksar 1 din baad
+  // GUJARAT CHAND COMMITTEE hijri — auto (gujchand.com)
+  const [gujchand, setGujchand] = useState<GujchandHijri | null>(null)
+  // fallback: Sunni Hanafi local ruyat adjust — Hindustan me chand aksar 1 din baad
   const [hijriAdjust, setHijriAdjust] = useState<number>(-1)
 
   useEffect(() => {
@@ -131,9 +135,13 @@ export function CalendarView() {
   const fetchPrayerData = useCallback(async (city: typeof location) => {
     setLoading(true)
     try {
-      // Sunni Hanafi India: method=1 (Univ. of Islamic Sciences — Fajr/Isha 18°)
-      // school=1 → HANAFI Asr (Shafi standard se alag — ye zaroori hai)
-      const url = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(city.city)}&country=${encodeURIComponent(city.country)}&method=1&school=1`
+      // Coordinates wali city → timingsByCoordinates (precise, koi geocoding
+      // mismatch nahi — Junagadh jaise chhote shehro ke liye zaroori).
+      // Sunni Hanafi India: method=1 (Fajr/Isha 18°), school=1 (HANAFI Asr)
+      const now = new Date()
+      const dmy = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`
+      const coordQuery = `latitude=${city.lat}&longitude=${city.lng}&method=1&school=1`
+      const url = `https://api.aladhan.com/v1/timings/${dmy}?${coordQuery}`
       const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
       if (!res.ok) throw new Error('aladhan failed')
       const json = await res.json()
@@ -147,25 +155,40 @@ export function CalendarView() {
         Maghrib: parseTime(d.timings.Maghrib),
         Isha: parseTime(d.timings.Isha),
       }
-      const hijri: HijriDate = hijriWithAdjust(0) // placeholder — render par hijriAdjust ke saath override hota hai
+      const hijri: HijriDate = hijriWithAdjust(0) // placeholder — render par gujchand/adjust override karta hai
       setData({
         timings,
         hijri,
         gregorian: d.date?.gregorian?.date ?? '',
-        timezone: d.meta?.timezone ?? '',
+        timezone: d.meta?.timezone ?? 'Asia/Kolkata',
         city: `${city.city}, ${city.country}`,
       })
     } catch {
-      // offline fallback — browser hijri (adjust render par lagta hai) + static approximate timings
+      // offline fallback — static approximate timings (Junagadh base)
       setData({
         timings: { Fajr: '05:15', Sunrise: '06:35', Dhuhr: '12:30', Asr: '16:00', Maghrib: '18:10', Isha: '19:30' },
         hijri: hijriWithAdjust(0),
         gregorian: new Date().toLocaleDateString('en-GB'),
-        timezone: 'local',
+        timezone: 'Asia/Kolkata',
         city: `${city.city}, ${city.country}`,
       })
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  // GUJARAT CHAND COMMITTEE — live hijri fetch (gujchand.com)
+  useEffect(() => {
+    let stale = false
+    getGujchandHijri()
+      .then((h) => {
+        if (!stale && h) setGujchand(h)
+      })
+      .catch(() => {
+        /* fallback ruyat adjust chalta rahega */
+      })
+    return () => {
+      stale = true
     }
   }, [])
 
@@ -208,11 +231,25 @@ export function CalendarView() {
     }
   }
 
-  // render par hijri hamesha local ruyat adjust ke saath dikhta hai
-  const view = useMemo(
-    () => (data ? { ...data, hijri: hijriWithAdjust(hijriAdjust) } : null),
-    [data, hijriAdjust]
-  )
+  // render par hijri: GUJARAT CHAND COMMITTEE (auto) > local ruyat adjust
+  const view = useMemo(() => {
+    if (!data) return null
+    if (gujchand) {
+      return {
+        ...data,
+        hijri: {
+          day: gujchand.day,
+          monthNumber: gujchand.monthNumber,
+          monthEn: gujchand.monthEn,
+          monthAr: '',
+          year: gujchand.year,
+          weekdayEn: new Intl.DateTimeFormat('en', { weekday: 'long' }).format(new Date()),
+          designation: 'Gujarat Chand Committee',
+        } as HijriDate,
+      }
+    }
+    return { ...data, hijri: hijriWithAdjust(hijriAdjust) }
+  }, [data, gujchand, hijriAdjust])
   const clampAdjust = (v: number) => Math.max(-2, Math.min(2, v))
 
   return (
@@ -281,35 +318,47 @@ export function CalendarView() {
             <p className="mt-1 text-[12px] font-semibold opacity-75">
               {view.gregorian} • {view.city}
             </p>
-            {/* local ruyat adjust (Hanafi maslak) */}
-            <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-black/15 px-3 py-2">
-              <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
-                Chand adjust
-              </span>
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHijriAdjust((a) => clampAdjust(a - 1))}
-                  disabled={hijriAdjust <= -2}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
-                  aria-label="Hijri date ek din peeche"
-                >
-                  −
-                </button>
-                <span className="min-w-9 text-center font-mono text-xs font-bold">
-                  {hijriAdjust > 0 ? `+${hijriAdjust}` : hijriAdjust}
+            {/* hijri source: GUJARAT CHAND COMMITTEE auto ya local ruyat adjust */}
+            {gujchand ? (
+              <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-black/15 px-3 py-2">
+                <BadgeCheck className="h-4 w-4 shrink-0 text-gold" />
+                <span className="text-[10.5px] font-bold leading-tight">
+                  Gujarat Chand Committee ke mutabiq
+                  <span className="ml-1.5 font-medium opacity-60">
+                    {gujchand.source === 'cache' ? `(last sync: ${gujchand.fetchedOn})` : 'auto-updated'}
+                  </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setHijriAdjust((a) => clampAdjust(a + 1))}
-                  disabled={hijriAdjust >= 2}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
-                  aria-label="Hijri date ek din aage"
-                >
-                  +
-                </button>
               </div>
-            </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-black/15 px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
+                  Chand adjust
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHijriAdjust((a) => clampAdjust(a - 1))}
+                    disabled={hijriAdjust <= -2}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
+                    aria-label="Hijri date ek din peeche"
+                  >
+                    −
+                  </button>
+                  <span className="min-w-9 text-center font-mono text-xs font-bold">
+                    {hijriAdjust > 0 ? `+${hijriAdjust}` : hijriAdjust}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHijriAdjust((a) => clampAdjust(a + 1))}
+                    disabled={hijriAdjust >= 2}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
+                    aria-label="Hijri date ek din aage"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* countdown */}
