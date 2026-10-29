@@ -25,6 +25,15 @@ service cloud.firestore {
     match /tracks/{doc}      { allow read: if true;  allow write: if false; }
     match /products/{doc}    { allow read: if true;  allow write: if false; }
 
+    // ── SAFETY NET (v0.2.1-25) ──
+    // crashLogs: app crash reports yahan likhti hai (sirf create + read —
+    // koi update/delete nahi, tamper-proof log).
+    match /crashLogs/{doc}   { allow read: if true;  allow create: if true;
+                               allow update, delete: if false; }
+    // remoteConfig: kill switch / force-update / feature flags (read-only).
+    // Doc `remoteConfig/app` Firebase console se manually banaya/edit hota hai.
+    match /remoteConfig/{doc} { allow read: if true;  allow write: if false; }
+
     // ── PRIVATE: CI keystore + secrets — CLIENT KE LIYE POORA BAND ──
     // (keystore base64 yahin rehti hai — bahar kabhi nahi jayegi)
     match /ci_private/{doc}  { allow read: if false; allow write: if false; }
