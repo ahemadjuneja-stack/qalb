@@ -47,6 +47,8 @@ export function HomeView() {
   const [activeContinuation, setActiveContinuation] = useState<string | null>(null)
   const [refined, setRefined] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
+  // strict mode: ambiguous query par results sirf Islamic-marker wale
+  const [strictMode, setStrictMode] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
   const [theme, setTheme] = useState<QalbTheme>('light')
 
@@ -97,7 +99,11 @@ export function HomeView() {
       // APK-safe chain: YouTube unlimited → YT API → Firestore → bundled
       const usedQuery = validation.refinedQuery || q
       setRefined(usedQuery)
-      const data = await withTimeout(youtubeSearchSmart(usedQuery), SEARCH_WATCHDOG_MS)
+      // strict mode: ambiguous query (naam waghera) → results par sirf
+      // Islamic-marker wale pass hote hain (Bollywood/bhajan hide)
+      const strict = validation.strict === true
+      setStrictMode(strict)
+      const data = await withTimeout(youtubeSearchSmart(usedQuery, null, strict), SEARCH_WATCHDOG_MS)
       if (stale()) return
       setResults(data.tracks)
       setResultSource(data.source)
@@ -106,8 +112,9 @@ export function HomeView() {
 
       if (data.tracks.length === 0) {
         toast({
-          title: 'Koi result nahi mila',
-          description: 'Dusre keywords se search karein — jaise "Tajdar-e-Haram naat".',
+          title: 'Koi paak kalaam result nahi mila',
+          description:
+            'Islamic keywords ke saath search karein — jaise "Tajdar-e-Haram naat" ya "Nusrat qawwali".',
         })
       }
     } catch {
@@ -126,7 +133,7 @@ export function HomeView() {
     setLoadingMore(true)
     try {
       const data = await withTimeout(
-        youtubeSearchSmart(refined, activeContinuation),
+        youtubeSearchSmart(refined, activeContinuation, strictMode),
         SEARCH_WATCHDOG_MS
       )
       setResults((prev) => {
@@ -317,6 +324,18 @@ export function HomeView() {
             </span>
           </div>
           <div className="card-surface rounded-2xl p-2">
+            {results.length === 0 && (
+              <div className="px-4 py-8 text-center">
+                <p className="text-2xl">🤍</p>
+                <p className="mt-2 text-sm font-semibold text-emerald-200/90">
+                  Koi paak kalaam result nahi mila
+                </p>
+                <p className="mx-auto mt-1 max-w-[16rem] text-xs leading-relaxed text-emerald-200/50">
+                  Qalb sirf Islamic content dikhata hai. "naat", "qawwali" ya
+                  "sufi" ke saath search karein.
+                </p>
+              </div>
+            )}
             {results.map((t, i) => (
               <TrackRow key={`${t.videoId}-${t.id}`} track={t} index={i} queue={results} showIndex={false} />
             ))}

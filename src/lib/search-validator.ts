@@ -28,10 +28,11 @@ ALLOWED categories:
 - NASHEED: Islamic devotional songs. e.g. Maher Zain, Sami Yusuf, Zain Bhikha, Ahmed Bukhatir, Mesut Kurtis.
 
 STRICTLY BLOCKED (valid=false):
-- Bollywood / Lollywood movie songs, filmi music, any film soundtrack
+- ANY non-Islamic religious content: Hindu devotional (bhajan, bhakti, aarti, bhagwan, krishna, vishnu, ram, shiva, hanuman, mandir...), Christian (gospel, church, jesus), Sikh (gurbani, kirtan, waheguru), or any other religion
+- Bollywood / Lollywood / Hollywood movie songs, filmi music, any film soundtrack
 - Pop, rock, rap, hip-hop, EDM, remix, mashup, DJ, dance, party music
 - Romantic/love songs, sad songs, breakup songs (secular music)
-- Podcasts, talk shows, lectures, dramas, trailers, comedy
+- Podcasts, talk shows, lectures (non-Islamic), dramas, trailers, comedy
 - Any content hostile to Islam or generally non-devotional music
 - Secular songs by Islamic artists (e.g. Maher Zain pop collabs, Atif Aslam Bollywood hits like "Tera Hone Laga Hoon" — block those; but his naats are allowed)
 
@@ -42,7 +43,9 @@ REFINEMENT RULES (when valid):
 - The refined query MUST be a clean YouTube search string.
 
 RESPONSE FORMAT — respond with MINIFIED JSON only, no markdown, no explanation outside JSON:
-{"valid":<true|false>,"category":"NAAT"|"HAMD"|"QAWWALI"|"NASHEED"|null,"refinedQuery":"<string or null>","reason":"<one short sentence, Roman Urdu>"}`
+{"valid":<true|false>,"category":"NAAT"|"HAMD"|"QAWWALI"|"NASHEED"|null,"refinedQuery":"<string or null>","reason":"<one short sentence, Roman Urdu>"}
+
+IMPORTANT: If the query is ambiguous (e.g. just a person's name that could match film actors), still set valid=true with category=null — the app applies strict result filtering for such queries automatically.`
 
 interface GuardianJson {
   valid?: boolean
@@ -83,6 +86,7 @@ async function geminiValidate(query: string): Promise<SearchValidationResult | n
       refinedQuery: parsed.valid ? parsed.refinedQuery ?? query : null,
       reason: parsed.reason || 'Content verified.',
       provider: 'gemini',
+      strict: !parsed.category, // ambiguous query → strict result filtering
     }
   } catch {
     return null
@@ -114,6 +118,7 @@ async function zaiValidate(query: string): Promise<SearchValidationResult | null
       refinedQuery: parsed.valid ? parsed.refinedQuery ?? query : null,
       reason: parsed.reason || 'Content verified.',
       provider: 'zai',
+      strict: !parsed.category, // ambiguous query → strict result filtering
     }
   } catch {
     return null

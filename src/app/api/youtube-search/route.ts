@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { cacheGet, cacheSet, cacheKey } from '@/lib/search-cache'
 import { youtubeSearchPage } from '@/lib/youtube-search-source'
+import { filterSearchResults } from '@/lib/result-filter'
 import type { QalbTrack } from '@/lib/types'
 
 const CACHE_TTL = 60 * 60 * 1000 // 1h
@@ -114,11 +115,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const q = (searchParams.get('q') || '').trim()
     const cont = searchParams.get('cont')
+    const strict = searchParams.get('strict') === '1'
     if (!q && !cont) {
       return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
     }
 
-    const key = cacheKey(['yt-search', cont ? `cont:${cont}` : q])
+    const key = cacheKey(['yt-search', cont ? `cont:${cont}` : q, strict ? 'strict' : 'loose'])
     const cached = cacheGet<{ tracks: QalbTrack[]; continuation: string | null }>(key)
     if (cached) {
       return NextResponse.json({
@@ -131,17 +133,19 @@ export async function GET(req: Request) {
     // 1) InnerTube — UNLIMITED, no key (server-side fetch, CORS nahi lagta)
     // 2) cont token ke saath sirf InnerTube hi pagination deta hai
     const page = await youtubeSearchPage(q, cont)
-    if (page.tracks.length) {
-      cacheSet(key, page, CACHE_TTL)
+    const filtered = filterSearchResults(page.tracks, strict)
+    if (filtered.length) {
+      const pageOut = { tracks: filtered, continuation: page.continuation }
+      cacheSet(key, pageOut, CACHE_TTL)
       return NextResponse.json({
-        tracks: page.tracks,
+        tracks: filtered,
         source: 'youtube',
         continuation: page.continuation,
       })
     }
 
     // 3) Data API backup (agar key ho) — sirf fresh search ke liye
-    let tracks: QalbTrack[] | null = cont ? null : await searchYouTubeDataApi(q)
+    let tracks: QalbTrack[] | null = cont ? null : filterSearchResults(await searchYouTubeDataApi(q) ?? [], strict)
     if (tracks?.length) {
       cacheSet(key, { tracks, continuation: null }, CACHE_TTL)
       return NextResponse.json({ tracks, source: 'youtube', continuation: null })

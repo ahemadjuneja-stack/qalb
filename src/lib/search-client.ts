@@ -22,6 +22,7 @@
 import { Capacitor } from '@capacitor/core'
 import { QALB } from '@/lib/qalb'
 import { ruleBasedValidate } from '@/lib/search-rules'
+import { filterSearchResults } from '@/lib/result-filter'
 import { searchTracksFromFirestore } from '@/lib/remote-data'
 import { searchBundledLibrary } from '@/lib/bundled-library'
 import { youtubeSearchPage } from '@/lib/youtube-search-source'
@@ -61,7 +62,14 @@ export async function validateSmart(query: string): Promise<SearchValidationResu
       })
       if (res.ok) {
         const data = (await res.json()) as SearchValidationResult
-        if (typeof data.valid === 'boolean') return data
+        if (typeof data.valid === 'boolean') {
+          return {
+            ...data,
+            // AI guardian strict flag nahi bhejta → category hi intent hai:
+            // category null = ambiguous query = strict result filtering
+            strict: typeof data.strict === 'boolean' ? data.strict : !data.category,
+          }
+        }
       }
     } catch {
       /* APK me yahan fail hoga → rules fallback */
@@ -129,28 +137,34 @@ export interface SmartSearchResult {
 
 export async function youtubeSearchSmart(
   q: string,
-  continuation: string | null = null
+  continuation: string | null = null,
+  strict = false
 ): Promise<SmartSearchResult> {
   // pagination mode → sirf YouTube ka agla page (koi hosted/library nahi)
   if (continuation) {
     const page = await youtubeSearchPage(q, continuation)
-    return { tracks: page.tracks, source: 'youtube', continuation: page.continuation }
+    return {
+      tracks: filterSearchResults(page.tracks, strict),
+      source: 'youtube',
+      continuation: page.continuation,
+    }
   }
 
   if (isNative()) {
     // APK: UNLIMITED YouTube search — pehle ye (no key, no quota)
     const page = await youtubeSearchPage(q, null)
-    if (page.tracks.length) {
-      return { tracks: page.tracks, source: 'youtube', continuation: page.continuation }
+    const filtered = filterSearchResults(page.tracks, strict)
+    if (filtered.length) {
+      return { tracks: filtered, source: 'youtube', continuation: page.continuation }
     }
     // backup: Data API (agar YT_API_KEY secret set ho)
-    const yt = await searchYouTubeDirect(q)
+    const yt = filterSearchResults(await searchYouTubeDirect(q), strict)
     if (yt.length) return { tracks: yt, source: 'youtube', continuation: null }
   } else {
-    // web / hosted backend (server-side InnerTube + 1h cache)
+    // web / hosted backend (server-side InnerTube bhi chalata hai)
     try {
       const res = await fetch(
-        `${QALB.apiBase}/api/youtube-search?q=${encodeURIComponent(q)}`,
+        `${QALB.apiBase}/api/youtube-search?q=${encodeURIComponent(q)}&strict=${strict ? 1 : 0}`,
         { signal: AbortSignal.timeout(10000) }
       )
       if (res.ok) {
@@ -161,7 +175,7 @@ export async function youtubeSearchSmart(
         }
         if (data.tracks?.length) {
           return {
-            tracks: data.tracks,
+            tracks: filterSearchResults(data.tracks, strict),
             source: data.source === 'youtube' ? 'youtube' : 'library',
             continuation: data.continuation ?? null,
           }

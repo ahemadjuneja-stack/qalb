@@ -44,6 +44,9 @@ export interface SearchValidationResult {
   refinedQuery: string | null
   reason: string
   provider: 'gemini' | 'zai' | 'rules' | 'cache'
+  // strict=true → ambiguous query (jaise koi naam) — result filter par
+  // sirf Islamic-marker wale results pass hote hain (result-filter.ts)
+  strict?: boolean
 }
 
 export interface AladhanTimings {
