@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Qalb status-bar glyph: flat crescent + star (small icon) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M14.5,2C10.36,2 7,5.36 7,9.5C7,13.64 10.36,17 14.5,17C15.63,17 16.7,16.75 17.66,16.3C16.27,17.97 14.19,19 11.9,19C7.81,19 4.5,15.69 4.5,11.6C4.5,8.28 6.68,5.48 9.68,4.55C8.86,5.87 8.4,7.41 8.4,9.06C8.4,8.5 8.48,7.97 8.62,7.46C7.62,9.15 7.5,10.9 7.5,11.5C7.5,15.09 10.41,18 14,18C17.59,18 20.5,15.09 20.5,11.5C20.5,6.25 16.5,2 14.5,2Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M18.2,4.2L18.7,5.6L20.1,6.1L18.7,6.6L18.2,8L17.7,6.6L16.3,6.1L17.7,5.6Z" />
+</vector>

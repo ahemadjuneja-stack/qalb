@@ -4,6 +4,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Window;
 
 import androidx.core.app.ActivityCompat;
@@ -21,8 +23,10 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * Qalb — Native bridge plugin
  *
  * JS (qalb-native.ts) isko call karta hai:
- *  - startPlayback / updatePlayback / stopPlayback → PlaybackService (background audio)
+ *  - startPlayback / updatePlayback / stopPlayback → PlaybackService (background audio
+ *    + MediaSession lock-screen controls + thumbnail media notification)
  *  - setStatusBarStyle → theme ke hisaab se status bar icons (light/dark)
+ *  - mediaAction event: notification/lock-screen buttons se JS player store control
  *
  * CRASH-SAFETY (v0.2.1-24): Capacitor @PluginMethod bodies ko khud wrap nahi
  * karta — native exception = seedha app force-close. Isliye HAR method try/catch
@@ -32,13 +36,46 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "QalbNative")
 public class QalbNativePlugin extends Plugin {
 
+    /** PlaybackService → JS media button bridge */
+    public interface MediaActionEmitter {
+        void onMediaAction(String action);
+    }
+
+    private static volatile MediaActionEmitter mediaEmitter;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    @Override
+    public void load() {
+        mediaEmitter = action -> mainHandler.post(() -> {
+            try {
+                JSObject data = new JSObject();
+                data.put("action", action);
+                notifyListeners("mediaAction", data);
+            } catch (Exception ignored) {
+                // WebView dead / bridge down — notification buttons bas dead ho jayenge
+            }
+        });
+    }
+
+    /** PlaybackService se button press forward karne ke liye (static entry) */
+    public static void emitMediaAction(String action) {
+        MediaActionEmitter e = mediaEmitter;
+        if (e != null) {
+            try {
+                e.onMediaAction(action);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     @PluginMethod
     public void startPlayback(PluginCall call) {
         try {
             String title = call.getString("title", "Naat chal rahi hai");
             String artist = call.getString("artist", "Qalb");
+            String thumbUrl = call.getString("thumbUrl", "");
 
-            PlaybackService.start(getContext(), title, artist);
+            PlaybackService.start(getContext(), title, artist, thumbUrl);
 
             // Android 13+: notification permission (pehli dafa) — audio isse affected nahi
             Activity activity = getActivity();
@@ -60,7 +97,12 @@ public class QalbNativePlugin extends Plugin {
         try {
             String title = call.getString("title", "Naat chal rahi hai");
             String artist = call.getString("artist", "Qalb");
-            PlaybackService.updateMeta(getContext(), title, artist);
+            String thumbUrl = call.getString("thumbUrl", "");
+            boolean isPlaying = Boolean.TRUE.equals(call.getBoolean("isPlaying"));
+            double position = call.getDouble("position") != null ? call.getDouble("position") : 0d;
+            double duration = call.getDouble("duration") != null ? call.getDouble("duration") : 0d;
+
+            PlaybackService.updateMeta(getContext(), title, artist, thumbUrl, isPlaying, position, duration);
             call.resolve();
         } catch (Exception e) {
             call.reject("playback meta fail: " + safeMsg(e));

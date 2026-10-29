@@ -37,11 +37,24 @@ export function MiniPlayer() {
             onKeyDown={(e) => e.key === 'Enter' && openFull()}
             className="glass relative flex items-center gap-3 overflow-hidden rounded-2xl border border-emerald-400/15 p-2 pr-3 shadow-[0_12px_40px_-12px_var(--shadow-float)]"
           >
-            {/* progress hairline */}
-            <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-400/10">
+            {/* progress hairline — chalte waqt qalb (dil) ki tarah dhadakta hai */}
+            <div className="absolute inset-x-0 top-0 z-10 h-2.5">
+              {/* track */}
+              <div className="absolute inset-x-0 top-[4px] h-[2px] rounded-full bg-emerald-400/10" />
+              {/* fill */}
               <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-500"
+                className={`absolute left-0 top-[3.5px] h-[3px] rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 transition-[width] duration-500 ${
+                  isPlaying ? 'qalb-ph-line' : ''
+                }`}
                 style={{ width: `${progress}%` }}
+              />
+              {/* heartbeat playhead dot */}
+              <span
+                aria-hidden
+                className={`absolute top-[1px] h-2 w-2 rounded-full bg-emerald-200 shadow-[0_0_10px_2px_rgba(16,185,129,0.55)] transition-[left,opacity] duration-500 ${
+                  isPlaying ? 'qalb-ph-dot' : 'opacity-60'
+                }`}
+                style={{ left: `calc(${progress}% - 4px)` }}
               />
             </div>
 

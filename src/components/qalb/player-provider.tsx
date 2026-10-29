@@ -11,10 +11,11 @@ import { useEffect, useRef } from 'react'
 import { usePlayerStore, ytBridge } from '@/lib/player-store'
 import { useToast } from '@/hooks/use-toast'
 import {
-  nativeStartPlayback,
-  nativeStopPlayback,
   nativeUpdatePlayback,
+  nativeStopPlayback,
   nativeSetStatusBar,
+  onNativeMediaAction,
+  type QalbMediaAction,
 } from '@/plugins/qalb-native'
 import { getTheme } from '@/lib/theme'
 
@@ -169,21 +170,91 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     ytBridge.seekTo = (s, allow = true) => playerRef.current?.seekTo(s, allow)
   }, [])
 
-  // ── background playback service (Android) ──────────────────────
-  // Play → foreground service on (wake lock + media notification)
-  // Pause/stop → service off. Track change → notification meta update.
+  // ── native media controls (Android) ─────────────────────────────
+  // Status bar + lock screen media card sync — play/pause/next/prev/seek
+  // sab jagah kaam kare (app me, notification, lock screen, headset).
   useEffect(() => {
     nativeSetStatusBar(getTheme() === 'dark') // startup sync
+
+    // Notification / lock-screen / headset buttons → player store
+    let unlisten: (() => void) | null = null
+    onNativeMediaAction((action: QalbMediaAction) => {
+      const st = usePlayerStore.getState()
+      if (action === 'play') {
+        if (st.queue.length && st.currentIndex >= 0) {
+          usePlayerStore.setState({ isPlaying: true })
+        }
+      } else if (action === 'pause') {
+        usePlayerStore.setState({ isPlaying: false })
+      } else if (action === 'next') {
+        st.next()
+      } else if (action === 'prev') {
+        st.prev()
+      } else if (action === 'stop') {
+        usePlayerStore.setState({ isPlaying: false })
+        nativeStopPlayback() // service + notification band
+      } else if (typeof action === 'string' && action.startsWith('seek:')) {
+        const target = Number.parseFloat(action.slice(5))
+        if (Number.isFinite(target)) st.seek(target)
+      }
+    }).then((fn) => {
+      unlisten = fn
+    })
+
+    return () => {
+      unlisten?.()
+    }
+  }, [])
+
+  // State changes → notification turant update (play/pause icon, thumbnail, seekbar)
+  useEffect(() => {
     return usePlayerStore.subscribe((s, prev) => {
       const t = s.currentIndex >= 0 ? s.queue[s.currentIndex] : null
       const prevT = prev.currentIndex >= 0 ? prev.queue[prev.currentIndex] : null
-      if (s.isPlaying !== prev.isPlaying) {
-        if (s.isPlaying && t) nativeStartPlayback(t.title, t.artist)
-        else nativeStopPlayback()
-      } else if (s.isPlaying && t && prevT && t.videoId !== prevT.videoId) {
-        nativeUpdatePlayback(t.title, t.artist)
+
+      if (!t) {
+        if (prevT) nativeStopPlayback() // queue khatam
+        return
+      }
+
+      const trackChanged = !prevT || t.videoId !== prevT.videoId
+      if (s.isPlaying !== prev.isPlaying || trackChanged) {
+        // Pause pe bhi notification zinda rehta hai (Play button ke saath) —
+        // sirf explicit stop / queue clear / swipe-close pe service band hota hai.
+        nativeUpdatePlayback({
+          title: t.title,
+          artist: t.artist,
+          thumbUrl: t.thumbnailUrl,
+          isPlaying: s.isPlaying,
+          position: s.position,
+          duration: s.duration,
+        })
       }
     })
+  }, [])
+
+  // Position ticker (3s) — notification seekbar aage badhta rahe +
+  // pause me seek karne par bhi sync ho.
+  useEffect(() => {
+    const lastPushed = { playing: false, pos: -1 }
+    const interval = setInterval(() => {
+      const s = usePlayerStore.getState()
+      const t = s.currentIndex >= 0 ? s.queue[s.currentIndex] : null
+      if (!t) return
+      const drifted = Math.abs(s.position - lastPushed.pos) > 2.5
+      if (!s.isPlaying && !drifted && lastPushed.playing === s.isPlaying) return
+      lastPushed.playing = s.isPlaying
+      lastPushed.pos = s.position
+      nativeUpdatePlayback({
+        title: t.title,
+        artist: t.artist,
+        thumbUrl: t.thumbnailUrl,
+        isPlaying: s.isPlaying,
+        position: s.position,
+        duration: s.duration,
+      })
+    }, 3000)
+    return () => clearInterval(interval)
   }, [])
 
   // video change → load

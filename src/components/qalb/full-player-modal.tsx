@@ -202,7 +202,7 @@ export function FullPlayerModal() {
             </div>
           )}
 
-          {/* seek */}
+          {/* seek — chalte waqt line + thumb qalb ki tarah dhadakte hain */}
           <div className="px-6 pt-6">
             <Slider
               value={[Math.min(position, duration || 1)]}
@@ -210,10 +210,12 @@ export function FullPlayerModal() {
               step={1}
               onValueChange={(v) => seek(v[0] ?? 0)}
               aria-label="Seek"
-              className="[&_[data-slot=slider-range]]:bg-emerald-400 [&_[data-slot=slider-thumb]]:border-emerald-400 [&_[data-slot=slider-track]]:bg-emerald-400/15"
+              className={`[&_[data-slot=slider-range]]:bg-emerald-400 [&_[data-slot=slider-thumb]]:border-emerald-400 [&_[data-slot=slider-track]]:bg-emerald-400/15 ${
+                isPlaying && !isBuffering ? 'qalb-heartbeat-slider' : ''
+              }`}
             />
             <div className="mt-1.5 flex justify-between text-[11px] tabular-nums text-emerald-200/50">
-              <span>{fmt(position)}</span>
+              <span className={isPlaying ? 'qalb-ph-text' : ''}>{fmt(position)}</span>
               <span>{fmt(duration)}</span>
             </div>
           </div>

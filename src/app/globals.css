@@ -440,13 +440,92 @@
   animation: qalb-shimmer 4.5s linear infinite;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   PLAYER PROGRESS HEARTBEAT — music line jab aage badhti hai to
+   dil (qalb) ki tarah double-thump dhadakti hai. Sirf isPlaying me.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Playhead dot — lub-dub scale pulse (transform-only, position CSS se nahi) */
+@keyframes qalb-ph-beat {
+  0%, 100% { transform: scale(1); }
+  12% { transform: scale(1.5); }
+  24% { transform: scale(1); }
+  36% { transform: scale(1.3); }
+  52% { transform: scale(1); }
+}
+.qalb-ph-dot {
+  animation: qalb-ph-beat 1.5s ease-in-out infinite;
+}
+
+/* Filled line — box-shadow glow pulse (transform touch nahi karta) */
+@keyframes qalb-ph-glow {
+  0%, 100% {
+    box-shadow: 0 0 4px 0 rgba(16, 185, 129, 0.3);
+  }
+  12% {
+    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.75), 0 0 24px 6px rgba(16, 185, 129, 0.35);
+  }
+  28% {
+    box-shadow: 0 0 6px 0 rgba(16, 185, 129, 0.4);
+  }
+  40% {
+    box-shadow: 0 0 9px 1px rgba(16, 185, 129, 0.6), 0 0 18px 3px rgba(16, 185, 129, 0.25);
+  }
+}
+.qalb-ph-line {
+  animation: qalb-ph-glow 1.5s ease-in-out infinite;
+}
+
+/* Full-player thumb — ripple thump (Radix translateX safe: no transform) */
+@keyframes qalb-thumb-thump {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.35), 0 0 8px 1px rgba(16, 185, 129, 0.3);
+  }
+  12% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.22), 0 0 20px 5px rgba(16, 185, 129, 0.55);
+  }
+  26% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18), 0 0 10px 2px rgba(16, 185, 129, 0.4);
+  }
+  38% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2), 0 0 15px 3px rgba(16, 185, 129, 0.48);
+  }
+  55% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 0 8px 1px rgba(16, 185, 129, 0.3);
+  }
+}
+
+/* Slider wrapper par lagao (isPlaying me) */
+.qalb-heartbeat-slider [data-slot='slider-range'] {
+  animation: qalb-ph-glow 1.5s ease-in-out infinite;
+}
+.qalb-heartbeat-slider [data-slot='slider-thumb'] {
+  animation: qalb-thumb-thump 1.5s ease-out infinite;
+}
+
+/* Elapsed time halka sa pulse — heartbeat ke sath sync feel */
+@keyframes qalb-ph-text {
+  0%, 100% { opacity: 0.75; }
+  12% { opacity: 1; }
+  30% { opacity: 0.7; }
+  45% { opacity: 0.95; }
+}
+.qalb-ph-text {
+  animation: qalb-ph-text 1.5s ease-in-out infinite;
+}
+
 /* Accessibility — motion kam pasand karne walon ke liye */
 @media (prefers-reduced-motion: reduce) {
   .qalb-beat,
   .qalb-glow-pulse,
   .qalb-ekg-pulse,
   .qalb-spark,
-  .qalb-divider {
+  .qalb-divider,
+  .qalb-ph-dot,
+  .qalb-ph-line,
+  .qalb-heartbeat-slider [data-slot='slider-range'],
+  .qalb-heartbeat-slider [data-slot='slider-thumb'],
+  .qalb-ph-text {
     animation: none !important;
   }
 }
