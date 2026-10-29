@@ -52,15 +52,19 @@ public class UpdaterPlugin extends Plugin {
     /** Pehle se download hua APK hai? (app restart ke baad bhi) */
     @PluginMethod
     public void getReadyApk(PluginCall call) {
-        String vc = call.getString("versionCode");
-        if (vc == null) {
-            call.resolve(new JSObject().put("path", null));
-            return;
+        try {
+            String vc = call.getString("versionCode");
+            if (vc == null) {
+                call.resolve(new JSObject().put("path", null));
+                return;
+            }
+            File f = targetApk(vc);
+            JSObject res = new JSObject();
+            res.put("path", (f.exists() && f.length() > 0) ? f.getAbsolutePath() : null);
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("ready apk check fail: " + safeMsg(e));
         }
-        File f = targetApk(vc);
-        JSObject res = new JSObject();
-        res.put("path", (f.exists() && f.length() > 0) ? f.getAbsolutePath() : null);
-        call.resolve(res);
     }
 
     /**

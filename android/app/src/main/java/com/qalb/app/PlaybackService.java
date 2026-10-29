@@ -47,10 +47,17 @@ public class PlaybackService extends Service {
         Intent i = new Intent(ctx, PlaybackService.class);
         i.putExtra(EXTRA_TITLE, title);
         i.putExtra(EXTRA_ARTIST, artist);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ctx.startForegroundService(i);
-        } else {
-            ctx.startService(i);
+        // CRASH-SAFETY: Android 12+ background se startForegroundService allowed
+        // nahi hai (track auto-advance jab app background me ho) — exception
+        // catch karo, audio WebView me chalta rahega, sirf notification nahi banegi.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(i);
+            } else {
+                ctx.startService(i);
+            }
+        } catch (Exception ignored) {
+            // background FGS start restriction — non-fatal
         }
     }
 
@@ -59,10 +66,14 @@ public class PlaybackService extends Service {
         i.setAction(ACTION_UPDATE);
         i.putExtra(EXTRA_TITLE, title);
         i.putExtra(EXTRA_ARTIST, artist);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ctx.startForegroundService(i);
-        } else {
-            ctx.startService(i);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                ctx.startForegroundService(i);
+            } else {
+                ctx.startService(i);
+            }
+        } catch (Exception ignored) {
+            // background FGS start restriction — non-fatal
         }
     }
 
@@ -92,10 +103,18 @@ public class PlaybackService extends Service {
         if (currentArtist == null) currentArtist = "Qalb";
 
         Notification notification = buildNotification(this, currentTitle, currentArtist);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        // CRASH-SAFETY: startForeground fail ho (OEM permission/type quirks) to
+        // service khud band — warna system "did not call startForeground" ANR crash
+        // deta hai. Audio WebView me phir bhi chalega.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Exception e) {
+            stopSelf();
+            return START_NOT_STICKY;
         }
 
         acquireWakeLock();

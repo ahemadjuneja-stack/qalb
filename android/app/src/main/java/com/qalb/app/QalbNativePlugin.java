@@ -23,57 +23,93 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * JS (qalb-native.ts) isko call karta hai:
  *  - startPlayback / updatePlayback / stopPlayback → PlaybackService (background audio)
  *  - setStatusBarStyle → theme ke hisaab se status bar icons (light/dark)
+ *
+ * CRASH-SAFETY (v0.2.1-24): Capacitor @PluginMethod bodies ko khud wrap nahi
+ * karta — native exception = seedha app force-close. Isliye HAR method try/catch
+ * me hai: kisi bhi OEM ROM / API level ka bug ab app crash nahi kar sakta,
+ * sirf call reject hoti hai (JS side pehle se catch karta hai).
  */
 @CapacitorPlugin(name = "QalbNative")
 public class QalbNativePlugin extends Plugin {
 
     @PluginMethod
     public void startPlayback(PluginCall call) {
-        String title = call.getString("title", "Naat chal rahi hai");
-        String artist = call.getString("artist", "Qalb");
+        try {
+            String title = call.getString("title", "Naat chal rahi hai");
+            String artist = call.getString("artist", "Qalb");
 
-        PlaybackService.start(getContext(), title, artist);
+            PlaybackService.start(getContext(), title, artist);
 
-        // Android 13+: notification permission (pehli dafa) — audio isse affected nahi
-        Activity activity = getActivity();
-        if (activity != null && Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
-                    != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                        activity, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9101);
+            // Android 13+: notification permission (pehli dafa) — audio isse affected nahi
+            Activity activity = getActivity();
+            if (activity != null && Build.VERSION.SDK_INT >= 33) {
+                if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                            activity, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9101);
+                }
             }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("playback start fail: " + safeMsg(e));
         }
-        call.resolve();
     }
 
     @PluginMethod
     public void updatePlayback(PluginCall call) {
-        String title = call.getString("title", "Naat chal rahi hai");
-        String artist = call.getString("artist", "Qalb");
-        PlaybackService.updateMeta(getContext(), title, artist);
-        call.resolve();
+        try {
+            String title = call.getString("title", "Naat chal rahi hai");
+            String artist = call.getString("artist", "Qalb");
+            PlaybackService.updateMeta(getContext(), title, artist);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("playback meta fail: " + safeMsg(e));
+        }
     }
 
     @PluginMethod
     public void stopPlayback(PluginCall call) {
-        PlaybackService.stop(getContext());
-        call.resolve();
+        try {
+            PlaybackService.stop(getContext());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("playback stop fail: " + safeMsg(e));
+        }
     }
 
     @PluginMethod
     public void setStatusBarStyle(PluginCall call) {
-        boolean isDarkTheme = Boolean.TRUE.equals(call.getBoolean("dark"));
-        Activity activity = getActivity();
-        if (activity == null) {
+        try {
+            boolean isDarkTheme = Boolean.TRUE.equals(call.getBoolean("dark"));
+            Activity activity = getActivity();
+            if (activity == null || activity.isFinishing()) {
+                call.resolve();
+                return;
+            }
+            Window window = activity.getWindow();
+            if (window == null || window.getDecorView() == null) {
+                call.resolve();
+                return;
+            }
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller == null) {
+                // kuch OEM ROMs pe insets controller null aata hai — skip, crash nahi
+                call.resolve();
+                return;
+            }
+            // dark theme → light icons; light theme → dark icons
+            controller.setAppearanceLightStatusBars(!isDarkTheme);
+            controller.setAppearanceLightNavigationBars(!isDarkTheme);
             call.resolve();
-            return;
+        } catch (Exception e) {
+            // status bar styling fail = cosmetic issue — app chalti rahegi
+            call.reject("status bar style fail: " + safeMsg(e));
         }
-        Window window = activity.getWindow();
-        WindowInsetsControllerCompat controller =
-                WindowCompat.getInsetsController(window, window.getDecorView());
-        // dark theme → light icons; light theme → dark icons
-        controller.setAppearanceLightStatusBars(!isDarkTheme);
-        controller.setAppearanceLightNavigationBars(!isDarkTheme);
-        call.resolve();
+    }
+
+    private String safeMsg(Exception e) {
+        String m = e.getMessage();
+        return m != null ? m : e.getClass().getSimpleName();
     }
 }
