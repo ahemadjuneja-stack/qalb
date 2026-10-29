@@ -1,7 +1,8 @@
 'use client'
 
 // Qalb — App Shell
-// 5-tab navigation + global PlayerProvider (Mini-Player + Full Modal saare tabs pe visible)
+// 4-tab navigation + global PlayerProvider (Mini-Player + Full Modal saare tabs pe visible)
+// NOTE: Store tab temporarily removed (store-view.tsx file safe padi hai)
 
 import { useEffect, useState } from 'react'
 import { PlayerProvider } from '@/components/qalb/player-provider'
@@ -11,7 +12,6 @@ import { FullPlayerModal } from '@/components/qalb/full-player-modal'
 import { HomeView } from '@/components/qalb/views/home-view'
 import { PlayerView } from '@/components/qalb/views/player-view'
 import { CalendarView } from '@/components/qalb/views/calendar-view'
-import { StoreView } from '@/components/qalb/views/store-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
 
@@ -30,7 +30,6 @@ export function QalbShell() {
           {tab === 'home' && <HomeView />}
           {tab === 'player' && <PlayerView />}
           {tab === 'calendar' && <CalendarView />}
-          {tab === 'store' && <StoreView />}
           {tab === 'profile' && <ProfileView />}
         </main>
       </div>
