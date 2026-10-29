@@ -6,6 +6,8 @@
 
 import { create } from 'zustand'
 import type { QalbTrack } from '@/lib/types'
+import { recordPlay, countEvents } from '@/lib/recommend'
+import { useQalbAuth, syncUserDoc } from '@/lib/auth'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -63,6 +65,22 @@ export const ytBridge: {
   play: () => {},
   pause: () => {},
   seekTo: () => {},
+}
+
+// ── Algorithm hook — har play par taste update, har 10 plays par cloud sync ──
+let lastSyncedCount = 0
+function trackPlayForAlgorithm(track: QalbTrack) {
+  try {
+    const uid = useQalbAuth.getState().user?.uid ?? null
+    recordPlay(track, uid)
+    const count = countEvents(uid)
+    if (count - lastSyncedCount >= 10 && uid) {
+      lastSyncedCount = count
+      void syncUserDoc() // best-effort — rules pending ho to silent fail
+    }
+  } catch {
+    /* algorithm failure kabhi playback nahi todna */
+  }
 }
 
 function shuffleQueue<T>(arr: T[]): T[] {
@@ -215,6 +233,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       /* quota — ignore */
     }
     set({ recents: next })
+    // per-user algorithm — play event (30s dedupe internally)
+    trackPlayForAlgorithm(track)
   },
 
   loadRecents: () => set({ recents: readRecents() }),

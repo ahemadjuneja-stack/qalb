@@ -15,13 +15,17 @@ import {
   SunMedium,
   Moon,
   Palette,
+  LogIn,
+  LogOut,
+  Sparkles,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { usePlayerStore } from '@/lib/player-store'
 import { useAppUpdate } from '@/hooks/use-app-update'
 import { getDownloads, removeDownload, isNativeCapacitor } from '@/lib/downloads'
 import { QALB } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
+import { useQalbAuth } from '@/lib/auth'
+import { getTasteProfile, useTasteStore } from '@/lib/recommend'
 import type { SavedDownload } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
@@ -32,7 +36,11 @@ export function ProfileView() {
   const [downloads, setDownloads] = useState<SavedDownload[]>([])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
   const [theme, setTheme] = useState<QalbTheme>('light')
-  const recents = usePlayerStore((s) => s.recents)
+  // auth + algorithm
+  const user = useQalbAuth((s) => s.user)
+  const openLogin = useQalbAuth((s) => s.openLogin)
+  const logout = useQalbAuth((s) => s.logout)
+  const tasteV = useTasteStore((s) => s.v)
   const { toast } = useToast()
 
   const { checking, update, hasUpdate, checkForUpdate, installUpdate } = useAppUpdate()
@@ -95,45 +103,121 @@ export function ProfileView() {
     toast({ title: 'Download remove ho gaya' })
   }
 
+  const handleLogout = () => {
+    logout()
+    toast({ title: 'Logout ho gaya', description: 'Musafir mode me chal rahe hain — app poori chalti hai.' })
+  }
+
+  // display identity — login ho to wahi, warna local naam
+  const displayName = user?.name ?? name
+  const taste = user
+    ? getTasteProfile(user.uid)
+    : getTasteProfile(null)
+  const tasteTop = taste.artistScores.slice(0, 4).map(([n]) => n)
+
   return (
     <div className="space-y-5 px-4 pb-8 pt-5">
       {/* profile card */}
       <section aria-label="Profile" className="card-surface rounded-3xl p-5">
         <div className="flex items-center gap-4">
-          <div className="emerald-gradient flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_var(--glow)]">
-            {name.charAt(0).toUpperCase()}
+          <div
+            className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_var(--glow)] ${
+              user ? 'gold-gradient' : 'emerald-gradient'
+            }`}
+          >
+            {user?.photoUrl ? (
+              <img src={user.photoUrl} alt={displayName} className="h-full w-full object-cover" />
+            ) : (
+              displayName.charAt(0).toUpperCase()
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            {editing ? (
-              <input
-                autoFocus
-                defaultValue={name}
-                onBlur={(e) => saveName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && saveName((e.target as HTMLInputElement).value)}
-                aria-label="Apna naam likhein"
-                className="w-full rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-2.5 py-1.5 text-base font-bold text-emerald-50 focus:outline-none"
-              />
+            {user ? (
+              <div>
+                <h2 className="truncate text-lg font-extrabold text-emerald-50">{displayName}</h2>
+                <p className="flex items-center gap-1 text-[11px] text-emerald-200/50">
+                  <BadgeCheck className="h-3.5 w-3.5 text-gold" />
+                  {user.provider === 'phone'
+                    ? user.phone
+                    : (user.email ?? 'Google se login')}
+                </p>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="group flex items-center gap-1.5"
-                aria-label="Naam edit karein"
-              >
-                <h2 className="truncate text-lg font-extrabold text-emerald-50">{name}</h2>
-                <Pencil className="h-3.5 w-3.5 text-emerald-200/40 transition group-hover:text-emerald-300" />
-              </button>
+              <>
+                {editing ? (
+                  <input
+                    autoFocus
+                    defaultValue={name}
+                    onBlur={(e) => saveName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveName((e.target as HTMLInputElement).value)}
+                    aria-label="Apna naam likhein"
+                    className="w-full rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-2.5 py-1.5 text-base font-bold text-emerald-50 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="group flex items-center gap-1.5"
+                    aria-label="Naam edit karein"
+                  >
+                    <h2 className="truncate text-lg font-extrabold text-emerald-50">{displayName}</h2>
+                    <Pencil className="h-3.5 w-3.5 text-emerald-200/40 transition group-hover:text-emerald-300" />
+                  </button>
+                )}
+                <p className="flex items-center gap-1 text-[11px] text-emerald-200/50">
+                  <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" /> Musafir mode • v{QALB.currentVersionName}
+                </p>
+              </>
             )}
-            <p className="flex items-center gap-1 text-[11px] text-emerald-200/50">
-              <BadgeCheck className="h-3.5 w-3.5 text-emerald-400" /> Qalb member • v{QALB.currentVersionName}
+          </div>
+          {/* login/logout — JioSaavn account action */}
+          {user ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-red-400/25 px-3 text-[11px] font-bold text-red-300/80 transition hover:bg-red-400/10 hover:text-red-300"
+              aria-label="Logout karein"
+            >
+              <LogOut className="h-3.5 w-3.5" /> Logout
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={openLogin}
+              className="gold-gradient flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[11.5px] font-extrabold text-emerald-950 shadow-[0_0_16px_-4px_var(--glow)] transition hover:brightness-110 active:scale-95"
+              aria-label="Login karein"
+            >
+              <LogIn className="h-3.5 w-3.5" /> Login
+            </button>
+          )}
+        </div>
+
+        {/* taste insight — algorithm aap ko kya pasand samajhta hai */}
+        {tasteTop.length > 0 && (
+          <div className="mt-4 rounded-2xl border border-gold/20 bg-gold/[0.05] p-3">
+            <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-gold">
+              <Sparkles className="h-3.5 w-3.5" /> Aap ki Pasand — {taste.plays} kalaam sune
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {tasteTop.map((a) => (
+                <span
+                  key={a}
+                  className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10.5px] font-semibold text-emerald-200/80"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-emerald-200/40">
+              Home feed isi pasand se roz naya banaya jata hai — jitna sunenge, utna behtar.
             </p>
           </div>
-        </div>
+        )}
 
         {/* stats */}
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-2xl bg-emerald-400/5 py-2.5">
-            <p className="text-lg font-extrabold text-emerald-300">{recents.length}</p>
+            <p className="text-lg font-extrabold text-emerald-300">{taste.plays}</p>
             <p className="text-[10px] text-emerald-200/50">Played</p>
           </div>
           <div className="rounded-2xl bg-emerald-400/5 py-2.5">

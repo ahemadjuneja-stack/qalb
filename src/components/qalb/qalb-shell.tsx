@@ -26,6 +26,8 @@ import { CalendarView } from '@/components/qalb/views/calendar-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
 import { AddToPlaylistSheet } from '@/components/qalb/add-to-playlist-sheet'
+import { LoginSheet } from '@/components/qalb/login-sheet'
+import { useQalbAuth } from '@/lib/auth'
 import { QalbErrorBoundary } from '@/components/qalb/error-boundary'
 import {
   SafeModeScreen,
@@ -61,6 +63,8 @@ export function QalbShellCore() {
     installCrashReporter()
     setSafeMode(recordBootAndGetSafeMode())
     setBooted(true)
+    // auth session restore (localStorage) — login state sab views me ready
+    useQalbAuth.getState().init()
   }, [])
 
   // L1: native crash-loop upgrade + pichli hard-crash ka report
@@ -176,6 +180,7 @@ function QalbShellInner({
       <MiniPlayer />
       <FullPlayerModal />
       <AddToPlaylistSheet />
+      <LoginSheet />
       <BottomNav active={tab} onChange={setTab} hiddenTabs={hiddenTabs} />
     </PlayerProvider>
   )

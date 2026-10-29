@@ -15,7 +15,8 @@ import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
 
 // mulberry32 — chhota deterministic PRNG (seed-based shuffle)
-function mulberry32(seed: number) {
+// (recommend.ts bhi isi se daily rotation banata hai)
+export function mulberry32(seed: number) {
   return () => {
     seed |= 0
     seed = (seed + 0x6d2b79f5) | 0
@@ -25,7 +26,7 @@ function mulberry32(seed: number) {
   }
 }
 
-function daySeed(d: Date): number {
+export function daySeed(d: Date): number {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -37,7 +38,7 @@ export function todayLabel(d: Date = new Date()): string {
 }
 
 /** Seeded shuffle (Fisher-Yates with PRNG) */
-function seededShuffle<T>(arr: T[], rand: () => number): T[] {
+export function seededShuffle<T>(arr: T[], rand: () => number): T[] {
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1))

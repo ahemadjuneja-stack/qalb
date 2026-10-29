@@ -38,6 +38,12 @@ concurrency:
 
 env:
   NEXT_PUBLIC_API_BASE: ${{ vars.API_BASE_URL }}
+  # Auth (login) ke liye — GitHub repo Variables me set karein (optional):
+  #   FIREBASE_WEB_API_KEY  → Firebase console > Project settings > Web API key
+  #   GOOGLE_CLIENT_ID      → OAuth 2.0 Web Client ID (Google login ke liye)
+  # Agar variables empty hain to app Firestore config/auth doc se leta hai.
+  NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.FIREBASE_WEB_API_KEY }}
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
 
 jobs:
   build-apk:
