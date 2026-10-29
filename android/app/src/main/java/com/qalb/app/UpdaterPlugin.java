@@ -1,6 +1,7 @@
 package com.qalb.app;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -178,7 +179,7 @@ public class UpdaterPlugin extends Plugin {
         }
     }
 
-    /** Install intent — pehli baar "unknown apps" permission chahiye ho to flag return */
+    /** Install intent — pehli baar "unknown apps" permission chahiye ho to settings khud khul jati hai */
     @PluginMethod
     public void installApk(PluginCall call) {
         String path = call.getString("path");
@@ -188,17 +189,28 @@ public class UpdaterPlugin extends Plugin {
         }
         try {
             Activity activity = getActivity();
-            Context ctx = activity != null ? activity : getContext();
+            final Context ctx = activity != null ? activity : getContext();
             File apk = new File(path);
             if (!apk.exists()) {
                 call.reject("APK file missing: " + path);
                 return;
             }
 
-            // Android 8+ par install permission check
+            // Android 8+ par install permission check — nahi hai to SETTINGS SCREEN
+            // KHUD KHOLO (purane build me yahan sirf flag return hota tha jo JS
+            // popup dikhata hi nahi tha — isliye "install" tap pe kuch nahi hota tha)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 PackageManager pm = ctx.getPackageManager();
                 if (!pm.canRequestPackageInstalls()) {
+                    try {
+                        Intent si = new Intent(
+                                android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                Uri.parse("package:" + ctx.getPackageName()));
+                        si.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        ctx.startActivity(si);
+                    } catch (Exception ignored) {
+                        // kuch OEMs pe direct screen nahi milti — JS side button fallback hai
+                    }
                     call.resolve(new JSObject()
                             .put("ok", false)
                             .put("needsPermission", true));
@@ -207,13 +219,22 @@ public class UpdaterPlugin extends Plugin {
             }
 
             Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", apk);
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(uri, "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            if (activity != null) {
-                activity.startActivity(intent);
-            } else {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            // ACTION_INSTALL_PACKAGE (explicit installer) — na mile to ACTION_VIEW fallback
+            try {
+                Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                intent.setDataAndType(uri, "application/vnd.android.package-archive");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                if (activity != null) {
+                    activity.startActivity(intent);
+                } else {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    ctx.startActivity(intent);
+                }
+            } catch (ActivityNotFoundException e) {
+                Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setDataAndType(uri, "application/vnd.android.package-archive");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
                 ctx.startActivity(intent);
             }
             call.resolve(new JSObject().put("ok", true));

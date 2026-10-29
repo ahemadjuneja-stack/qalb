@@ -181,13 +181,17 @@ export async function installEngine(): Promise<void> {
   try {
     const res = await plugin.installApk({ path: st.readyPath })
     if (res?.needsPermission) {
+      // IMPORTANT: phase 'error' karna zaroori hai — popup sirf error phase me
+      // permission button dikhata hai. Warna silent fail hota tha (install tap pe kuch nahi).
       set({
+        phase: 'error',
         needsPermission: true,
-        error: 'Android me "Install unknown apps" permission chahiye',
+        error:
+          'Settings khul gayi — wahan "Allow from this source" ON karein, phir wapas aake "Dobara koshish" dabayein',
       })
     }
   } catch (e) {
-    set({ error: errMsg(e) })
+    set({ phase: 'error', error: errMsg(e) })
   }
 }
 

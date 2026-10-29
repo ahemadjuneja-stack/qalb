@@ -71,6 +71,17 @@ export function UpdatePopup() {
               <p className="mt-0.5 text-xs text-emerald-300/80">
                 Qalb v{verName} — Install dabao, bas.
               </p>
+              {error && (
+                <p className="mt-1.5 text-xs text-amber-300/90">{error}</p>
+              )}
+              {needsPermission && (
+                <button
+                  onClick={openPermissionSettingsEngine}
+                  className="mt-2 w-full rounded-xl border border-amber-500/40 bg-amber-400/10 py-2 text-xs font-semibold text-amber-200 active:scale-95"
+                >
+                  Permission settings kholo (Allow from this source)
+                </button>
+              )}
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => void installEngine()}
