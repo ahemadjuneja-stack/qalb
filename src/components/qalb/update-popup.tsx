@@ -46,7 +46,7 @@ export function UpdatePopup() {
   if (phase === 'downloading') {
     return (
       <div className="fixed inset-x-0 top-0 z-[70] px-3 pt-3">
-        <div className="rounded-2xl border border-emerald-800/60 bg-[#12110d]/95 p-4 shadow-xl backdrop-blur">
+        <div className="popup-surface rounded-2xl border border-emerald-400/20 p-4 shadow-xl">
           <div className="flex items-center justify-between text-xs text-emerald-300/90">
             <span className="font-semibold">Naya version v{verName} aa raha hai…</span>
             <span className="tabular-nums font-bold text-emerald-200">{progress}%</span>
@@ -66,7 +66,7 @@ export function UpdatePopup() {
   if (phase === 'ready' || phase === 'error') {
     return (
       <div className="fixed inset-x-0 bottom-28 z-[70] px-4">
-        <div className="rounded-2xl border border-emerald-700/60 bg-[#14120e]/97 p-4 shadow-2xl backdrop-blur">
+        <div className="popup-surface rounded-2xl border border-emerald-400/25 p-4 shadow-2xl">
           {phase === 'ready' ? (
             <>
               <p className="text-sm font-bold text-emerald-100">
@@ -95,7 +95,7 @@ export function UpdatePopup() {
                 </button>
                 <button
                   onClick={() => dismissEngine()}
-                  className="rounded-xl border border-emerald-800/70 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
+                  className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
                 >
                   Baad me
                 </button>
@@ -122,7 +122,7 @@ export function UpdatePopup() {
                 </button>
                 <button
                   onClick={() => dismissEngine()}
-                  className="rounded-xl border border-emerald-800/70 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
+                  className="rounded-xl border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-300 active:scale-95"
                 >
                   Baad me
                 </button>

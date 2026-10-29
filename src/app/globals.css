@@ -49,69 +49,167 @@
   --animate-pulse-glow: pulse-glow 3.2s ease-in-out infinite;
 
   /*
-    ── QALB "MIDNIGHT GOLD" RAMP ────────────────────────────────────
-    Purane components emerald-* utility classes use karte the. Ab poori
-    app ka theme EK JAGAH se badalta hai: emerald scale ko ivory/gold
-    ramp pe override kar diya gaya hai.
-      emerald-50/100/200  → warm ivory text (primary/secondary)
-      emerald-300/400/500 → GOLD accents (active, buttons, glows)
-      emerald-950         → near-black bronze (dark surfaces / on-gold text)
+    ── QALB DUAL THEME RAMP ────────────────────────────────────────
+    Components purane emerald-* utilities use karte hain. Ab poora
+    emerald scale CSS variables pe chalta hai jo LIGHT/DARK dono me
+    flip hota hai (html.dark class se). Isliye hardcoded emerald-*
+    classes dono theme me sahi render hote hain.
   */
-  --color-emerald-50: #f6f2e8;
-  --color-emerald-100: #ece4cf;
-  --color-emerald-200: #d8cdb2;
-  --color-emerald-300: #e9cd7e;
-  --color-emerald-400: #ddba5f;
-  --color-emerald-500: #cda64c;
-  --color-emerald-600: #a9852f;
-  --color-emerald-700: #7d6424;
-  --color-emerald-800: #4c3d18;
-  --color-emerald-900: #2b2311;
-  --color-emerald-950: #1a1409;
+  --color-emerald-50: var(--q-em-50);
+  --color-emerald-100: var(--q-em-100);
+  --color-emerald-200: var(--q-em-200);
+  --color-emerald-300: var(--q-em-300);
+  --color-emerald-400: var(--q-em-400);
+  --color-emerald-500: var(--q-em-500);
+  --color-emerald-600: var(--q-em-600);
+  --color-emerald-700: var(--q-em-700);
+  --color-emerald-800: var(--q-em-800);
+  --color-emerald-900: var(--q-em-900);
+  --color-emerald-950: var(--q-em-950);
 }
 
 /*
-  Qalb — MIDNIGHT GOLD theme (always dark, mobile-first)
-  Palette:
-  - background:  #0A0A0C  (ink black, neutral)
-  - surfaces:    #131317 / #1A1A20
-  - accent:      #DDBA5F  (royal gold) + ivory #F6F2E8 text
-  - feel:        premium Islamic — gold & ivory on midnight black
+  ═══════════════════════════════════════════════════════════════
+  QALB LIGHT THEME — "EMERALD IVORY"
+  Warm ivory background, deep emerald ink text, green + gold accents.
+  Classic Islamic palette: safed chamka, gehra sabz, halka sunehra.
+  ═══════════════════════════════════════════════════════════════
 */
 :root {
   --radius: 0.75rem;
-  --background: #0a0a0c;
-  --foreground: #f6f2e8;
-  --card: #131317;
-  --card-foreground: #f6f2e8;
-  --popover: #17171c;
-  --popover-foreground: #f6f2e8;
-  --primary: #ddba5f;
-  --primary-foreground: #1a1409;
-  --secondary: #1c1c22;
-  --secondary-foreground: #e4dcc8;
-  --muted: #1c1c22;
-  --muted-foreground: #9c948a;
-  --accent: #262218;
-  --accent-foreground: #e9cd7e;
+  --background: #f6f3ea;
+  --foreground: #17281f;
+  --card: #ffffff;
+  --card-foreground: #17281f;
+  --popover: #ffffff;
+  --popover-foreground: #17281f;
+  --primary: #0f9163;
+  --primary-foreground: #f3fbf4;
+  --secondary: #edeadd;
+  --secondary-foreground: #33473b;
+  --muted: #eceade;
+  --muted-foreground: #5a6e61;
+  --accent: #e2f0e4;
+  --accent-foreground: #0b7a52;
+  --destructive: #dc2626;
+  --border: rgba(23, 40, 31, 0.1);
+  --input: rgba(23, 40, 31, 0.12);
+  --ring: #0f9163;
+  --gold: #a9821f;
+  --chart-1: #0f9163;
+  --chart-2: #a9821f;
+  --chart-3: #0b7a52;
+  --chart-4: #17281f;
+  --chart-5: #6b8a3c;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #17281f;
+  --sidebar-primary: #0f9163;
+  --sidebar-primary-foreground: #f3fbf4;
+  --sidebar-accent: #e2f0e4;
+  --sidebar-accent-foreground: #0b7a52;
+  --sidebar-border: rgba(23, 40, 31, 0.1);
+  --sidebar-ring: #0f9163;
+
+  /* emerald ramp — LIGHT me ye "ink" ke roop me kaam karte hain */
+  --q-em-50: #17281f;
+  --q-em-100: #33473b;
+  --q-em-200: #5a6e61;
+  --q-em-300: #0b7a52;
+  --q-em-400: #0e8a5c;
+  --q-em-500: #0f9163;
+  --q-em-600: #0c7e56;
+  --q-em-700: #0a6b47;
+  --q-em-800: #8fa697;
+  --q-em-900: #cbe0cd;
+  --q-em-950: #e7efe3;
+
+  /* app-level theme tokens */
+  --glow: rgba(15, 145, 99, 0.35);
+  --shadow-float: rgba(23, 40, 31, 0.18);
+  --text-glow-color: rgba(15, 145, 99, 0.22);
+  --glass-bg: rgba(252, 251, 246, 0.86);
+  --card-surface-bg: linear-gradient(165deg, #ffffff, #fbfaf3);
+  --card-surface-border: rgba(23, 40, 31, 0.08);
+  --player-bg: linear-gradient(180deg, #f3f0e4, #ece8d9);
+  --popup-bg: rgba(255, 255, 255, 0.97);
+  --scroll-thumb: rgba(23, 40, 31, 0.2);
+  --grad-emerald-1: #17a673;
+  --grad-emerald-2: #0f9163;
+  --grad-emerald-3: #0a6b47;
+  --grad-gold-1: #d9b54a;
+  --grad-gold-2: #c39a33;
+  --grad-gold-3: #a9821f;
+}
+
+/*
+  ═══════════════════════════════════════════════════════════════
+  QALB DARK THEME — "MIDNIGHT EMERALD"
+  Gehra sabz-kaali raat, chamakta emerald, sunehri touch.
+  ═══════════════════════════════════════════════════════════════
+*/
+.dark {
+  --background: #070b09;
+  --foreground: #ecf5ee;
+  --card: #0f1512;
+  --card-foreground: #ecf5ee;
+  --popover: #121915;
+  --popover-foreground: #ecf5ee;
+  --primary: #2fc98d;
+  --primary-foreground: #06231a;
+  --secondary: #141c18;
+  --secondary-foreground: #d9e7db;
+  --muted: #141c18;
+  --muted-foreground: #a9bfac;
+  --accent: #10241b;
+  --accent-foreground: #5ee3ab;
   --destructive: #f87171;
-  --border: rgba(221, 186, 95, 0.13);
-  --input: rgba(221, 186, 95, 0.18);
-  --ring: #ddba5f;
-  --gold: #ddba5f;
-  --chart-1: #ddba5f;
-  --chart-2: #a9852f;
-  --chart-3: #e9cd7e;
-  --chart-4: #f6f2e8;
-  --chart-5: #7d6424;
-  --sidebar: #131317;
-  --sidebar-foreground: #f6f2e8;
-  --sidebar-primary: #ddba5f;
-  --sidebar-primary-foreground: #1a1409;
-  --sidebar-accent: #262218;
-  --sidebar-accent-foreground: #e9cd7e;
-  --sidebar-border: rgba(221, 186, 95, 0.13);
-  --sidebar-ring: #ddba5f;
+  --border: rgba(61, 220, 158, 0.14);
+  --input: rgba(61, 220, 158, 0.18);
+  --ring: #3ddc9e;
+  --gold: #e9c46a;
+  --chart-1: #2fc98d;
+  --chart-2: #e9c46a;
+  --chart-3: #5ee3ab;
+  --chart-4: #ecf5ee;
+  --chart-5: #17805b;
+  --sidebar: #0f1512;
+  --sidebar-foreground: #ecf5ee;
+  --sidebar-primary: #2fc98d;
+  --sidebar-primary-foreground: #06231a;
+  --sidebar-accent: #10241b;
+  --sidebar-accent-foreground: #5ee3ab;
+  --sidebar-border: rgba(61, 220, 158, 0.14);
+  --sidebar-ring: #3ddc9e;
+
+  /* emerald ramp — DARK me bright accent ke roop me */
+  --q-em-50: #ecf5ee;
+  --q-em-100: #d9e7db;
+  --q-em-200: #a9bfac;
+  --q-em-300: #5ee3ab;
+  --q-em-400: #3ddc9e;
+  --q-em-500: #2fc98d;
+  --q-em-600: #21ae75;
+  --q-em-700: #17805b;
+  --q-em-800: #14654a;
+  --q-em-900: #16382a;
+  --q-em-950: #0a130f;
+
+  /* app-level theme tokens */
+  --glow: rgba(61, 220, 158, 0.4);
+  --shadow-float: rgba(0, 0, 0, 0.7);
+  --text-glow-color: rgba(94, 227, 171, 0.35);
+  --glass-bg: rgba(12, 18, 15, 0.82);
+  --card-surface-bg: linear-gradient(165deg, rgba(20, 30, 25, 0.92), rgba(11, 16, 13, 0.96));
+  --card-surface-border: rgba(61, 220, 158, 0.12);
+  --player-bg: linear-gradient(180deg, #0c1511, #060a08);
+  --popup-bg: rgba(16, 22, 19, 0.97);
+  --scroll-thumb: rgba(61, 220, 158, 0.25);
+  --grad-emerald-1: #58e6ae;
+  --grad-emerald-2: #2fc98d;
+  --grad-emerald-3: #14996a;
+  --grad-gold-1: #f1da96;
+  --grad-gold-2: #ddba5f;
+  --grad-gold-3: #a8842a;
 }
 
 @layer base {
@@ -119,15 +217,23 @@
     @apply border-border outline-ring/50;
   }
   html {
+    color-scheme: light;
+  }
+  html.dark {
     color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, rgba(221, 186, 95, 0.09), transparent 60%),
-      radial-gradient(900px 460px at -15% 14%, rgba(125, 100, 36, 0.07), transparent 55%);
+      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(15, 145, 99, 0.06)), transparent 60%),
+      radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(169, 130, 31, 0.05)), transparent 55%);
     background-attachment: fixed;
     overscroll-behavior-y: none;
+  }
+  .dark body {
+    background-image:
+      radial-gradient(1100px 520px at 85% -12%, rgba(61, 220, 158, 0.07), transparent 60%),
+      radial-gradient(900px 460px at -15% 14%, rgba(20, 101, 74, 0.09), transparent 55%);
   }
 }
 
@@ -146,7 +252,7 @@
   50% { opacity: 1; transform: scale(1.04); }
 }
 
-/* ── App utilities ─────────────────────────────────────────────── */
+/* ── App utilities (theme-aware) ───────────────────────────────── */
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
@@ -163,34 +269,47 @@
   background: transparent;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(221, 186, 95, 0.25);
+  background: var(--scroll-thumb);
   border-radius: 999px;
 }
 
 .glass {
-  background: rgba(16, 15, 14, 0.82);
+  background: var(--glass-bg);
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
 }
 
 .text-glow {
-  text-shadow: 0 0 18px rgba(221, 186, 95, 0.4);
+  text-shadow: 0 0 18px var(--text-glow-color);
 }
 
 .card-surface {
-  background: linear-gradient(160deg, rgba(26, 25, 21, 0.92), rgba(15, 15, 13, 0.96));
-  border: 1px solid rgba(221, 186, 95, 0.1);
+  background: var(--card-surface-bg);
+  border: 1px solid var(--card-surface-border);
+}
+
+/* update popup / dialog surfaces */
+.popup-surface {
+  background: var(--popup-bg);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+
+/* full player modal background */
+.fullplayer-bg {
+  background: var(--player-bg);
 }
 
 .gold-gradient {
-  background: linear-gradient(135deg, #f1da96, #ddba5f 45%, #a8842a);
+  background: linear-gradient(135deg, var(--grad-gold-1), var(--grad-gold-2) 45%, var(--grad-gold-3));
 }
 
-/* Legacy name — components isse use karte hain; ab gold hi render hota hai */
+/* Primary action gradient — LIGHT: gehra sabz (pale text), DARK: chamakta sabz (ink text) */
 .emerald-gradient {
-  background: linear-gradient(135deg, #f1da96, #ddba5f 45%, #a8842a);
+  background: linear-gradient(135deg, var(--grad-emerald-1), var(--grad-emerald-2) 45%, var(--grad-emerald-3));
 }
 
+/* Legacy name — components isse use karte hain */
 @keyframes marquee-x {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }

@@ -4,11 +4,19 @@
 // • Ek single hidden YT.IFrame instance poori app (saare tabs) ko drive karta hai
 // • Audio-only mode: video offscreen, spinning cover art UI me dikhti hai
 // • Media Session API: lock-screen / notification controls
+// • Background playback: Android foreground service — screen lock pe bhi naat chalti rahe
 // • Global: Mini-Player aur Full-screen Modal isi provider pe chalte hain
 
 import { useEffect, useRef } from 'react'
 import { usePlayerStore, ytBridge } from '@/lib/player-store'
 import { useToast } from '@/hooks/use-toast'
+import {
+  nativeStartPlayback,
+  nativeStopPlayback,
+  nativeUpdatePlayback,
+  nativeSetStatusBar,
+} from '@/plugins/qalb-native'
+import { getTheme } from '@/lib/theme'
 
 // ── minimal YT IFrame typings ────────────────────────────────────
 interface YTPlayer {
@@ -159,6 +167,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     ytBridge.play = () => playerRef.current?.playVideo()
     ytBridge.pause = () => playerRef.current?.pauseVideo()
     ytBridge.seekTo = (s, allow = true) => playerRef.current?.seekTo(s, allow)
+  }, [])
+
+  // ── background playback service (Android) ──────────────────────
+  // Play → foreground service on (wake lock + media notification)
+  // Pause/stop → service off. Track change → notification meta update.
+  useEffect(() => {
+    nativeSetStatusBar(getTheme() === 'dark') // startup sync
+    return usePlayerStore.subscribe((s, prev) => {
+      const t = s.currentIndex >= 0 ? s.queue[s.currentIndex] : null
+      const prevT = prev.currentIndex >= 0 ? prev.queue[prev.currentIndex] : null
+      if (s.isPlaying !== prev.isPlaying) {
+        if (s.isPlaying && t) nativeStartPlayback(t.title, t.artist)
+        else nativeStopPlayback()
+      } else if (s.isPlaying && t && prevT && t.videoId !== prevT.videoId) {
+        nativeUpdatePlayback(t.title, t.artist)
+      }
+    })
   }, [])
 
   // video change → load

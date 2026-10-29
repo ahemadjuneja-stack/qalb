@@ -222,7 +222,7 @@ export function CalendarView() {
         <div>
           <h1 className="flex items-center gap-2 text-xl font-extrabold text-emerald-50">
             <MoonStar className="h-5 w-5 text-emerald-400" /> Islamic Calendar
-            <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[#ddba5f]">
+            <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gold">
               Sunni Hanafi
             </span>
           </h1>
@@ -269,7 +269,7 @@ export function CalendarView() {
           {/* hijri card */}
           <section
             aria-label="Hijri date"
-            className="emerald-gradient relative overflow-hidden rounded-3xl p-5 text-emerald-950 shadow-[0_16px_48px_-16px_rgba(221,186,95,0.45)]"
+            className="emerald-gradient relative overflow-hidden rounded-3xl p-5 text-emerald-950 shadow-[0_16px_48px_-16px_var(--glow)]"
           >
             <div className="absolute -right-6 -top-8 text-[110px] leading-none opacity-15">🕌</div>
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-emerald-900/70">
@@ -282,7 +282,7 @@ export function CalendarView() {
               {view.gregorian} • {view.city}
             </p>
             {/* local ruyat adjust (Hanafi maslak) */}
-            <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-emerald-950/25 px-3 py-2">
+            <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-black/15 px-3 py-2">
               <span className="text-[10px] font-bold uppercase tracking-wide opacity-80">
                 Chand adjust
               </span>
@@ -291,7 +291,7 @@ export function CalendarView() {
                   type="button"
                   onClick={() => setHijriAdjust((a) => clampAdjust(a - 1))}
                   disabled={hijriAdjust <= -2}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-950/40 text-sm font-bold transition hover:bg-emerald-950/60 disabled:opacity-30"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
                   aria-label="Hijri date ek din peeche"
                 >
                   −
@@ -303,7 +303,7 @@ export function CalendarView() {
                   type="button"
                   onClick={() => setHijriAdjust((a) => clampAdjust(a + 1))}
                   disabled={hijriAdjust >= 2}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-950/40 text-sm font-bold transition hover:bg-emerald-950/60 disabled:opacity-30"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-black/20 text-sm font-bold transition hover:bg-black/30 disabled:opacity-30"
                   aria-label="Hijri date ek din aage"
                 >
                   +
@@ -316,15 +316,14 @@ export function CalendarView() {
           {nextPrayer && (
             <section
               aria-label="Next prayer countdown"
-              className="card-surface flex items-center justify-between rounded-2xl border-gold/20 p-4"
-              style={{ borderColor: 'rgba(221,186,95,0.25)' }}
+              className="card-surface flex items-center justify-between rounded-2xl border-gold/25 p-4"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#ddba5f]/10 text-xl">
-                  <AlarmClock className="h-5 w-5 text-[#ddba5f]" />
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gold/10 text-xl">
+                  <AlarmClock className="h-5 w-5 text-gold" />
                 </span>
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[#ddba5f]">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gold">
                     Agli Namaz — {PRAYER_NAMES_UR[nextPrayer]}
                   </p>
                   <p className="font-mono text-xl font-bold tabular-nums text-emerald-50">
@@ -349,7 +348,7 @@ export function CalendarView() {
                 <div
                   key={name}
                   className={`card-surface flex items-center justify-between rounded-2xl px-4 py-3 transition ${
-                    isNext ? 'border-emerald-400/40 shadow-[0_0_24px_-8px_rgba(221,186,95,0.35)]' : ''
+                    isNext ? 'border-emerald-400/40 shadow-[0_0_24px_-8px_var(--glow)]' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">

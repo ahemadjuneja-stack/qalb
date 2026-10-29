@@ -35,7 +35,7 @@ export function MiniPlayer() {
             aria-label="Full player kholein"
             onClick={openFull}
             onKeyDown={(e) => e.key === 'Enter' && openFull()}
-            className="glass relative flex items-center gap-3 overflow-hidden rounded-2xl border border-emerald-400/15 p-2 pr-3 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.8)]"
+            className="glass relative flex items-center gap-3 overflow-hidden rounded-2xl border border-emerald-400/15 p-2 pr-3 shadow-[0_12px_40px_-12px_var(--shadow-float)]"
           >
             {/* progress hairline */}
             <div className="absolute inset-x-0 top-0 h-[2px] bg-emerald-400/10">

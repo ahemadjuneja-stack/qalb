@@ -13,12 +13,16 @@ import {
   Info,
   BadgeCheck,
   Smartphone,
+  SunMedium,
+  Moon,
+  Palette,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { usePlayerStore } from '@/lib/player-store'
 import { useAppUpdate } from '@/hooks/use-app-update'
 import { getDownloads, removeDownload, isNativeCapacitor } from '@/lib/downloads'
 import { PRAYER_CITIES, QALB } from '@/lib/qalb'
+import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import type { SavedDownload } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
@@ -30,6 +34,7 @@ export function ProfileView() {
   const [downloads, setDownloads] = useState<SavedDownload[]>([])
   const [city, setCity] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
+  const [theme, setTheme] = useState<QalbTheme>('dark')
   const recents = usePlayerStore((s) => s.recents)
   const { toast } = useToast()
 
@@ -52,6 +57,7 @@ export function ProfileView() {
       }
       setDownloads(getDownloads())
     }, 0)
+    setTheme(getTheme())
     return () => clearTimeout(t)
   }, [])
 
@@ -75,6 +81,14 @@ export function ProfileView() {
       /* ignore */
     }
     toast({ title: `Namaz ke auqaat ab ${c.city} ke liye honge 🕌` })
+  }
+
+  const switchTheme = (t: QalbTheme) => {
+    applyTheme(t)
+    setTheme(t)
+    toast({
+      title: t === 'light' ? 'Light theme on ho gayi ☀️' : 'Dark theme on ho gayi 🌙',
+    })
   }
 
   const handleCheckUpdate = async () => {
@@ -105,7 +119,7 @@ export function ProfileView() {
       {/* profile card */}
       <section aria-label="Profile" className="card-surface rounded-3xl p-5">
         <div className="flex items-center gap-4">
-          <div className="emerald-gradient flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_rgba(221,186,95,0.6)]">
+          <div className="emerald-gradient flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-extrabold text-emerald-950 shadow-[0_0_28px_-8px_var(--glow)]">
             {name.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
@@ -152,6 +166,39 @@ export function ProfileView() {
         </div>
       </section>
 
+      {/* theme (light/dark) */}
+      <section aria-label="Theme setting" className="card-surface rounded-2xl p-4">
+        <p className="flex items-center gap-2 text-[13px] font-bold text-emerald-50">
+          <Palette className="h-4 w-4 text-emerald-400" /> Theme — Light ya Dark
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-emerald-400/5 p-1.5">
+          <button
+            type="button"
+            onClick={() => switchTheme('light')}
+            aria-pressed={theme === 'light'}
+            className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold transition ${
+              theme === 'light'
+                ? 'emerald-gradient text-emerald-950 shadow-[0_0_20px_-6px_var(--glow)]'
+                : 'border border-emerald-400/15 text-emerald-200/70 hover:border-emerald-400/30'
+            }`}
+          >
+            <SunMedium className="h-4 w-4" /> Light
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTheme('dark')}
+            aria-pressed={theme === 'dark'}
+            className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold transition ${
+              theme === 'dark'
+                ? 'emerald-gradient text-emerald-950 shadow-[0_0_20px_-6px_var(--glow)]'
+                : 'border border-emerald-400/15 text-emerald-200/70 hover:border-emerald-400/30'
+            }`}
+          >
+            <Moon className="h-4 w-4" /> Dark
+          </button>
+        </div>
+      </section>
+
       {/* update card */}
       <section aria-label="App update" className="card-surface rounded-2xl p-4">
         <div className="flex items-center justify-between">
@@ -179,8 +226,8 @@ export function ProfileView() {
         </div>
 
         {(hasUpdate || showUpdateCard) && update && (
-          <div className="mt-3 rounded-2xl border border-[#d4a937]/30 bg-[#d4a937]/[0.06] p-3.5">
-            <p className="flex items-center gap-1.5 text-[13px] font-bold text-[#e6c868]">
+          <div className="mt-3 rounded-2xl border border-gold/30 bg-gold/[0.06] p-3.5">
+            <p className="flex items-center gap-1.5 text-[13px] font-bold text-gold">
               <CloudDownload className="h-4 w-4" /> Naya version: {update.versionName} (code{' '}
               {update.versionCode})
             </p>
@@ -192,7 +239,7 @@ export function ProfileView() {
             <button
               type="button"
               onClick={handleInstall}
-              className="gold-gradient mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[12.5px] font-extrabold text-emerald-950 transition hover:brightness-110 active:scale-[0.98]"
+              className="emerald-gradient mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[12.5px] font-extrabold text-emerald-950 transition hover:brightness-110 active:scale-[0.98]"
             >
               <Download className="h-4 w-4" /> Update Download Karein (APK)
             </button>

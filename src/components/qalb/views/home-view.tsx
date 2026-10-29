@@ -3,13 +3,14 @@
 // Qalb — Home Tab: AI Smart Search (Gemini Guardian) + Trending + Playlists
 
 import { useEffect, useState } from 'react'
-import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play, ChevronDown } from 'lucide-react'
+import { Search, ShieldCheck, ShieldAlert, Loader2, Sparkles, Play, ChevronDown, Moon, SunMedium } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
+import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
 
 type Phase = 'idle' | 'validating' | 'blocked' | 'searching' | 'results'
@@ -31,6 +32,7 @@ export function HomeView() {
   const [refined, setRefined] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
+  const [theme, setTheme] = useState<QalbTheme>('dark')
 
   const playQueue = usePlayerStore((s) => s.playQueue)
   const openFull = usePlayerStore((s) => s.openFull)
@@ -41,7 +43,14 @@ export function HomeView() {
     fetchPlaylistsSmart()
       .then((p) => setPlaylists(p))
       .catch(() => setPlaylists([]))
+    setTheme(getTheme())
   }, [])
+
+  const switchTheme = () => {
+    const next: QalbTheme = theme === 'dark' ? 'light' : 'dark'
+    applyTheme(next)
+    setTheme(next)
+  }
 
   async function runSearch(rawQuery: string) {
     const q = rawQuery.trim()
@@ -121,8 +130,18 @@ export function HomeView() {
           </h1>
           <p className="text-xs text-emerald-200/50">Naat • Hamd • Sufi Qawwali • Nasheed</p>
         </div>
-        <div className="gold-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-xl shadow-[0_0_24px_-6px_rgba(212,169,55,0.5)]">
-          🕌
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={switchTheme}
+            aria-label={theme === 'dark' ? 'Light theme on karein' : 'Dark theme on karein'}
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-400/15 bg-emerald-400/5 text-emerald-300 transition hover:bg-emerald-400/15 active:scale-95"
+          >
+            {theme === 'dark' ? <SunMedium className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+          <div className="gold-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-xl shadow-[0_0_24px_-6px_var(--glow)]">
+            🕌
+          </div>
         </div>
       </header>
 
@@ -141,7 +160,7 @@ export function HomeView() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Naat, hamd ya qawwali search karein…"
             aria-label="Search query"
-            className="w-full rounded-2xl border border-emerald-400/15 bg-[#141419] py-3.5 pl-11 pr-28 text-sm text-emerald-50 placeholder:text-emerald-200/35 focus:border-emerald-400/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
+            className="w-full rounded-2xl border border-emerald-400/15 bg-card py-3.5 pl-11 pr-28 text-sm text-emerald-50 placeholder:text-emerald-200/35 focus:border-emerald-400/40 focus:outline-none focus:ring-2 focus:ring-emerald-400/20"
           />
           <button
             type="submit"

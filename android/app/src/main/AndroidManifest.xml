@@ -33,6 +33,12 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Background naat playback: screen lock par bhi audio chalta rahe -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
     <!-- Permissions -->
@@ -40,4 +46,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- In-app auto updater: APK install intent (Android 8+ par user ek dafa allow karta hai) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Background playback: foreground service + wake lock + notification -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>
