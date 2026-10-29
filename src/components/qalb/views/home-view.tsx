@@ -149,7 +149,7 @@ export function HomeView() {
       {/* header — animated QALB brand logo (heart + EKG heartbeat) */}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <QalbLogo className="h-14 w-auto" />
+          <QalbLogo className="h-12 w-auto" />
           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400/80">
             Assalam-o-Alaikum
           </p>

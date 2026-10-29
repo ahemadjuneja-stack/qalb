@@ -77,24 +77,24 @@
 */
 :root {
   --radius: 0.75rem;
-  --background: #f6f3ea;
-  --foreground: #17281f;
+  --background: #eef3e8;
+  --foreground: #1c2f24;
   --card: #ffffff;
-  --card-foreground: #17281f;
+  --card-foreground: #1c2f24;
   --popover: #ffffff;
-  --popover-foreground: #17281f;
-  --primary: #0f9163;
-  --primary-foreground: #f3fbf4;
-  --secondary: #edeadd;
-  --secondary-foreground: #33473b;
-  --muted: #eceade;
+  --popover-foreground: #1c2f24;
+  --primary: #35714f;
+  --primary-foreground: #f2faf4;
+  --secondary: #e6efdc;
+  --secondary-foreground: #2c4534;
+  --muted: #e9f0e0;
   --muted-foreground: #5a6e61;
-  --accent: #e2f0e4;
-  --accent-foreground: #0b7a52;
+  --accent: #dfeee0;
+  --accent-foreground: #246b47;
   --destructive: #dc2626;
-  --border: rgba(23, 40, 31, 0.1);
-  --input: rgba(23, 40, 31, 0.12);
-  --ring: #0f9163;
+  --border: rgba(28, 47, 36, 0.1);
+  --input: rgba(28, 47, 36, 0.12);
+  --ring: #35714f;
   --gold: #a9821f;
   --chart-1: #0f9163;
   --chart-2: #a9821f;
@@ -124,18 +124,18 @@
   --q-em-950: #e7efe3;
 
   /* app-level theme tokens */
-  --glow: rgba(15, 145, 99, 0.35);
-  --shadow-float: rgba(23, 40, 31, 0.18);
-  --text-glow-color: rgba(15, 145, 99, 0.22);
-  --glass-bg: rgba(252, 251, 246, 0.93);
-  --card-surface-bg: linear-gradient(165deg, #ffffff, #fbfaf3);
-  --card-surface-border: rgba(23, 40, 31, 0.08);
-  --player-bg: linear-gradient(180deg, #f3f0e4, #ece8d9);
-  --popup-bg: rgba(255, 255, 255, 0.97);
-  --scroll-thumb: rgba(23, 40, 31, 0.2);
-  --grad-emerald-1: #17a673;
-  --grad-emerald-2: #0f9163;
-  --grad-emerald-3: #0a6b47;
+  --glow: rgba(47, 148, 96, 0.35);
+  --shadow-float: rgba(28, 47, 36, 0.18);
+  --text-glow-color: rgba(47, 148, 96, 0.22);
+  --glass-bg: rgba(250, 253, 248, 0.93);
+  --card-surface-bg: linear-gradient(165deg, #ffffff, #fafdf7);
+  --card-surface-border: rgba(28, 47, 36, 0.08);
+  --player-bg: linear-gradient(180deg, #f2f7ec, #e8f1e0);
+  --popup-bg: rgba(252, 254, 250, 0.97);
+  --scroll-thumb: rgba(28, 47, 36, 0.2);
+  --grad-emerald-1: #2fa46c;
+  --grad-emerald-2: #2f9460;
+  --grad-emerald-3: #1d6b45;
   --grad-gold-1: #d9b54a;
   --grad-gold-2: #c39a33;
   --grad-gold-3: #a9821f;
@@ -148,7 +148,7 @@
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #070b09;
+  --background: #0a130e;
   --foreground: #ecf5ee;
   --card: #0f1512;
   --card-foreground: #ecf5ee;
@@ -225,7 +225,7 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(15, 145, 99, 0.06)), transparent 60%),
+      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(47, 148, 96, 0.07)), transparent 60%),
       radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(169, 130, 31, 0.05)), transparent 55%);
     background-attachment: fixed;
     overscroll-behavior-y: none;
@@ -235,7 +235,7 @@
   .dark body {
     background-image:
       radial-gradient(1100px 520px at 85% -12%, rgba(61, 220, 158, 0.07), transparent 60%),
-      radial-gradient(900px 460px at -15% 14%, rgba(20, 101, 74, 0.09), transparent 55%);
+      radial-gradient(900px 460px at -15% 14%, rgba(29, 107, 69, 0.12), transparent 55%);
   }
 }
 
@@ -342,15 +342,15 @@
   --qalb-red-a: #b31226;
   --qalb-red-b: #e63946;
   --qalb-red-c: #ff5a5a;
-  --qalb-ekg: #c9404e;
-  --qalb-ekg-pulse: #ff8a8a;
+  --qalb-ekg: #2f8f5c;
+  --qalb-ekg-pulse: #46c98a;
 }
 .dark {
   --qalb-red-a: #a10f22;
   --qalb-red-b: #ef3b4e;
   --qalb-red-c: #ff6b6b;
-  --qalb-ekg: #ff6b6b;
-  --qalb-ekg-pulse: #ffd9d9;
+  --qalb-ekg: #3ddc9e;
+  --qalb-ekg-pulse: #c2f4de;
 }
 
 /* Heartbeat — dil ki asli rhythm jaisa double-thump */
@@ -414,7 +414,7 @@
   background: linear-gradient(
     90deg,
     transparent,
-    var(--qalb-red-b) 30%,
+    var(--qalb-ekg) 30%,
     var(--gold) 55%,
     transparent 85%
   );

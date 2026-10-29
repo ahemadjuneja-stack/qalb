@@ -110,7 +110,7 @@ export function QalbLogo({ className = 'h-12 w-auto' }: { className?: string }) 
       />
       <path
         d={SPARK}
-        fill="var(--qalb-red-c)"
+        fill="var(--qalb-ekg)"
         opacity="0.85"
         className="qalb-spark"
         style={{ animationDelay: '0.7s' }}
@@ -126,7 +126,7 @@ export function QalbLogo({ className = 'h-12 w-auto' }: { className?: string }) 
       />
       <path
         d={SPARK}
-        fill="var(--qalb-red-c)"
+        fill="var(--qalb-ekg)"
         opacity="0.7"
         className="qalb-spark"
         style={{ animationDelay: '2.1s' }}
