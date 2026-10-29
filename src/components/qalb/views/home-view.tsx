@@ -171,6 +171,32 @@ export function HomeView() {
       </header>
       <div className="qalb-divider mt-3" aria-hidden="true" />
 
+      {/* trending — sab se UPAR (user request): search se pehle dikhta hai */}
+      {trending.length > 0 && phase !== 'results' && (
+        <section aria-label="Trending">
+          <div className="mb-2.5 flex items-center justify-between">
+            <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+              🔥 Trending Kalam
+            </h2>
+            <button
+              type="button"
+              onClick={() => {
+                playQueue(trending, 0)
+                toast({ title: 'Trending kalam chal raha hai 🎵' })
+              }}
+              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
+            >
+              <Play className="h-3 w-3 fill-current" /> Sab play
+            </button>
+          </div>
+          <div className="card-surface rounded-2xl p-2">
+            {trending.map((t, i) => (
+              <TrackRow key={t.id} track={t} index={i} queue={trending} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* search */}
       <section aria-label="Search">
         <form
@@ -317,32 +343,6 @@ export function HomeView() {
           >
             clear results
           </button>
-        </section>
-      )}
-
-      {/* trending */}
-      {trending.length > 0 && phase !== 'results' && (
-        <section aria-label="Trending">
-          <div className="mb-2.5 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
-              🔥 Trending Kalam
-            </h2>
-            <button
-              type="button"
-              onClick={() => {
-                playQueue(trending, 0)
-                toast({ title: 'Trending kalam chal raha hai 🎵' })
-              }}
-              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300"
-            >
-              <Play className="h-3 w-3 fill-current" /> Sab play
-            </button>
-          </div>
-          <div className="card-surface rounded-2xl p-2">
-            {trending.map((t, i) => (
-              <TrackRow key={t.id} track={t} index={i} queue={trending} />
-            ))}
-          </div>
         </section>
       )}
 
