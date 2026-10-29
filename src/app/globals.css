@@ -329,3 +329,106 @@
 .marquee-track {
   animation: marquee-x 12s linear infinite;
 }
+
+/*
+  ── QALB ANIMATED BRAND LOGO (header) ────────────────────────────
+  Red heart + EKG heartbeat line + gold-edged wordmark. Saari
+  animations sirf transform/opacity/stroke-dashoffset chalti hain
+  (compositor-friendly — Android WebView pe bhi 60fps smooth).
+  Colors brand logo se: red heart + gold edge; light theme me
+  gehra red/gold, dark theme me bright.
+*/
+:root {
+  --qalb-red-a: #b31226;
+  --qalb-red-b: #e63946;
+  --qalb-red-c: #ff5a5a;
+  --qalb-ekg: #c9404e;
+  --qalb-ekg-pulse: #ff8a8a;
+}
+.dark {
+  --qalb-red-a: #a10f22;
+  --qalb-red-b: #ef3b4e;
+  --qalb-red-c: #ff6b6b;
+  --qalb-ekg: #ff6b6b;
+  --qalb-ekg-pulse: #ffd9d9;
+}
+
+/* Heartbeat — dil ki asli rhythm jaisa double-thump */
+@keyframes qalb-beat {
+  0%, 100% { transform: scale(1); }
+  8% { transform: scale(1.085); }
+  16% { transform: scale(1); }
+  24% { transform: scale(1.05); }
+  34% { transform: scale(1); }
+}
+.qalb-beat {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: qalb-beat 1.6s ease-in-out infinite;
+}
+
+/* Heart glow pulse — beat ke sath sync */
+@keyframes qalb-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  10% { opacity: 0.9; transform: scale(1.1); }
+  30% { opacity: 0.45; transform: scale(1); }
+}
+.qalb-glow-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: qalb-glow 1.6s ease-out infinite;
+}
+
+/* EKG travelling pulse — bright dash line pe daudta hai */
+@keyframes qalb-ekg-run {
+  0% { stroke-dashoffset: 0; opacity: 0; }
+  6% { opacity: 1; }
+  55% { stroke-dashoffset: -170; opacity: 1; }
+  64% { stroke-dashoffset: -196; opacity: 0; }
+  100% { stroke-dashoffset: -196; opacity: 0; }
+}
+.qalb-ekg-pulse {
+  animation: qalb-ekg-run 1.6s linear infinite;
+}
+
+/* Sparkles — staggered twinkle (delay inline style se aata hai) */
+@keyframes qalb-twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.6) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.2) rotate(24deg); }
+}
+.qalb-spark {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: qalb-twinkle 2.8s ease-in-out infinite;
+}
+
+/* Header ke neeche shimmering gold-red divider */
+@keyframes qalb-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.qalb-divider {
+  height: 2px;
+  border-radius: 999px;
+  opacity: 0.55;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--qalb-red-b) 30%,
+    var(--gold) 55%,
+    transparent 85%
+  );
+  background-size: 200% 100%;
+  animation: qalb-shimmer 4.5s linear infinite;
+}
+
+/* Accessibility — motion kam pasand karne walon ke liye */
+@media (prefers-reduced-motion: reduce) {
+  .qalb-beat,
+  .qalb-glow-pulse,
+  .qalb-ekg-pulse,
+  .qalb-spark,
+  .qalb-divider {
+    animation: none !important;
+  }
+}

@@ -323,7 +323,7 @@ export function ProfileView() {
         </p>
         <p className="mt-2 text-[11.5px] leading-relaxed text-emerald-200/55">
           Qalb aik paak Islamic media platform hai — sirf authentic Naat, Hamd aur Sufi Qawwali,
-          AI guardian se verified. Hijri calendar, namaz ke auqaat aur Islamic Store bhi shamil
+          har kalaam keyword-rules se verified. Hijri calendar, namaz ke auqaat aur Islamic Store bhi shamil
           hai. GitHub Actions se signed APK builds automatically release hote hain aur in-app
           updater users ko naye version ki itla deta hai.
         </p>

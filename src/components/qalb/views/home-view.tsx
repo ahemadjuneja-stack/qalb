@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Search, ShieldCheck, ShieldAlert, Loader2, Play, ChevronDown, Moon, SunMedium } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
+import { QalbLogo } from '@/components/qalb/qalb-logo'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
@@ -145,18 +146,16 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* header */}
-      <header className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-emerald-400/80">
+      {/* header — animated QALB brand logo (heart + EKG heartbeat) */}
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <QalbLogo className="h-14 w-auto" />
+          <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400/80">
             Assalam-o-Alaikum
           </p>
-          <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-emerald-50">
-            Qalb
-          </h1>
-          <p className="text-xs text-emerald-200/50">Naat • Hamd • Sufi Qawwali • Nasheed</p>
+          <p className="text-[11px] text-emerald-200/50">Naat • Hamd • Sufi Qawwali • Nasheed</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={switchTheme}
@@ -165,11 +164,12 @@ export function HomeView() {
           >
             {theme === 'dark' ? <SunMedium className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
-          <div className="gold-gradient flex h-11 w-11 items-center justify-center rounded-2xl text-xl shadow-[0_0_24px_-6px_var(--glow)]">
+          <div className="gold-gradient flex h-11 w-11 animate-pulse-glow items-center justify-center rounded-2xl text-xl shadow-[0_0_24px_-6px_var(--glow)]">
             🕌
           </div>
         </div>
       </header>
+      <div className="qalb-divider mt-3" aria-hidden="true" />
 
       {/* search */}
       <section aria-label="Search">
