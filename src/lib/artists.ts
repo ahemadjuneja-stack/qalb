@@ -58,13 +58,6 @@ export const QALB_ARTISTS: QalbArtist[] = [
     accent: '#F59E0B',
   },
   {
-    name: 'Junaid Jamshed',
-    role: 'Naat Khwan',
-    query: 'Junaid Jamshed naat',
-    image: 'https://i.ytimg.com/vi/l3hHUwc1cAk/hqdefault.jpg',
-    accent: '#059669',
-  },
-  {
     name: 'Atif Aslam',
     role: 'Sufi Kalaam',
     query: 'Atif Aslam naat qawwali',

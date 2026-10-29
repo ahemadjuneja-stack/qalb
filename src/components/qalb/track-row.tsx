@@ -9,6 +9,7 @@ import { memo } from 'react'
 import { ListPlus, Pause, Play } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
 import { usePlaylistPicker } from '@/lib/user-playlists'
+import { QalbThumb } from '@/components/qalb/thumb-square'
 import type { QalbTrack } from '@/lib/types'
 
 export function EqualizerBars() {
@@ -81,16 +82,11 @@ export const TrackRow = memo(function TrackRow({
             </span>
           )
         ) : (
-          <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
-            {track.thumbnailUrl ? (
-              <img src={track.thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
-            ) : (
-              <span className="flex h-full w-full items-center justify-center">🕌</span>
-            )}
-            <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition hover:opacity-100">
-              <Play className="h-4 w-4 fill-white text-white" />
-            </span>
-          </span>
+          <QalbThumb
+            src={track.thumbnailUrl}
+            className="h-14 w-14"
+            rounded="rounded-xl"
+          />
         )}
 
         <span className="min-w-0 flex-1">

@@ -28,6 +28,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
+import { QalbThumb } from '@/components/qalb/thumb-square'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
@@ -411,7 +412,7 @@ export function HomeView() {
               <Play className="h-3 w-3 fill-current" /> Sab play
             </button>
           </div>
-          {/* horizontal big cards — music player style */}
+          {/* square (1:1) BIG cards — Spotify album-art style */}
           <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
             {dailyTrending.tracks.map((t, i) => (
               <div
@@ -424,26 +425,20 @@ export function HomeView() {
                     playQueue(dailyTrending.tracks, i)
                     openFull()
                   }}
-                  className="relative block h-24 w-full"
+                  className="relative block w-full"
                   aria-label={`${t.title} play karein`}
                 >
-                  {t.thumbnailUrl ? (
-                    <img
-                      src={t.thumbnailUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center bg-emerald-950 text-3xl">🕌</span>
-                  )}
+                  <QalbThumb
+                    src={t.thumbnailUrl}
+                    className="aspect-square w-full"
+                    rounded="rounded-none"
+                  />
                   <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-[10px] font-extrabold text-gold backdrop-blur">
+                  <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-[11px] font-extrabold text-gold backdrop-blur">
                     {i + 1}
                   </span>
-                  <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950 shadow-lg">
-                    <Play className="h-4 w-4 fill-current" />
+                  <span className="absolute bottom-2 right-2 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950 shadow-lg">
+                    <Play className="h-5 w-5 fill-current" />
                   </span>
                 </button>
                 <div className="flex items-start gap-1 p-2.5 pt-2">
@@ -522,11 +517,11 @@ export function HomeView() {
           <h2 className="mb-2.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
             💚 Aap ki Playlists
           </h2>
-          <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+          <div className="grid grid-cols-2 gap-3">
             {userPlaylists.map((p) => (
               <div
                 key={p.id}
-                className="card-surface w-40 shrink-0 overflow-hidden rounded-2xl p-3 transition hover:border-emerald-400/30 active:scale-[0.98]"
+                className="card-surface overflow-hidden rounded-2xl transition hover:border-emerald-400/30 active:scale-[0.98]"
               >
                 <button
                   type="button"
@@ -541,26 +536,26 @@ export function HomeView() {
                   className="block w-full text-left"
                   aria-label={`${p.name} play karein`}
                 >
-                  <div className="relative flex h-24 items-center justify-center rounded-xl text-4xl"
-                    style={{ background: 'rgba(16,185,129,0.13)', border: '1px solid rgba(16,185,129,0.27)' }}
-                  >
-                    {p.tracks.length > 0 && p.tracks[0].thumbnailUrl ? (
-                      <img
-                        src={p.tracks[0].thumbnailUrl}
-                        alt=""
-                        className="absolute inset-0 h-full w-full rounded-xl object-cover opacity-45"
-                        loading="lazy"
-                      />
-                    ) : null}
-                    <span className="relative">{p.emoji}</span>
+                  <div className="relative">
+                    <QalbThumb
+                      src={p.tracks[0]?.thumbnailUrl ?? null}
+                      className="aspect-square w-full"
+                      rounded="rounded-none"
+                      fallbackEmoji={p.emoji}
+                    />
+                    <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-black/55 text-lg backdrop-blur">
+                      {p.emoji}
+                    </span>
                     {p.tracks.length > 0 && (
-                      <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950">
-                        <Play className="h-3.5 w-3.5 fill-current" />
+                      <span className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/90 text-emerald-950 shadow-lg">
+                        <Play className="h-4 w-4 fill-current" />
                       </span>
                     )}
                   </div>
-                  <p className="mt-2.5 truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
-                  <p className="truncate text-[10.5px] text-emerald-200/50">{p.tracks.length} kalam</p>
+                  <div className="p-2.5">
+                    <p className="truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
+                    <p className="truncate text-[10.5px] text-emerald-200/50">{p.tracks.length} kalam</p>
+                  </div>
                 </button>
                 <button
                   type="button"
@@ -569,7 +564,7 @@ export function HomeView() {
                     setUserPlaylists(listUserPlaylists())
                     toast({ title: `"${p.name}" delete ho gayi` })
                   }}
-                  className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-red-300/70 transition hover:text-red-300"
+                  className="mb-2 ml-3 flex items-center gap-1 text-[10px] font-semibold text-red-300/70 transition hover:text-red-300"
                   aria-label={`${p.name} delete karein`}
                 >
                   <Trash2 className="h-3 w-3" /> Delete
@@ -580,13 +575,16 @@ export function HomeView() {
         </section>
       )}
 
-      {/* 🎧 CURATED PLAYLISTS (Firestore/bundled) */}
+      {/* 🎧 CURATED PLAYLISTS (Firestore → verified pool se curated) — poora page bharta hai */}
       {playlists.length > 0 && phase !== 'results' && (
         <section aria-label="Playlists">
-          <h2 className="mb-2.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
-            🎧 Playlists
-          </h2>
-          <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
+          <div className="mb-2.5 flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+              🎧 Playlists
+            </h2>
+            <span className="text-[10px] text-emerald-200/40">{playlists.length} collections</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             {playlists.map((p) => (
               <button
                 key={p.id}
@@ -595,15 +593,29 @@ export function HomeView() {
                   playQueue(p.tracks, 0)
                   openFull()
                 }}
-                className="card-surface w-40 shrink-0 overflow-hidden rounded-2xl p-3 text-left transition hover:border-emerald-400/30 active:scale-[0.98]"
+                className="card-surface overflow-hidden rounded-2xl text-left transition hover:border-emerald-400/30 active:scale-[0.98]"
               >
-                <div className="flex h-24 items-center justify-center rounded-xl text-4xl"
-                  style={{ background: `${p.accentColor}22`, border: `1px solid ${p.accentColor}44` }}
-                >
-                  {p.coverEmoji}
+                <div className="relative">
+                  <QalbThumb
+                    src={p.tracks[0]?.thumbnailUrl ?? null}
+                    className="aspect-square w-full"
+                    rounded="rounded-none"
+                    fallbackEmoji={p.coverEmoji}
+                  />
+                  <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-black/55 text-lg backdrop-blur">
+                    {p.coverEmoji}
+                  </span>
+                  <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-emerald-100 backdrop-blur">
+                    <Play className="h-2.5 w-2.5 fill-current" /> {p.tracks.length}
+                  </span>
                 </div>
-                <p className="mt-2.5 truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
-                <p className="truncate text-[10.5px] text-emerald-200/50">{p.tracks.length} kalam</p>
+                <div className="p-2.5">
+                  <p className="truncate text-[13px] font-bold text-emerald-50">{p.name}</p>
+                  <p className="truncate text-[10.5px] text-emerald-200/50">
+                    {p.tracks.length} kalam
+                    {p.description ? ` • ${p.description}` : ''}
+                  </p>
+                </div>
               </button>
             ))}
           </div>

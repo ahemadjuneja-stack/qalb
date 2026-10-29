@@ -62,7 +62,7 @@ export function PlayerView() {
         <div className="flex items-center gap-4">
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-emerald-400/20 bg-emerald-950">
             {current.thumbnailUrl ? (
-              <img src={current.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+              <img src={current.thumbnailUrl} alt="" className="absolute left-1/2 top-1/2 h-[133.33%] w-auto max-w-none min-w-full -translate-x-1/2 -translate-y-1/2 object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-3xl">🕌</div>
             )}

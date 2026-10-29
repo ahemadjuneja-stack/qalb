@@ -127,7 +127,7 @@ export function FullPlayerModal() {
                       <img
                         src={current.thumbnailUrl}
                         alt={`${current.title} cover art`}
-                        className="h-full w-full object-cover"
+                        className="absolute left-1/2 top-1/2 h-[133.33%] w-auto max-w-none min-w-full -translate-x-1/2 -translate-y-1/2 object-cover"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center bg-emerald-900 text-6xl">

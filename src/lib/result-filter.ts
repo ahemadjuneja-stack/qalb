@@ -61,7 +61,7 @@ const ISLAMIC_MARKERS = [
   // naat khawan / Islamic artists (jo YouTube par islamic content dete hain)
   'nusrat fateh', 'rahat fateh', 'abida parveen', 'sabri brothers',
   'amjad sabri', 'aziz mian', 'owais raza', 'hafiz ahmed raza',
-  'junaid jamshed', 'zain zohaib', 'maher zain', 'sami yusuf',
+  'zain zohaib', 'maher zain', 'sami yusuf',
   'zain bhikha', 'ahmed bukhatir', 'mesut kurtis', 'mishary',
   'abdul basit', 'abdul rahman al sudais', 'sudais', 'qawwal',
   'naat khawan', 'naatkwan', 'alhaj', 'naat academy', 'naat studio',

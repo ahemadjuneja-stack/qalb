@@ -73,7 +73,7 @@ export const SEARCH_SUGGESTIONS = [
   'Owais Raza Qadri naat',
   'Nusrat Fateh Ali Khan qawwali',
   'Maher Zain nasheed',
-  'Junaid Jamshed naat',
+  'Abida Parveen sufi kalam',
   'Amjad Sabri kalam',
   'Allah Hoo hamd',
   'Ramzan special naat',

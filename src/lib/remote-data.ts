@@ -12,6 +12,7 @@
 
 import { QALB } from '@/lib/qalb'
 import { BUNDLED_PLAYLISTS } from '@/lib/bundled-library'
+import { CURATED_PLAYLISTS } from '@/lib/curated-playlists'
 import type { AppVersionInfo, QalbProduct, QalbPlaylist, QalbTrack } from '@/lib/types'
 
 // ── Firestore REST helpers ───────────────────────────────────────
@@ -198,11 +199,12 @@ export async function fetchPlaylistsSmart(): Promise<QalbPlaylist[]> {
       )
       .map(({ _featured, _sortOrder, ...p }) => p)
 
-    // Firestore khali hai → bundled starter library (APK first install)
-    return playlists.length > 0 ? playlists : BUNDLED_PLAYLISTS
+    // Firestore khali hai → curated playlists (verified pool se, HAMESHA bhari)
+    // phir bundled starter library (APK first install ka last resort)
+    return playlists.length > 0 ? playlists : CURATED_PLAYLISTS
   } catch {
-    // Network/rules fail → bhi bundled dikha do, app kabhi khali na lage
-    return BUNDLED_PLAYLISTS
+    // Network/rules fail → bhi curated dikha do, app kabhi khali na lage
+    return CURATED_PLAYLISTS.length > 0 ? CURATED_PLAYLISTS : BUNDLED_PLAYLISTS
   }
 }
 

@@ -289,7 +289,7 @@ export function ProfileView() {
               <div key={d.trackId} className="flex items-center gap-3 rounded-xl px-2 py-2">
                 <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
                   {d.thumbnailUrl ? (
-                    <img src={d.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={d.thumbnailUrl} alt="" className="absolute left-1/2 top-1/2 h-[133.33%] w-auto max-w-none min-w-full -translate-x-1/2 -translate-y-1/2 object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center">🕌</span>
                   )}

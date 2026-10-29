@@ -104,7 +104,7 @@ const ISLAMIC_MARKERS = [
   'ya rasool', 'ya nabi', 'lam yati', 'hasbi rabbi', 'ya munir', 'burdah',
   'burda', 'mawlid', 'mehfil e', 'owais raza', 'nusrat', 'rahat fateh',
   'amjad sabri', 'sabri brothers', 'atif aslam', 'maher zain', 'sami yusuf',
-  'junaid jamshed', 'abida parveen', 'wadali', 'qadri', 'naqshband',
+  'abida parveen', 'wadali', 'qadri', 'naqshband',
   'rizwan', 'muazzam', 'fareed ayaz', 'tahir qawwal', 'nizami brothers',
   'qutbi brothers', 'hyderabadi', 'aziz mian', 'bari sarkar', 'data diwane',
 ]
@@ -124,7 +124,7 @@ const QUERIES = [
   'rahat fateh ali khan qawwali',
   'maher zain nasheed',
   'sami yusuf nasheed',
-  'junaid jamshed naat',
+  'abida parveen sufi',
   'abdul rahman al shahat? no',
   'hamd e bari taala',
   'famous naat',
