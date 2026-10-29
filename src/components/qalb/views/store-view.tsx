@@ -130,7 +130,7 @@ export function StoreView() {
                 <div className={`relative flex h-28 items-center justify-center bg-gradient-to-br text-5xl ${p.gradient}`}>
                   {p.emoji}
                   {!p.inStock && (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] font-bold uppercase tracking-widest text-red-300">
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] font-bold uppercase tracking-widest text-red-400">
                       Out of stock
                     </span>
                   )}

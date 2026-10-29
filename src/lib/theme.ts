@@ -3,7 +3,7 @@
 // Qalb — Theme engine (Light / Dark)
 // LIGHT = "Emerald Ivory" (warm ivory + gehra sabz + gold)
 // DARK  = "Midnight Emerald" (sabz-kaali raat + chamakta emerald)
-// localStorage: qalb_theme = 'light' | 'dark' (default: dark)
+// localStorage: qalb_theme = 'light' | 'dark' (default: light — sage reference theme)
 // Native side par status-bar icons bhi sync hote hain (QalbNative plugin).
 
 type QalbNativeInterface = {
@@ -29,11 +29,12 @@ export type QalbTheme = 'light' | 'dark'
 export const THEME_KEY = 'qalb_theme'
 
 export function getTheme(): QalbTheme {
-  if (typeof window === 'undefined') return 'dark'
+  if (typeof window === 'undefined') return 'light'
   try {
-    return window.localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'
+    // default LIGHT (sage) — user ne reference image me yahi manga tha
+    return window.localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
   } catch {
-    return 'dark'
+    return 'light'
   }
 }
 

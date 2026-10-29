@@ -34,7 +34,7 @@ export function ProfileView() {
   const [downloads, setDownloads] = useState<SavedDownload[]>([])
   const [city, setCity] = useState<(typeof PRAYER_CITIES)[number]>(PRAYER_CITIES[0])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
-  const [theme, setTheme] = useState<QalbTheme>('dark')
+  const [theme, setTheme] = useState<QalbTheme>('light')
   const recents = usePlayerStore((s) => s.recents)
   const { toast } = useToast()
 

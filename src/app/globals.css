@@ -66,6 +66,12 @@
   --color-emerald-800: var(--q-em-800);
   --color-emerald-900: var(--q-em-900);
   --color-emerald-950: var(--q-em-950);
+
+  /* red/amber light-tints bhi theme-aware (light me gehra, dark me halka) */
+  --color-red-100: var(--q-red-100);
+  --color-red-200: var(--q-red-200);
+  --color-red-300: var(--q-red-300);
+  --color-amber-200: var(--q-amber-200);
 }
 
 /*
@@ -139,6 +145,12 @@
   --grad-gold-1: #d9b54a;
   --grad-gold-2: #c39a33;
   --grad-gold-3: #a9821f;
+
+  /* red/amber — LIGHT me deep (light bg par readable) */
+  --q-red-100: #7f1d1d;
+  --q-red-200: #991b1b;
+  --q-red-300: #b91c1c;
+  --q-amber-200: #92400e;
 }
 
 /*
@@ -210,6 +222,12 @@
   --grad-gold-1: #f1da96;
   --grad-gold-2: #ddba5f;
   --grad-gold-3: #a8842a;
+
+  /* red/amber — DARK me original light tints */
+  --q-red-100: #fee2e2;
+  --q-red-200: #fecaca;
+  --q-red-300: #fca5a5;
+  --q-amber-200: #fde68a;
 }
 
 @layer base {

@@ -48,7 +48,7 @@ export function HomeView() {
   const [refined, setRefined] = useState('')
   const [loadingMore, setLoadingMore] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
-  const [theme, setTheme] = useState<QalbTheme>('dark')
+  const [theme, setTheme] = useState<QalbTheme>('light')
 
   // har nayi search purani ko supersede karti hai (generation counter)
   const searchIdRef = useRef(0)
