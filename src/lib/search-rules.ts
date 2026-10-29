@@ -27,7 +27,7 @@ export const BLOCKED_TERMS = [
 ]
 
 // Category sirf UI/badge ke liye — blocking isse decide nahi hoti
-function detectCategory(q: string): string | null {
+function detectCategory(q: string): SearchValidationResult['category'] {
   if (/qaww?ali|kaww?ali|qwal|sufi/.test(q)) return 'QAWWALI'
   if (/\bnaats?\b|\bnoha\b|\bmanqabat\b|\bhamd|\bhumd\b|\bnasheed|\bnashid\b/.test(q)) {
     return /\bnaats?\b|\bnoha\b|\bmanqabat\b/.test(q) ? 'NAAT' : 'HAMD'
