@@ -8,6 +8,9 @@
 //   • Header me Qalb ka brand logo (app ke andar wala hi).
 //   • Login: Google (GIS one-tap) ya Mobile OTP (+91) — lib/auth.ts ke
 //     REST flows. Login hote hi gate gayab, app khul jaati hai.
+//   • v0.4.1 FIX: config-aware buttons — Google button sirf tab jab
+//     OAuth client id bake ho; apiKey na ho to amber notice (dead-end
+//     red error ki jagah).
 //   • "Abhi nahi" → Musafir (guest) mode — gate dobara nahi aata, app
 //     poori chalti hai. Login baad me Profile se bhi ho sakta hai.
 //
@@ -16,16 +19,18 @@
 // nahi hota. Refresh token auto-renew lib/auth.ts ensureIdToken me.
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, Moon, Smartphone } from 'lucide-react'
+import { ArrowLeft, Info, Loader2, Moon, Smartphone } from 'lucide-react'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
 import {
   authErrorMessage,
   clearPhoneSession,
+  getAuthConfig,
   googleSignIn,
   hasPhoneSession,
   sendPhoneOtp,
   useQalbAuth,
   verifyPhoneOtp,
+  type AuthConfig,
 } from '@/lib/auth'
 
 type Step = 'entry' | 'phone' | 'otp'
@@ -43,6 +48,22 @@ export function LoginGate() {
   const [err, setErr] = useState<{ title: string; desc: string } | null>(null)
   const [resendIn, setResendIn] = useState(0)
   const otpRef = useRef<HTMLInputElement>(null)
+
+  // login config (v0.4.1 fix): apiKey/clientId available hai? Google button
+  // sirf tab render hota hai jab clientId ho — warna dead-end error nahi.
+  // NOTE: ye useEffect early-return se PEHLE hai (hooks order safe).
+  const [cfg, setCfg] = useState<AuthConfig | null>(null)
+  useEffect(() => {
+    let alive = true
+    getAuthConfig()
+      .then((c) => {
+        if (alive) setCfg(c)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // resend countdown
   useEffect(() => {
@@ -190,29 +211,48 @@ export function LoginGate() {
           {/* ── STEP: entry ── */}
           {step === 'entry' && (
             <div className="mt-5 space-y-3">
-              <button
-                type="button"
-                onClick={() => void handleGoogle()}
-                disabled={busy !== null}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[14px] font-bold text-slate-800 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
-              >
-                {busy === 'google' ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <GoogleG />
-                )}
-                Google se login karein
-              </button>
+              {/* apiKey hi nahi — login system is build me bake nahi hua.
+                  Dead-end errors ki jagah saaf notice (v0.4.1 fix). */}
+              {cfg && !cfg.apiKey && (
+                <div className="flex items-start gap-2.5 rounded-2xl border border-amber-300/25 bg-amber-300/[0.07] p-3">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                  <p className="text-[12px] leading-relaxed text-amber-100/85">
+                    Login thodi der me available hoga — app band kar ke dobara
+                    khol kar try karein. Filhaal Musafir mode me enjoy karein.
+                  </p>
+                </div>
+              )}
 
-              <button
-                type="button"
-                onClick={() => setStep('phone')}
-                disabled={busy !== null}
-                className="emerald-gradient flex w-full items-center justify-center gap-3 rounded-2xl py-3.5 text-[14px] font-extrabold text-emerald-950 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
-              >
-                <Smartphone className="h-5 w-5" />
-                Mobile number se login
-              </button>
+              {/* Google — sirf jab OAuth client id bake ho */}
+              {cfg?.apiKey && cfg.googleClientId && (
+                <button
+                  type="button"
+                  onClick={() => void handleGoogle()}
+                  disabled={busy !== null}
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[14px] font-bold text-slate-800 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
+                >
+                  {busy === 'google' ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <GoogleG />
+                  )}
+                  Google se login karein
+                </button>
+              )}
+
+              {/* Phone — hamesha primary (sirf apiKey ke sath kaam karta hai,
+                  par tap karne par khud config resolve karta hai) */}
+              {(!cfg || cfg.apiKey) && (
+                <button
+                  type="button"
+                  onClick={() => setStep('phone')}
+                  disabled={busy !== null}
+                  className="emerald-gradient flex w-full items-center justify-center gap-3 rounded-2xl py-3.5 text-[14px] font-extrabold text-emerald-950 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
+                >
+                  <Smartphone className="h-5 w-5" />
+                  Mobile number se login
+                </button>
+              )}
 
               <button
                 type="button"

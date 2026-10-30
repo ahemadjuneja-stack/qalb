@@ -41,9 +41,10 @@ env:
   # Auth (login) ke liye — GitHub repo Variables me set karein (optional):
   #   FIREBASE_WEB_API_KEY  → Firebase console > Project settings > Web API key
   #   GOOGLE_CLIENT_ID      → OAuth 2.0 Web Client ID (Google login ke liye)
-  # Agar variables empty hain to app Firestore config/auth doc se leta hai.
-  NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.FIREBASE_WEB_API_KEY }}
-  NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+  # Agar variable khaali hai to "Resolve login config" step service account se
+  # Web API key AUTO-discover karta hai (webApps → webConfig). Isliye ye env
+  # workflow-level par NAHI — build step ke env me hai (warna khaali string
+  # discovered key ko override kar deti).
 
 jobs:
   build-apk:
@@ -122,8 +123,46 @@ jobs:
           echo "FPID=$FPID" >> "$GITHUB_ENV"
           echo "Firebase project: $FPID"
 
+      # ── 3b. Login config (v0.4.1 FIX — "Login nahi ho rahaa") ─────
+      # v0.4.0 build me NEXT_PUBLIC_FIREBASE_API_KEY khaali thi (GitHub
+      # variable set nahi tha) → har login attempt 'auth-setup' error.
+      # FIX: agar GitHub variable FIREBASE_WEB_API_KEY set hai to wahi
+      # use hota hai; warna service account se Firebase project ki web
+      # app ka webConfig fetch kar ke API key AUTO-discover hoti hai.
+      # (Web API key public identifier hai — APK me bake kana standard
+      #  Firebase practice hai, secret NAHI.)
+      - name: Resolve login config (Web API key auto-discover)
+        id: authcfg
+        run: |
+          KEY="${{ vars.FIREBASE_WEB_API_KEY }}"
+          SRC="github-variable"
+          if [ -z "$KEY" ]; then
+            SRC="auto-discover"
+            TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+            if [ -n "$TOKEN" ]; then
+              APPID=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" \
+                | jq -r '.apps[0].appId // empty')
+              if [ -n "$APPID" ]; then
+                KEY=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" \
+                  | jq -r '.apiKey // empty')
+                SRC="auto-discover(${APPID})"
+              fi
+            fi
+          fi
+          echo "apiKey=$KEY" >> "$GITHUB_OUTPUT"
+          echo "login config: source=${SRC} apiKeyLen=${#KEY}"
+          if [ -z "$KEY" ]; then
+            echo "⚠️ Web API key nahi mili — app me login guest-mode tak simat jayega."
+            echo "   FIX: GitHub Variables me FIREBASE_WEB_API_KEY daalo (Firebase console > Project settings > General > Web API Key)"
+          fi
+
       # ── 4. Web build (static export for Capacitor) ────────────────
       - name: Build Next.js static export
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ steps.authcfg.outputs.apiKey }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
         run: |
           # Mobile build me server API routes nahi hote — APK Firestore REST
           # + hosted API (NEXT_PUBLIC_API_BASE) use karta hai. Isliye api/
@@ -131,6 +170,12 @@ jobs:
           # YT_API_KEY (GitHub secret, optional) → APK me direct YouTube search
           mv src/app/api .api-routes-backup
           MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" npx next build
+          # sanity: API key bake hui? (login iske bina kaam nahi karega)
+          if grep -rq 'AIzaSy' out/_next/static --include='*.js' 2>/dev/null; then
+            echo "✅ Firebase Web API key APK bundle me baked hai"
+          else
+            echo "⚠️ Bundle me AIzaSy* key nahi mili — login setup adhoora rahega (upar ka FIX dekho)"
+          fi
 
       # ── 5. Capacitor Android project ──────────────────────────────
       - name: Capacitor sync

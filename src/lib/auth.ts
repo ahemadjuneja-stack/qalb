@@ -298,7 +298,7 @@ async function getRecaptchaToken(apiKey: string): Promise<string> {
   } catch {
     /* fallthrough */
   }
-  if (!siteKey) throw new Error('auth-setup')
+  if (!siteKey) throw new Error('phone-setup')
 
   // 2. reCAPTCHA v2 invisible widget
   await loadScript('https://www.google.com/recaptcha/api.js?onload=__qalbRecaptchaReady&render=explicit')
@@ -352,7 +352,15 @@ function errKind(raw: string | undefined): string {
   if (raw.includes('INVALID_CODE') || raw.includes('INVALID_SESSION'))
     return 'otp-invalid'
   if (raw.includes('TOO_MANY_ATTEMPTS') || raw.includes('EXCEEDED')) return 'rate-limit'
-  if (raw.includes('OPERATION_NOT_ALLOWED')) return 'auth-setup'
+  // Phone provider Firebase console me enabled nahi (ya project config
+  // adhoori) — user ka masla nahi, setup ka hai
+  if (
+    raw.includes('OPERATION_NOT_ALLOWED') ||
+    raw.includes('ADMIN_ONLY_OPERATION') ||
+    raw.includes('OPERATOR_NOT_ALLOWED') ||
+    raw.includes('INVALID_APP_CREDENTIALS')
+  )
+    return 'phone-setup'
   if (raw.includes('API_KEY')) return 'auth-setup'
   return 'auth-fail'
 }
@@ -589,13 +597,18 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
   switch (kind) {
     case 'auth-setup':
       return {
-        title: 'Login setup pending hai',
-        desc: 'Firebase console me config/auth doc banayen (apiKey field). Guide Profile > Login card me hai.',
+        title: 'Login abhi setup ho raha hai',
+        desc: 'Thodi der baad app band kar ke dobara khol kar try karein — naya update login theek kar dega. Tab tak Musafir (guest) mode me app enjoy karein.',
+      }
+    case 'phone-setup':
+      return {
+        title: 'Phone login abhi khula nahi hai',
+        desc: 'Firebase console me Phone sign-in enable karna baaki hai — thodi der me theek ho jayega. Tab tak Google ya Musafir mode use karein.',
       }
     case 'google-setup':
       return {
-        title: 'Google login setup pending',
-        desc: 'config/auth doc me googleClientId field add karein (OAuth Web Client ID).',
+        title: 'Google login abhi khula nahi hai',
+        desc: 'Mobile number se login try karein — wo abhi available hai.',
       }
     case 'google-unavailable':
     case 'google-timeout':

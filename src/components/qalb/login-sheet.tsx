@@ -13,11 +13,13 @@ import { useToast } from '@/hooks/use-toast'
 import {
   authErrorMessage,
   clearPhoneSession,
+  getAuthConfig,
   googleSignIn,
   hasPhoneSession,
   sendPhoneOtp,
   verifyPhoneOtp,
   useQalbAuth,
+  type AuthConfig,
 } from '@/lib/auth'
 
 type Step = 'entry' | 'phone' | 'otp'
@@ -32,6 +34,21 @@ export function LoginSheet() {
   const [resendIn, setResendIn] = useState(0)
   const { toast } = useToast()
   const otpRef = useRef<HTMLInputElement>(null)
+
+  // v0.4.1: Google button sirf jab OAuth client id available ho
+  const [cfg, setCfg] = useState<AuthConfig | null>(null)
+  useEffect(() => {
+    if (!loginOpen) return
+    let alive = true
+    getAuthConfig()
+      .then((c) => {
+        if (alive) setCfg(c)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [loginOpen])
 
   // sheet reset har baar
   useEffect(() => {
@@ -170,20 +187,22 @@ export function LoginSheet() {
         {/* ── STEP: entry ── */}
         {step === 'entry' && (
           <div className="space-y-3">
-            {/* Google */}
-            <button
-              type="button"
-              onClick={() => void handleGoogle()}
-              disabled={busy !== null}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-400/20 bg-white py-3.5 text-[14px] font-bold text-slate-800 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
-            >
-              {busy === 'google' ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <GoogleG />
-              )}
-              Google se login karein
-            </button>
+            {/* Google — sirf jab OAuth client id bake ho (dead-end na ho) */}
+            {cfg?.googleClientId && (
+              <button
+                type="button"
+                onClick={() => void handleGoogle()}
+                disabled={busy !== null}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-400/20 bg-white py-3.5 text-[14px] font-bold text-slate-800 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
+              >
+                {busy === 'google' ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <GoogleG />
+                )}
+                Google se login karein
+              </button>
+            )}
 
             {/* Mobile */}
             <button
