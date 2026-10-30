@@ -4,10 +4,13 @@ import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import androidx.core.content.FileProvider;
+import androidx.core.content.pm.PackageInfoCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -19,6 +22,9 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -297,6 +303,224 @@ public class UpdaterPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Clean error: " + safeMsg(e));
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  OTA Web Bundle (v0.3.0) — WhatsApp-style silent live update
+    //  Chote web fixes APK install ke bina: zip download → verify →
+    //  unzip → agla app start isi bundle se chalega (Capacitor 8
+    //  built-in live update: CapWebViewSettings/serverBasePath pref).
+    //  State machine + rollback: QalbOta.java
+    // ══════════════════════════════════════════════════════════════
+
+    /** Installed APK ka REAL versionCode/versionName — update-engine isse
+     *  compare karta hai (APP_BUILD bundle ke sath aata hai, APK ka nahi:
+     *  OTA lage chuke bundle me wo aage badh chuka hota hai). */
+    @PluginMethod
+    public void getNativeVersion(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            PackageInfo pi = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0);
+            JSObject res = new JSObject();
+            res.put("versionCode", PackageInfoCompat.getLongVersionCode(pi));
+            res.put("versionName", pi.versionName != null ? pi.versionName : "");
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("version fail: " + safeMsg(e));
+        }
+    }
+
+    /** Current OTA state — {state: none|ready|active|active_ok, code, path} */
+    @PluginMethod
+    public void getOtaState(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            SharedPreferences p = QalbOta.prefs(ctx);
+            JSObject res = new JSObject();
+            res.put("state", p.getString(QalbOta.K_STATE, "none"));
+            res.put("code", p.getLong(QalbOta.K_CODE, 0L));
+            res.put("path", p.getString(QalbOta.K_PATH, null));
+            res.put("versionCode", Long.parseLong(QalbOta.apkVersionCode(ctx)));
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("ota state fail: " + safeMsg(e));
+        }
+    }
+
+    /** JS boot safe ho gaya (shell mount) → bundle trusted, ab rollback nahi hoga. */
+    @PluginMethod
+    public void markBundleOk(PluginCall call) {
+        try {
+            SharedPreferences p = QalbOta.prefs(getContext());
+            if ("active".equals(p.getString(QalbOta.K_STATE, null))) {
+                p.edit().putString(QalbOta.K_STATE, "active_ok").apply();
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("markOk fail: " + safeMsg(e));
+        }
+    }
+
+    /**
+     * Web bundle (OTA) download + sha256 verify + unzip + validate.
+     * Sab theek to state=ready + Capacitor serverBasePath pref set —
+     * AGLA app start isi bundle se chalega (ye session nahi badalta).
+     * Fail hone par kuch nahi badalta — purana bundle hi chalta rahega.
+     */
+    @PluginMethod
+    public void downloadWebBundle(PluginCall call) {
+        final String url = call.getString("url");
+        final String code = call.getString("code");
+        final String sha = call.getString("sha256");
+        if (url == null || code == null) {
+            call.reject("url/code missing");
+            return;
+        }
+        if (!downloading.compareAndSet(false, true)) {
+            call.reject("download already running");
+            return;
+        }
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Context ctx = getContext();
+                    File root = new File(ctx.getFilesDir(), "ota");
+                    File zip = new File(root, "bundle-" + code + ".zip");
+                    File dest = new File(root, "b" + code);
+                    if (!root.exists()) root.mkdirs();
+
+                    IOExceptionHolder holder = new IOExceptionHolder();
+                    boolean ok = false;
+                    for (int attempt = 1; attempt <= 3 && !ok; attempt++) {
+                        if (zip.exists()) zip.delete();
+                        ok = downloadOnce(url, zip, holder, attempt);
+                        if (!ok && attempt < 3) Thread.sleep(2000L * attempt);
+                    }
+                    if (!ok) {
+                        call.reject("Bundle download fail: " + holder.message);
+                        return;
+                    }
+
+                    // integrity (optional but CI hamesha sha256 bhejta hai)
+                    if (sha != null && !sha.isEmpty() && !sha256Hex(zip).equalsIgnoreCase(sha)) {
+                        call.reject("Bundle sha256 mismatch");
+                        return;
+                    }
+
+                    // unzip (zip-slip safe) + validate
+                    if (dest.exists()) QalbOta.deleteTree(dest);
+                    unzip(zip, dest);
+                    if (!new File(dest, "index.html").isFile()) {
+                        QalbOta.deleteTree(dest);
+                        call.reject("Bundle invalid (index.html missing)");
+                        return;
+                    }
+
+                    // purane bundles/zips clean — sirf naya rakho
+                    File[] kids = root.listFiles();
+                    if (kids != null) {
+                        for (File k : kids) {
+                            if (k.equals(dest)) continue;
+                            QalbOta.deleteTree(k);
+                        }
+                    }
+
+                    SharedPreferences p = QalbOta.prefs(ctx);
+                    p.edit()
+                            .putString(QalbOta.K_STATE, "ready")
+                            .putString(QalbOta.K_PATH, dest.getAbsolutePath())
+                            .putLong(QalbOta.K_CODE, Long.parseLong(code.trim()))
+                            .putString(QalbOta.K_BIN, QalbOta.apkVersionCode(ctx))
+                            .apply();
+
+                    // Capacitor built-in live-update pref — agla start isi dir se chalega
+                    ctx.getSharedPreferences(
+                            com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME,
+                            Context.MODE_PRIVATE)
+                            .edit()
+                            .putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH,
+                                    dest.getAbsolutePath())
+                            .apply();
+
+                    JSObject res = new JSObject()
+                            .put("path", dest.getAbsolutePath())
+                            .put("code", code);
+                    call.resolve(res);
+                } catch (Exception e) {
+                    call.reject("Bundle install fail: " + safeMsg(e));
+                } finally {
+                    downloading.set(false);
+                    activeConnection = null;
+                }
+            }
+        });
+    }
+
+    /** Manual recovery escape hatch — bundle hatao, assets par wapas. */
+    @PluginMethod
+    public void resetOta(PluginCall call) {
+        try {
+            Context ctx = getContext();
+            SharedPreferences p = QalbOta.prefs(ctx);
+            String path = p.getString(QalbOta.K_PATH, null);
+            if (path != null) QalbOta.deleteTree(new File(path));
+            p.edit().clear().apply();
+            ctx.getSharedPreferences(
+                    com.getcapacitor.plugin.WebView.WEBVIEW_PREFS_NAME,
+                    Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(com.getcapacitor.plugin.WebView.CAP_SERVER_PATH, "")
+                    .apply();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("ota reset fail: " + safeMsg(e));
+        }
+    }
+
+    /** zip → dest (zip-slip guarded: entry hamesha dest ke andar). */
+    private static void unzip(File zip, File dest) throws Exception {
+        dest.mkdirs();
+        String canonRoot = dest.getCanonicalPath() + File.separator;
+        ZipInputStream zis = new ZipInputStream(new FileInputStream(zip));
+        try {
+            byte[] buf = new byte[8192];
+            ZipEntry e;
+            while ((e = zis.getNextEntry()) != null) {
+                File out = new File(dest, e.getName());
+                if (!out.getCanonicalPath().startsWith(canonRoot)) {
+                    throw new SecurityException("zip entry outside dest: " + e.getName());
+                }
+                if (e.isDirectory()) {
+                    out.mkdirs();
+                    continue;
+                }
+                File parent = out.getParentFile();
+                if (parent != null) parent.mkdirs();
+                FileOutputStream fo = new FileOutputStream(out);
+                int n;
+                while ((n = zis.read(buf)) != -1) fo.write(buf, 0, n);
+                fo.close();
+                zis.closeEntry();
+            }
+        } finally {
+            try { zis.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    private static String sha256Hex(File f) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
+        FileInputStream in = new FileInputStream(f);
+        try {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) md.update(buf, 0, n);
+        } finally {
+            try { in.close(); } catch (Exception ignored) {}
+        }
+        StringBuilder sb = new StringBuilder();
+        for (byte b : md.digest()) sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
     @Override

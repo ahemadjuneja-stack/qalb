@@ -52,6 +52,7 @@ import {
 } from '@/plugins/qalb-native'
 import { usePlayerStore } from '@/lib/player-store'
 import { usePlaylistPicker } from '@/lib/user-playlists'
+import { otaBoot, useOtaStore } from '@/lib/ota'
 import { APP_BUILD } from '@/lib/app-build'
 
 // Tab-level feature flags (remoteConfig.disabledFeatures se aate hain)
@@ -175,6 +176,17 @@ function QalbShellInner({
     return () => clearTimeout(t)
   }, [])
 
+  // OTA live update (v0.3.0): naya web bundle serve ho raha hai to boot
+  // safe mark karo — warna agle start par QalbOta rollback kar dega.
+  // (QalbShellInner me isliye taake SafeMode/kill-switch/force-update
+  //  screens par mark NA ho — wahan bundle dobara download ho lega.)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void otaBoot()
+    }, 1_000)
+    return () => clearTimeout(t)
+  }, [])
+
   useEffect(() => {
     let unlisten: (() => void) | null = null
     let alive = true
@@ -261,12 +273,26 @@ function QalbShellInner({
 
       {/* global floating layers */}
       <UpdatePopup />
+      <OtaToast />
       <MiniPlayer />
       <FullPlayerModal />
       <AddToPlaylistSheet />
       <LoginSheet />
       <BottomNav active={tab} onChange={setTab} hiddenTabs={hiddenTabs} />
     </PlayerProvider>
+  )
+}
+
+// OTA live-update toast (v0.3.0) — "update taiyar hai" pill
+function OtaToast() {
+  const toast = useOtaStore((s) => s.toast)
+  if (!toast) return null
+  return (
+    <div className="fixed inset-x-0 bottom-[4.6rem] z-[70] flex justify-center px-4">
+      <div className="rounded-full bg-emerald-600/95 px-4 py-2 text-center text-[13px] font-medium leading-snug text-white shadow-lg shadow-black/30">
+        {toast}
+      </div>
+    </div>
   )
 }
 

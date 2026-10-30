@@ -89,6 +89,12 @@ export interface AppVersionInfo {
   releaseNotes: string | null
   mandatory: boolean
   publishedAt: string
+  /** OTA web bundle (v0.3.0+) — web-layer fixes APK update ke bina lagte hain */
+  webCode?: number
+  webUrl?: string
+  webSha256?: string | null
+  /** is web bundle ke chalne ke liye kam-se-kam ye APK versionCode chahiye */
+  webMinNative?: number
 }
 
 export interface SavedDownload {

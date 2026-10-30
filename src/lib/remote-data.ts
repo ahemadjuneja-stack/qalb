@@ -138,6 +138,11 @@ export async function fetchAppVersionFromFirestore(): Promise<AppVersionInfo | n
     releaseNotes: (d.releaseNotes as string | null) ?? null,
     mandatory: Boolean(d.mandatory ?? false),
     publishedAt: String(d.publishedAt ?? ''),
+    // OTA web bundle fields (v0.3.0+) — purane docs me absent hote hain
+    webCode: d.webCode != null ? Number(d.webCode) : undefined,
+    webUrl: d.webUrl != null ? String(d.webUrl) : undefined,
+    webSha256: d.webSha256 != null ? String(d.webSha256) : null,
+    webMinNative: d.webMinNative != null ? Number(d.webMinNative) : undefined,
   }
 }
 

@@ -217,6 +217,20 @@ jobs:
              "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk"
           ls -la dist/
 
+      # ── 7b. Web bundle (OTA live update, v0.3.0) ────────────────
+      # Static export (out/) zip → Release asset. Ye bundle webCode =
+      # run_number ke sath Firestore doc me publish hota hai; app me
+      # chote web fixes APK install kiye bina, restart par khud lagte hain.
+      - name: Package web bundle (OTA)
+        run: |
+          cd out
+          zip -qr ../dist/webbundle.zip .
+          cd ..
+          WEB_SHA=$(sha256sum dist/webbundle.zip | cut -d' ' -f1)
+          echo "WEB_SHA=$WEB_SHA" >> "$GITHUB_ENV"
+          ls -la dist/
+          echo "webbundle.zip sha256: $WEB_SHA"
+
       # ── 8. GitHub Release (APK hosting — repo public, direct download) ──
       - name: Create GitHub Release
         env:
@@ -228,13 +242,43 @@ jobs:
             --title "Qalb v${{ steps.ver.outputs.versionName }} (code ${{ github.run_number }})" \
             --notes "APK build from commit ${{ github.sha }}" \
             "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" \
-            || gh release upload "$TAG" "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" --clobber
+            "dist/webbundle.zip" \
+            || gh release upload "$TAG" "dist/qalb-v${{ steps.ver.outputs.versionName }}.apk" "dist/webbundle.zip" --clobber
           APK_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/qalb-v${{ steps.ver.outputs.versionName }}.apk"
+          WEB_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/webbundle.zip"
           echo "APK_URL=$APK_URL" >> "$GITHUB_ENV"
+          echo "WEB_URL=$WEB_URL" >> "$GITHUB_ENV"
           echo "APK download link: $APK_URL"
+          echo "Web bundle link: $WEB_URL"
+
+      # ── 8b. webMinNative — OTA compatibility gate ────────────────
+      # Web bundle SIRF unhi APKs par lagega jo is build ke native code ke
+      # sath compatible hain. Is push me android/ / capacitor config / npm
+      # deps badle → gate = is build ka versionCode (purane APKs pe OTA
+      # band, APK update hi raasta). Web-only fix → pichla gate inherit
+      # (purane APKs par bhi OTA chalta rahega).
+      - name: Resolve webMinNative (OTA gate)
+        run: |
+          MINNATIVE=""
+          BEFORE="${{ github.event.before }}"
+          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$'; then
+            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" \
+              -- android/ capacitor.config.json package.json package-lock.json | head -1 || true)
+            [ -n "$CHANGED" ] && MINNATIVE="${{ steps.ver.outputs.versionCode }}"
+          fi
+          if [ -z "$MINNATIVE" ]; then
+            TOKEN=$(gcloud auth print-access-token)
+            DOC_URL="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents/appVersions/latest"
+            PREV=$(curl -sS -H "Authorization: Bearer $TOKEN" "$DOC_URL" \
+              | jq -r '.fields.webMinNative.integerValue // empty')
+            if [ -n "$PREV" ]; then MINNATIVE="$PREV"; else MINNATIVE="${{ steps.ver.outputs.versionCode }}"; fi
+          fi
+          echo "WEB_MIN_NATIVE=$MINNATIVE" >> "$GITHUB_ENV"
+          echo "webMinNative gate: $MINNATIVE"
 
       # ── 9. Publish version to Firestore (appVersions/latest) ──────
-      # App isi doc ko poll karta hai — versionCode bara ho to update prompt.
+      # App isi doc ko poll karta hai — versionCode bara ho to update prompt,
+      # webCode bara ho (aur APK compatible ho) to silent OTA download.
       # Release BANNE KE BAAD publish hota hai — apkUrl kabhi dead nahi hoga.
       - name: Publish to Firestore appVersions/latest
         run: |
@@ -251,6 +295,10 @@ jobs:
                 \"apkUrl\":      {\"stringValue\": \"${APK_URL}\"},
                 \"releaseNotes\": {\"stringValue\": $(printf '%s' "$RELEASE_NOTES" | jq -Rs .)},
                 \"mandatory\":   {\"booleanValue\": false},
+                \"webCode\":      {\"integerValue\": \"${{ steps.ver.outputs.versionCode }}\"},
+                \"webUrl\":       {\"stringValue\": \"${WEB_URL}\"},
+                \"webSha256\":    {\"stringValue\": \"${WEB_SHA}\"},
+                \"webMinNative\": {\"integerValue\": \"${WEB_MIN_NATIVE}\"},
                 \"publishedAt\": {\"timestampValue\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}
               }
             }" | jq -e '.fields.versionCode.integerValue' >/dev/null \

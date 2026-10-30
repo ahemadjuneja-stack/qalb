@@ -10,6 +10,14 @@ export interface UpdateProgressData {
   total: number
 }
 
+/** OTA web-bundle state (QalbOta.java state machine) */
+export interface OtaState {
+  state: 'none' | 'ready' | 'active' | 'active_ok'
+  code: number
+  path: string | null
+  versionCode: number
+}
+
 interface UpdaterPluginShape {
   getReadyApk(o: { versionCode: string }): Promise<{ path: string | null }>
   downloadApk(o: { url: string; versionCode: string }): Promise<{ path: string }>
@@ -18,6 +26,16 @@ interface UpdaterPluginShape {
   ): Promise<{ ok: boolean; needsPermission?: boolean }>
   openPermissionSettings(): Promise<void>
   cleanStale(o: { versionCode: string }): Promise<unknown>
+  /** v0.3.0+ — OTA web bundle (naye APK me hi milega, purane builds me undefined) */
+  getNativeVersion?(): Promise<{ versionCode: number; versionName: string }>
+  getOtaState?(): Promise<OtaState>
+  markBundleOk?(): Promise<void>
+  downloadWebBundle?(o: {
+    url: string
+    code: string
+    sha256?: string
+  }): Promise<{ path: string; code: string }>
+  resetOta?(): Promise<void>
   addListener?(
     eventName: 'progress',
     cb: (data: UpdateProgressData) => void,

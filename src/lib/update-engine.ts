@@ -10,6 +10,7 @@ import { QALB } from '@/lib/qalb'
 import { fetchAppVersionFromFirestore, withNetTimeout } from '@/lib/remote-data'
 import { isNativeCapacitor } from '@/lib/downloads'
 import { getUpdaterPlugin, onDownloadProgress } from '@/plugins/updater'
+import { maybeOtaUpdate } from '@/lib/ota'
 import type { AppVersionInfo } from '@/lib/types'
 
 export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'ready' | 'error'
@@ -57,6 +58,28 @@ let autoRetryInitDone = false
 function errMsg(e: unknown): string {
   const m = e instanceof Error ? e.message : String(e)
   return m.replace(/^Download error:\s*/i, '')
+}
+
+// Installed APK ka REAL versionCode (cached — session me kabhi nahi badalta).
+// OTA gate ke liye zaroori: APP_BUILD bundle ke sath aata hai, OTA lage chuke
+// bundle me wo APK se aage badh chuka hota hai.
+let nativeCodePromise: Promise<number> | null = null
+function getNativeCode(): Promise<number> {
+  if (!nativeCodePromise) {
+    nativeCodePromise = (async () => {
+      const plugin = getUpdaterPlugin()
+      if (plugin?.getNativeVersion) {
+        try {
+          const nv = await plugin.getNativeVersion()
+          if (nv?.versionCode) return nv.versionCode
+        } catch {
+          /* fallback niche */
+        }
+      }
+      return QALB.currentVersionCode
+    })()
+  }
+  return nativeCodePromise
 }
 
 function clearRetry() {
@@ -138,6 +161,17 @@ export async function checkForUpdateEngine(force = false): Promise<AppVersionInf
   // successful check → throttle normal, retry counter reset
   set({ lastCheckAt: Date.now(), lastCheckOk: true, checkingSince: 0 })
   checkAttempt = 0
+
+  // ── OTA web bundle (v0.3.0): silent live update ─────────────────
+  // webCode/webUrl Firestore doc me CI publish karta hai. Eligible ho to
+  // background download — agli app start par khud lag jayega (WhatsApp
+  // jaisa). OTA sambhal lega to APK popup suppress (web update hi kaafi).
+  const nativeCode = await getNativeCode()
+  const webOta = maybeOtaUpdate(latest, nativeCode)
+  if (webOta) {
+    set({ phase: 'idle', info: null })
+    return null
+  }
 
   // same/older version → idle
   if (latest.versionCode <= QALB.currentVersionCode) {

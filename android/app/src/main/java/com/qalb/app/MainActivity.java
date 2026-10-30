@@ -26,6 +26,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Crash Guard SABSE PEHLE — WebView banne se pehle (wipe safe rehta hai)
         CrashGuard.install(this);
+        // OTA web-bundle state machine (v0.3.0) — Bridge banne se PEHLE:
+        // ready→active promote, broken bundle/APK-update par rollback.
+        QalbOta.bootstrap(this);
         registerPlugin(UpdaterPlugin.class);
         registerPlugin(QalbNativePlugin.class);
         super.onCreate(savedInstanceState);
