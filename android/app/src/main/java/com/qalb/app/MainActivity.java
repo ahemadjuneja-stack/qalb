@@ -13,7 +13,8 @@ import com.getcapacitor.BridgeActivity;
  *   full player modal khula? → band karo
  *   koi sheet khuli?         → band karo
  *   home se doosra tab?      → home par jao
- *   kuch nahi khula?         → JS khud minimizeApp() call karta hai
+ *   kuch nahi khula?         → JS ack karta hai, app home par rukti hai
+ *   (v0.2.4: back se app KABHI minimize/exit nahi hoti — hamesha home tak)
  *
  * Fallback safety: agar WebView/JS dead hai (500ms me backHandled nahi
  * mila) to QalbNativePlugin khud moveTaskToBack karta hai — back hamesha

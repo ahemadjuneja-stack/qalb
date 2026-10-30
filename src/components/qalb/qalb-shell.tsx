@@ -48,7 +48,6 @@ import {
   nativeClearCrash,
   onNativeBackButton,
   nativeBackHandled,
-  nativeMinimizeApp,
 } from '@/plugins/qalb-native'
 import { usePlayerStore } from '@/lib/player-store'
 import { usePlaylistPicker } from '@/lib/user-playlists'
@@ -155,7 +154,9 @@ function QalbShellInner({
   }
 
   // Back gesture chain (har screen par kaam karta hai):
-  //   full player modal → playlist sheet → login sheet → tab → home → minimize
+  //   full player modal → playlist sheet → login sheet → tab → home (yahin ruko)
+  // v0.2.4: back se app KABHI minimize nahi hoti — kahi se bhi back dabao,
+  // hamesha app ke andar home screen tak le aata hai (user request).
   useEffect(() => {
     tabRef.current = tab
     backChainRef.current = setTab
@@ -193,10 +194,11 @@ function QalbShellInner({
           void nativeBackHandled()
           return
         }
-        // 5. Root screen — app background (home-button jaisa, exit nahi)
-        void nativeMinimizeApp()
+        // 5. Home tab — back par yahin raho (app minimize NAHI hogi)
+        void nativeBackHandled()
       } catch {
-        void nativeMinimizeApp()
+        // chain me koi exception? app ko waise hi chhodo — minimize nahi
+        void nativeBackHandled()
       }
     }).then((fn) => {
       if (!alive) fn()

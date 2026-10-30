@@ -26,7 +26,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *  - startPlayback / updatePlayback / stopPlayback → PlaybackService (background audio
  *    + MediaSession lock-screen controls + thumbnail media notification)
  *  - setStatusBarStyle → theme ke hisaab se status bar icons (light/dark)
- *  - minimizeApp → back button root pe app background (exit nahi)
+ *  - minimizeApp → (safety only) app background; v0.2.4 se back root par
+ *    JS ack karta hai — app minimize nahi hoti
  *  - mediaAction event: notification/lock-screen buttons se JS player store control
  *  - backButton event: Android back gesture → JS view-stack navigation (v0.2.2)
  *
