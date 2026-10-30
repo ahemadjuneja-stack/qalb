@@ -586,3 +586,17 @@
   width: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 16 / 9));
   height: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 9 / 16));
 }
+
+/* ── v0.4.0 Login Gate poster slideshow ─────────────────────────── */
+@keyframes qalb-gate-zoom {
+  0% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1.1);
+  }
+}
+
+.qalb-gate-poster {
+  animation: qalb-gate-zoom 9s ease-out forwards;
+}

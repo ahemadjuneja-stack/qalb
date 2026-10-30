@@ -28,6 +28,7 @@ import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
 import { AddToPlaylistSheet } from '@/components/qalb/add-to-playlist-sheet'
 import { LoginSheet } from '@/components/qalb/login-sheet'
+import { LoginGate } from '@/components/qalb/login-gate'
 import { useQalbAuth } from '@/lib/auth'
 import { QalbErrorBoundary } from '@/components/qalb/error-boundary'
 import {
@@ -287,6 +288,8 @@ function QalbShellInner({
       <FullPlayerModal />
       <AddToPlaylistSheet />
       <LoginSheet />
+      {/* v0.4.0: pehli launch ka full-screen login gate — sabse upar */}
+      <LoginGate />
       <BottomNav active={tab} onChange={setTab} hiddenTabs={hiddenTabs} />
     </PlayerProvider>
   )

@@ -44,15 +44,27 @@ export interface QalbUser {
 interface AuthState {
   user: QalbUser | null
   ready: boolean
+  guest: boolean // "Abhi nahi" skip — login gate dobara nahi dikhega
   loginOpen: boolean
   init: () => void
   setSession: (u: QalbUser) => void
+  continueAsGuest: () => void
   logout: () => void
   openLogin: () => void
   closeLogin: () => void
 }
 
 const AUTH_KEY = 'qalb_auth_v1'
+const GUEST_KEY = 'qalb_guest_v1'
+
+function readGuest(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(GUEST_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 function readUser(): QalbUser | null {
   if (typeof window === 'undefined') return null
@@ -76,23 +88,61 @@ function persistUser(u: QalbUser | null) {
 export const useQalbAuth = create<AuthState>((set) => ({
   user: null,
   ready: false,
+  guest: false,
   loginOpen: false,
   init: () => {
     const u = readUser()
-    set({ user: u, ready: true })
-    if (u) void ensureIdToken() // expiry nikaal rahi ho to chup-chaap refresh
+    set({ user: u, guest: u ? false : readGuest(), ready: true })
+    if (u) {
+      void ensureIdToken() // expiry nikaal rahi ho to chup-chaap refresh
+      // v0.4.0: login ka user playlist cloud sync (wahi playlist wapis)
+      // 3s delay — app boot pe network rush nahi karna
+      setTimeout(() => {
+        void import('@/lib/user-sync')
+          .then((m) => m.syncUserPlaylists())
+          .catch(() => {})
+      }, 3_000)
+    }
   },
   setSession: (u) => {
     persistUser(u)
-    set({ user: u })
+    try {
+      window.localStorage.setItem(GUEST_KEY, '0') // ab asli user hai
+    } catch {
+      /* ignore */
+    }
+    set({ user: u, guest: false })
+  },
+  continueAsGuest: () => {
+    try {
+      window.localStorage.setItem(GUEST_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    set({ guest: true })
   },
   logout: () => {
     persistUser(null)
-    set({ user: null })
+    // manual logout → Musafir mode (gate dobara NAHI aata — app chalti rahe)
+    try {
+      window.localStorage.setItem(GUEST_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    set({ user: null, guest: true })
   },
   openLogin: () => set({ loginOpen: true }),
   closeLogin: () => set({ loginOpen: false }),
 }))
+
+/** Login gate dikhana hai? (pehli launch — na user, na guest-skip) */
+export function authGateVisible(s: {
+  ready: boolean
+  user: QalbUser | null
+  guest: boolean
+}): boolean {
+  return s.ready && !s.user && !s.guest
+}
 
 // ── Config resolution (API key / Google client id) ──────────────
 
@@ -483,6 +533,11 @@ function completeLogin(user: QalbUser) {
   migrateEventsToUser(user.uid)
   useQalbAuth.getState().setSession(user)
   void syncUserDoc(user)
+  // v0.4.0: playlists cloud sync — local playlists user account me push,
+  // cloud se wapas pull-merge (naya device ho to purani playlist wapis)
+  import('@/lib/user-sync')
+    .then((m) => m.syncUserPlaylists())
+    .catch(() => {})
 }
 
 // ── Firestore users/{uid} sync (best-effort, kabhi throw nahi) ──

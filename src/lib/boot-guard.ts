@@ -86,8 +86,32 @@ export function resetBootCounters(): void {
  * yahan ek button me ho jata hai — app hi apna data theek karti hai.
  */
 export async function fullResetAndReload(): Promise<void> {
+  // v0.4.0: login session + playlists RESET me bhi bacha ke rakhо —
+  // "update/restart pe logout kabhi nahi" ka promise crash-fix par bhi
+  // poora hota hai. (User ne explicitly "logout" nahi kiya.)
+  const preserveKeys: Record<string, string | null> = {}
+  try {
+    const prefixKeys = ['qalb_auth_v1', 'qalb_guest_v1', 'qalb_user_playlists_v1']
+    const eventsPrefix = 'qalb_events_'
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i)
+      if (!k) continue
+      if (prefixKeys.includes(k) || k.startsWith(eventsPrefix)) {
+        preserveKeys[k] = window.localStorage.getItem(k)
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   try {
     window.localStorage.clear()
+  } catch {
+    /* ignore */
+  }
+  try {
+    for (const [k, v] of Object.entries(preserveKeys)) {
+      if (v !== null) window.localStorage.setItem(k, v)
+    }
   } catch {
     /* ignore */
   }
