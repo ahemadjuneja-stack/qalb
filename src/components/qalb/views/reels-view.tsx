@@ -274,6 +274,7 @@ const ReelCard = memo(function ReelCard({
       {mounted ? (
         <iframe
           ref={iframeRef}
+          data-vid={item.videoId}
           className={`qalb-reel-cover absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 ${
             aspect === 'land' ? 'qalb-reel-cover-land' : 'qalb-reel-cover-port'
           }`}
@@ -584,10 +585,21 @@ export function ReelsView({ visible }: { visible: boolean }) {
       }
       busyDlRef.current = item.videoId
       setDlMap((m) => ({ ...m, [item.videoId]: { status: 'working', pct: 0 } }))
+      // catch me isi message ko dikhate hain — stream-fail ka precise
+      // reason generic "Download fail" se overwrite na ho
+      let failMsg = 'Download fail — thodi der baad try karo'
       try {
-        showToast('Stream mile to download shuru…')
-        const url = await getReelStreamUrl(item.videoId)
-        if (!url) throw new Error('stream nahi mili')
+        showToast('Stream dhoond rahe hain…')
+        const { url, reason } = await getReelStreamUrl(item.videoId)
+        if (!url) {
+          // wajah ke hisaab se saaf message — user ko pata chale kya karna hai
+          if (reason === 'network') {
+            failMsg = 'Net slow/na hai — thodi der me dobara try karo'
+          } else if (reason === 'blocked') {
+            failMsg = 'YouTube ne download block kiya — thodi der baad try karo'
+          }
+          throw new Error(`stream nahi mili (${reason})`)
+        }
         await nativeDownloadReel(url, `Qalb-${item.videoId}.mp4`, item.videoId, (pct) => {
           setDlMap((m) => {
             const state = m[item.videoId]
@@ -601,9 +613,10 @@ export function ReelsView({ visible }: { visible: boolean }) {
         setDownloadedSet(getDownloadedReels())
         setDlMap((m) => ({ ...m, [item.videoId]: 'done' }))
         showToast('Ho gaya — Gallery → Movies → Qalb')
-      } catch {
+      } catch (e) {
         setDlMap((m) => ({ ...m, [item.videoId]: 'error' }))
-        showToast('Download fail — thodi der baad try karo')
+        const msg = e instanceof Error ? e.message : ''
+        if (msg !== 'download cancelled') showToast(failMsg)
         window.setTimeout(() => {
           setDlMap((m) => {
             if (m[item.videoId] === 'error') {

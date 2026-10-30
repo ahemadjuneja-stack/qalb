@@ -675,8 +675,116 @@ function pickStreamUrl(data: any): string | null {
   return String((pick18 ?? pick22 ?? usable[0]).url)
 }
 
-export async function getReelStreamUrl(videoId: string): Promise<string | null> {
-  for (const t of CLIENT_TRIES) {
+// kisi bhi playerResponse-jaise object me se progressive mp4 url nikaalo
+// (iframe fallback ke liye deep-walk — response shape ka bharosa nahi)
+function pickStreamUrlDeep(node: any, depth = 0): string | null {
+  if (!node || typeof node !== 'object' || depth > 6) return null
+  const direct = pickStreamUrl(node)
+  if (direct) return direct
+  for (const k of Object.keys(node)) {
+    const v = (node as any)[k]
+    if (v && typeof v === 'object') {
+      const found = pickStreamUrlDeep(v, depth + 1)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+export type StreamFailReason = 'network' | 'blocked' | 'none'
+
+// Last resort: jo reel ABHI PLAY ho rahi hai uske YT iframe se
+// playerResponse maango (postMessage getPlayerResponse). Embed ka apna
+// auth context hota hai — iske streamingData me aksar direct url milta
+// hai. Response format ka bharosa nahi — isliye RAW text scan: jo bhi
+// message 'streamingData' leke aaye usme se url regex-lo. 4s timeout,
+// fail = silent null (koi nuksan nahi).
+function streamFromIframe(videoId: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-vid="${videoId}"]`)
+      const win = frame?.contentWindow
+      if (!frame || !win) {
+        resolve(null)
+        return
+      }
+      let done = false
+      const finish = (v: string | null) => {
+        if (done) return
+        done = true
+        window.removeEventListener('message', onMsg)
+        clearTimeout(timer)
+        resolve(v)
+      }
+      const unescapeJson = (s: string) =>
+        s.split('\\u0026').join('&').split('\\/').join('/').split('\\"').join('"')
+      const onMsg = (e: MessageEvent) => {
+        if (e.source !== win) return
+        try {
+          const raw = typeof e.data === 'string' ? e.data : JSON.stringify(e.data)
+          if (!raw || !raw.includes('streamingData')) return
+          const clean = unescapeJson(raw)
+          // pehle JSON-parse karke deep-walk (sabse saaf)
+          try {
+            const parsed = JSON.parse(clean)
+            const url = pickStreamUrlDeep(parsed)
+            if (url) {
+              finish(url)
+              return
+            }
+          } catch {
+            /* poora JSON nahi — regex fallback */
+          }
+          // regex: itag 18 ke paas wala googlevideo url (RegExp se —
+          // literal-regex escape soup avoid)
+          const m = clean.match(
+            new RegExp('"itag"\\s*:\\s*18[\\s\\S]{0,3000}?"url"\\s*:\\s*"([^"]+)"')
+          )
+          if (m?.[1]?.includes('googlevideo')) {
+            finish(m[1])
+            return
+          }
+          const m2 = clean.match(new RegExp('"url"\\s*:\\s*"([^"]*googlevideo[^"]+)"'))
+          if (m2?.[1]) finish(m2[1])
+        } catch {
+          /* ignore */
+        }
+      }
+      window.addEventListener('message', onMsg)
+      const send = () => {
+        try {
+          win.postMessage(JSON.stringify({ event: 'command', func: 'getPlayerResponse', args: [] }), '*')
+        } catch {
+          /* ignore */
+        }
+      }
+      send()
+      setTimeout(send, 900)
+      const timer = setTimeout(() => finish(null), 4000)
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
+/**
+ * Reel ka progressive mp4 stream URL — jitna ho sake robust:
+ *
+ * 1. InnerTube clients (ANDROID_VR primary — v0.3.3 se; baaki fallback)
+ * 2. Fail → 1.5s baad ANDROID_VR ek retry (flaky/slow network)
+ * 3. Phir bhi fail → chalu reel ke YT iframe se playerResponse (last resort)
+ *
+ * Har fail ka reason wapas aata hai — UI saaf message dikha sakta hai
+ * (net slow vs YouTube block).
+ */
+export async function getReelStreamUrl(videoId: string): Promise<{
+  url: string | null
+  reason: StreamFailReason
+}> {
+  let sawNetworkFail = false
+  let sawBlocked = false
+
+  const tryClient = async (t: (typeof CLIENT_TRIES)[number]): Promise<string | null> => {
     const data = await innertubePostJson(
       `https://www.youtube.com/youtubei/v1/player?key=${t.key}&prettyPrint=false`,
       t.headers,
@@ -687,13 +795,50 @@ export async function getReelStreamUrl(videoId: string): Promise<string | null> 
         racyCheckOk: true,
       }
     ).catch(() => null)
-    if (!data) continue
-    const status = String(data?.playabilityStatus?.status ?? '')
-    if (status && status !== 'OK') continue
-    const url = pickStreamUrl(data)
-    if (url) return url
+    if (!data) {
+      sawNetworkFail = true
+      return null
+    }
+    // CapacitorHttp kabhi-kabhi JSON string deta hai — defensive
+    const parsed = typeof data === 'string' ? safeParse(data) : data
+    if (!parsed) {
+      sawNetworkFail = true
+      return null
+    }
+    const status = String(parsed?.playabilityStatus?.status ?? '')
+    if (status && status !== 'OK') {
+      // LOGIN_REQUIRED = YouTube ka bot-check — is client se nahi milega
+      sawBlocked = true
+      return null
+    }
+    return pickStreamUrl(parsed)
   }
-  return null
+
+  for (const t of CLIENT_TRIES) {
+    const url = await tryClient(t)
+    if (url) return { url, reason: 'none' }
+  }
+
+  // flaky network — thoda ruk ke primary client ek baar aur
+  if (sawNetworkFail && !sawBlocked) {
+    await new Promise((r) => setTimeout(r, 1500))
+    const url = await tryClient(CLIENT_TRIES[0])
+    if (url) return { url, reason: 'none' }
+  }
+
+  // last resort — chalu reel ke iframe se
+  const iframeUrl = await streamFromIframe(videoId)
+  if (iframeUrl) return { url: iframeUrl, reason: 'none' }
+
+  return { url: null, reason: sawBlocked ? 'blocked' : sawNetworkFail ? 'network' : 'none' }
+}
+
+function safeParse(s: string): any | null {
+  try {
+    return JSON.parse(s)
+  } catch {
+    return null
+  }
 }
 
 /* eslint-enable @typescript-eslint/no-explicit-any */
