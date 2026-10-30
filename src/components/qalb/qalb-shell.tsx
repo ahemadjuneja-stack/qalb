@@ -164,6 +164,17 @@ function QalbShellInner({
     backChainRef.current = setTab
   }, [tab])
 
+  // Reels cache warm-up (v0.2.6) — boot ke 9s baad background me reels
+  // pool fetch → reels tab pehli baar khologe to bhi INSTANT (no loading)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void import('@/lib/reels')
+        .then((m) => m.getReels())
+        .catch(() => {})
+    }, 9_000)
+    return () => clearTimeout(t)
+  }, [])
+
   useEffect(() => {
     let unlisten: (() => void) | null = null
     let alive = true

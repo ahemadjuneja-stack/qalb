@@ -103,6 +103,10 @@ async function httpPostJson(
   }
 }
 
+// reels.ts (v0.2.6) download bhi yahi helper use karta hai —
+// native par CapacitorHttp (CORS bypass), web par normal fetch
+export { httpPostJson as innertubePostJson }
+
 // ── recursive videoRenderer collector (layout-change proof) ─────
 // Poore JSON tree me har videoRenderer dhoondta hai — YouTube ka
 // layout badle to bhi parsing tooti nahi. Live/upcoming skip hote hain.
