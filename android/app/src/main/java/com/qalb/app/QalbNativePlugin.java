@@ -26,7 +26,9 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  *  - startPlayback / updatePlayback / stopPlayback → PlaybackService (background audio
  *    + MediaSession lock-screen controls + thumbnail media notification)
  *  - setStatusBarStyle → theme ke hisaab se status bar icons (light/dark)
+ *  - minimizeApp → back button root pe app background (exit nahi)
  *  - mediaAction event: notification/lock-screen buttons se JS player store control
+ *  - backButton event: Android back gesture → JS view-stack navigation (v0.2.2)
  *
  * CRASH-SAFETY (v0.2.1-24): Capacitor @PluginMethod bodies ko khud wrap nahi
  * karta — native exception = seedha app force-close. Isliye HAR method try/catch
@@ -41,8 +43,20 @@ public class QalbNativePlugin extends Plugin {
         void onMediaAction(String action);
     }
 
+    /** Native → JS back-gesture bridge (MainActivity se) */
+    public interface BackEmitter {
+        void onBack();
+    }
+
     private static volatile MediaActionEmitter mediaEmitter;
+    private static volatile BackEmitter backEmitter;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    // ── Back navigation fallback state (v0.2.2) ──────────────────────
+    private static volatile boolean backAcked = false;
+    private static volatile Runnable backFallback;
+    private static final long BACK_FALLBACK_MS = 500L;
+    private static volatile java.lang.ref.WeakReference<Activity> backActivityRef;
 
     @Override
     public void load() {
@@ -55,6 +69,12 @@ public class QalbNativePlugin extends Plugin {
                 // WebView dead / bridge down — notification buttons bas dead ho jayenge
             }
         });
+        backEmitter = () -> mainHandler.post(() -> {
+            try {
+                notifyListeners("backButton", new JSObject());
+            } catch (Exception ignored) {
+            }
+        });
     }
 
     /** PlaybackService se button press forward karne ke liye (static entry) */
@@ -65,6 +85,77 @@ public class QalbNativePlugin extends Plugin {
                 e.onMediaAction(action);
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    // ── Back button bridge (v0.2.2) ──────────────────────────────────
+
+    /**
+     * MainActivity back gesture → JS "backButton" event.
+     * Safety: 500ms me JS ne ack nahi kiya (backHandled/minimizeApp se) —
+     * yaani WebView dead ya purana cached JS — to native khud app ko
+     * background bhej deta hai. Back kabhi "dead" nahi hota.
+     */
+    public static void emitBackButton(Activity activity) {
+        try {
+            backAcked = false;
+            backActivityRef = new java.lang.ref.WeakReference<>(activity);
+            BackEmitter e = backEmitter;
+            if (e != null) e.onBack();
+
+            Runnable old = backFallback;
+            if (old != null) {
+                new Handler(Looper.getMainLooper()).removeCallbacks(old);
+            }
+            Runnable fallback = () -> {
+                try {
+                    if (!backAcked) {
+                        Activity a = backActivityRef != null ? backActivityRef.get() : null;
+                        if (a != null && !a.isFinishing()) a.moveTaskToBack(true);
+                    }
+                } catch (Exception ignored) {
+                }
+            };
+            backFallback = fallback;
+            new Handler(Looper.getMainLooper()).postDelayed(fallback, BACK_FALLBACK_MS);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** JS ne back handle kar liya — native fallback cancel */
+    private static void ackBackButton() {
+        backAcked = true;
+        Runnable f = backFallback;
+        if (f != null) {
+            try {
+                new Handler(Looper.getMainLooper()).removeCallbacks(f);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** JS: "maine back handle kar liya (modal/sheet/tab band kiya)" */
+    @PluginMethod
+    public void backHandled(PluginCall call) {
+        try {
+            ackBackButton();
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    /** JS: "kuch nahi khula — app ko background karo (home-button jaisa)" */
+    @PluginMethod
+    public void minimizeApp(PluginCall call) {
+        try {
+            ackBackButton();
+            Activity activity = getActivity();
+            if (activity != null && !activity.isFinishing()) {
+                activity.moveTaskToBack(true);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("minimize fail: " + safeMsg(e));
         }
     }
 

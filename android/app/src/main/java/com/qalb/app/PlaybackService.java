@@ -14,6 +14,7 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
+import android.graphics.RectF;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -22,9 +23,9 @@ import android.os.PowerManager;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
-import androidx.media.app.NotificationCompat.MediaStyle;
 
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -35,18 +36,20 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Qalb — Playback Foreground Service (MediaSession edition)
+ * Qalb — Playback Foreground Service (MediaSession + custom sage notification)
  *
  * Naat chalte waqt ye service foreground mode me chalti hai:
- *  - MediaSessionCompat: lock screen + status bar + headset buttons par
- *    Play/Pause/Next/Previous controls (Android ka standard media player card)
- *  - MediaStyle notification: naat ki thumbnail (large icon), seekbar,
- *    emerald colored fancy card — Spotify/YouTube style
+ *  - MediaSessionCompat: lock screen + headset buttons par standard media controls
+ *  - CUSTOM notification (v0.2.2): light sage theme card — app jaisa look:
+ *      • sage ivory background (#EEF3E8) + deep emerald ink text
+ *      • HEARTBEAT seek line — 3-frame ViewFlipper upar-niche-upar-niche bounce
+ *        (auto-cycle hota hai, har frame ke liye re-notify NAHI karna padta)
+ *      • Close (×) button — tap = song stop + notification band, app NAHI khulti
  *  - Notification button presses → QalbNativePlugin.emitMediaAction() →
  *    WebView JS player store control
  *  - PARTIAL_WAKE_LOCK hold karta hai taaki screen band hone par bhi
  *    CPU/WebView chalta rahe aur YouTube IFrame ka audio na ruke
- *  - Android Doze me process ko kill hone se bachata hai
+ *  - Playing me 1s interpolation ticker: seek line + times smooth aage badhte
  *
  * JS side (player-provider) se QalbNative plugin ke through start/update/stop.
  *
@@ -73,8 +76,22 @@ public class PlaybackService extends Service {
     public static final String EXTRA_DURATION = "duration";
 
     private static final long WAKELOCK_TIMEOUT_MS = 8L * 60 * 60 * 1000; // 8h safety cap
-    private static final int ACCENT = 0xFF10B981; // emerald-500
     private static final int ART_SIZE = 256;
+
+    // ── Light sage theme palette (app ke light theme se) ─────────────
+    private static final int SAGE_BG = 0xFFEEF3E8;      // ivory-sage card bg
+    private static final int SAGE_INK = 0xFF1C2F24;     // deep emerald ink
+    private static final int SAGE_MUTED = 0xFF5A6E61;   // muted sage text
+    private static final int SAGE_ACCENT = 0xFF0F9163;  // emerald accent
+    private static final int SAGE_TRACK = 0xFFD7E3D2;   // seek track (halka sage)
+    private static final int ACCENT = SAGE_ACCENT;      // system chrome accent
+
+    // ── Seek line bitmap geometry ─────────────────────────────────────
+    // Bitmap fitXY se notification width par stretch hota hai — line uniform
+    // hai isliye stretch me koi distortion nahi. Height 48px ≈ 18dp @2.7x.
+    private static final int SEEK_W = 600;
+    private static final int SEEK_H = 48;
+    private static final float SEEK_OFFSET_PX = 9f;     // bounce amplitude (~3.3dp)
 
     private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -92,6 +109,25 @@ public class PlaybackService extends Service {
     private double positionSec;
     private double durationSec;
     private Bitmap artwork;
+
+    /** Position interpolation ticker (1s) — seek line + times chalte rahe */
+    private final Runnable tickRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                if (!playing) return;
+                positionSec += 1.0;
+                if (durationSec > 0 && positionSec > durationSec) positionSec = durationSec;
+                updateSessionState();
+                pushNotification();
+            } catch (Exception ignored) {
+            } finally {
+                if (playing) {
+                    mainHandler.postDelayed(this, 1000L);
+                }
+            }
+        }
+    };
 
     // ── static entry points (QalbNativePlugin se) ────────────────────
 
@@ -152,6 +188,8 @@ public class PlaybackService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            // × button (ya JS stop) — song band, notification hatao, app NA kholo
+            emitMediaAction("stop"); // JS: isPlaying=false → YT pause + service stop
             releaseWakeLock();
             stopSelf();
             return START_NOT_STICKY;
@@ -180,8 +218,13 @@ public class PlaybackService extends Service {
 
         updateSessionState();
 
-        if (playing) acquireWakeLock();
-        else releaseWakeLock();
+        if (playing) {
+            acquireWakeLock();
+            startTicker();
+        } else {
+            releaseWakeLock();
+            stopTicker();
+        }
 
         return START_STICKY;
     }
@@ -196,6 +239,7 @@ public class PlaybackService extends Service {
 
     @Override
     public void onDestroy() {
+        stopTicker();
         releaseWakeLock();
         if (session != null) {
             try {
@@ -211,6 +255,17 @@ public class PlaybackService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    // ── position interpolation ticker ────────────────────────────────
+
+    private void startTicker() {
+        mainHandler.removeCallbacks(tickRunnable);
+        mainHandler.postDelayed(tickRunnable, 1000L);
+    }
+
+    private void stopTicker() {
+        mainHandler.removeCallbacks(tickRunnable);
     }
 
     // ── intent → state ───────────────────────────────────────────────
@@ -415,14 +470,14 @@ public class PlaybackService extends Service {
         }
     }
 
-    /** Network thumb na mile to emerald crescent fallback art */
+    /** Network thumb na mile to sage crescent fallback art */
     private static Bitmap fallbackArt() {
         try {
             Bitmap bmp = Bitmap.createBitmap(ART_SIZE, ART_SIZE, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(bmp);
-            c.drawColor(0xFF064E3B); // emerald-950
+            c.drawColor(SAGE_ACCENT); // sage-emerald
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setColor(ACCENT);
+            p.setColor(SAGE_BG);
             int cx = ART_SIZE / 2;
             int cy = ART_SIZE / 2;
             int r = ART_SIZE / 3;
@@ -437,6 +492,82 @@ public class PlaybackService extends Service {
             return bmp;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    // ── seek line bitmaps (heartbeat bounce frames) ──────────────────
+
+    /**
+     * Ek seek-line frame render karo. yOffset = line ka vertical bounce
+     * (heartbeat: -amp / 0 / +amp). Track sage, fill emerald, round caps.
+     */
+    private static Bitmap renderSeekFrame(float progress, float yOffset) {
+        try {
+            Bitmap bmp = Bitmap.createBitmap(SEEK_W, SEEK_H, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(bmp);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeCap(Paint.Cap.ROUND);
+
+            float cy = SEEK_H / 2f + yOffset;
+            float pad = SEEK_H * 0.24f;           // rounded caps ke liye side padding
+            float stroke = SEEK_H * 0.22f;        // line thickness (~10.5px ≈ 4dp)
+            float span = SEEK_W - pad * 2f;
+            float prog = Math.max(0f, Math.min(1f, progress));
+            float endX = pad + span * prog;
+
+            // track (poori line — halka sage)
+            p.setColor(SAGE_TRACK);
+            p.setStrokeWidth(stroke);
+            c.drawLine(pad, cy, SEEK_W - pad, cy, p);
+
+            // fill (sunne tak — emerald)
+            if (prog > 0f) {
+                p.setColor(SAGE_ACCENT);
+                c.drawLine(pad, cy, endX, cy, p);
+            }
+            return bmp;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Thumbnail ko rounded-corner card me convert karo (sage card ke sath match) */
+    private static Bitmap roundedThumb(Bitmap src) {
+        if (src == null) return null;
+        try {
+            int size = Math.min(src.getWidth(), src.getHeight());
+            int out = ART_SIZE;
+            Bitmap outBmp = Bitmap.createBitmap(out, out, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(outBmp);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            // sage gap ring — card se thumb ke beech halki border
+            c.drawColor(SAGE_BG);
+            float radius = out * 0.18f;
+            RectF rect = new RectF(out * 0.02f, out * 0.02f, out * 0.98f, out * 0.98f);
+            // scaled square crop
+            Bitmap square = centerCropSquare(src, out);
+            android.graphics.Path clip = new android.graphics.Path();
+            clip.addRoundRect(rect, radius, radius, android.graphics.Path.Direction.CW);
+            c.save();
+            c.clipPath(clip);
+            c.drawBitmap(square, null, rect, p);
+            c.restore();
+            return outBmp;
+        } catch (Exception e) {
+            return src;
+        }
+    }
+
+    private static String fmtTime(double sec) {
+        try {
+            if (sec < 0 || Double.isNaN(sec) || Double.isInfinite(sec)) sec = 0;
+            long s = (long) sec;
+            long m = s / 60;
+            s = s % 60;
+            return m + ":" + String.format("%02d", s);
+        } catch (Exception e) {
+            return "0:00";
         }
     }
 
@@ -456,6 +587,52 @@ public class PlaybackService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
+    /** Custom sage notification views banao (theme match + heartbeat + close) */
+    private RemoteViews buildRemoteViews() {
+        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_player);
+
+        // text + thumb
+        rv.setTextViewText(R.id.notif_title, currentTitle != null ? currentTitle : "Naat chal rahi hai");
+        rv.setTextViewText(R.id.notif_artist,
+                (currentArtist != null ? currentArtist : "Qalb") + " • Qalb");
+        rv.setTextViewText(R.id.notif_pos, fmtTime(positionSec));
+        rv.setTextViewText(R.id.notif_dur, fmtTime(durationSec));
+
+        try {
+            Bitmap large = artwork != null ? artwork : fallbackArt();
+            Bitmap rounded = roundedThumb(large);
+            if (rounded != null) rv.setImageViewBitmap(R.id.notif_thumb, rounded);
+        } catch (Exception ignored) {
+        }
+
+        // heartbeat seek frames: upar / center / niche — ViewFlipper 140ms cycle
+        float prog = durationSec > 0 ? (float) (positionSec / durationSec) : 0f;
+        Bitmap fA = renderSeekFrame(prog, -SEEK_OFFSET_PX);
+        Bitmap fB = renderSeekFrame(prog, 0f);
+        Bitmap fC = renderSeekFrame(prog, SEEK_OFFSET_PX);
+        if (fA != null) rv.setImageViewBitmap(R.id.notif_seek_a, fA);
+        if (fB != null) rv.setImageViewBitmap(R.id.notif_seek_b, fB);
+        if (fC != null) rv.setImageViewBitmap(R.id.notif_seek_c, fC);
+        if (fB != null) rv.setImageViewBitmap(R.id.notif_seek_static, fB);
+
+        // playing → flipper bounce; paused → static line
+        rv.setViewVisibility(R.id.notif_flip,
+                playing ? android.view.View.VISIBLE : android.view.View.GONE);
+        rv.setViewVisibility(R.id.notif_seek_static,
+                playing ? android.view.View.GONE : android.view.View.VISIBLE);
+
+        // toggle icon
+        rv.setImageViewResource(R.id.notif_toggle, playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
+
+        // clicks
+        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
+        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
+        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
+        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
+
+        return rv;
+    }
+
     private Notification buildNotification() {
         Intent openIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent openPi = openIntent != null
@@ -464,39 +641,23 @@ public class PlaybackService extends Service {
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
                 : null;
 
-        Bitmap large = artwork != null ? artwork : fallbackArt();
+        RemoteViews views = buildRemoteViews();
 
+        // NOTE: API 36 me Notification.CATEGORY_MEDIA constant REMOVE ho chuka hai
+        // (androidx NotificationCompat se bhi) — isliye category set nahi karte
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_qalb)
                 .setContentTitle(currentTitle)
-                .setContentText(currentArtist + " • Qalb")
+                .setContentText(currentArtist != null ? currentArtist + " • Qalb" : "Qalb")
                 .setContentIntent(openPi)
-                .setLargeIcon(large)
+                .setCustomContentView(views)
+                .setCustomBigContentView(views)
                 .setOngoing(playing) // pause me swipe-dismiss allowed
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                // NOTE: API 36 me Notification.CATEGORY_MEDIA constant REMOVE ho chuka hai
-                // (androidx NotificationCompat se bhi) — isliye category set nahi karte
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setColor(ACCENT)
-                .setColorized(true); // fancy: thumbnail se colored media card
-
-        // controls: prev | play/pause | next | band
-        b.addAction(R.drawable.ic_notif_prev, "Pichla", actionPi(ACTION_PREV, 11));
-        if (playing) {
-            b.addAction(R.drawable.ic_notif_pause, "Pause", actionPi(ACTION_TOGGLE, 12));
-        } else {
-            b.addAction(R.drawable.ic_notif_play, "Play", actionPi(ACTION_TOGGLE, 12));
-        }
-        b.addAction(R.drawable.ic_notif_next, "Agla", actionPi(ACTION_NEXT, 13));
-        b.addAction(R.drawable.ic_notif_close, "Band karein", actionPi(ACTION_STOP, 14));
-
-        if (session != null) {
-            b.setStyle(new MediaStyle()
-                    .setMediaSession(session.getSessionToken())
-                    .setShowActionsInCompactView(0, 1, 2)); // lock/status bar: prev, play, next
-        }
+                .setColor(SAGE_ACCENT); // system chrome bits sage accent me
 
         return b.build();
     }

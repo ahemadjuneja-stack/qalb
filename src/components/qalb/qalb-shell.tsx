@@ -46,7 +46,12 @@ import {
   nativeGetBootHealth,
   nativeGetLastCrash,
   nativeClearCrash,
+  onNativeBackButton,
+  nativeBackHandled,
+  nativeMinimizeApp,
 } from '@/plugins/qalb-native'
+import { usePlayerStore } from '@/lib/player-store'
+import { usePlaylistPicker } from '@/lib/user-playlists'
 import { APP_BUILD } from '@/lib/app-build'
 
 // Tab-level feature flags (remoteConfig.disabledFeatures se aate hain)
@@ -128,6 +133,10 @@ function QalbShellInner({
   const [tab, setTabState] = useState<QalbTab>('home')
   const scrollPos = useRef<Partial<Record<QalbTab, number>>>({})
 
+  // Back navigation (v0.2.2) — latest tab value ref me (listener re-install na ho)
+  const tabRef = useRef<QalbTab>('home')
+  const backChainRef = useRef<(next: QalbTab) => void>(() => {})
+
   const hiddenTabs = GATABLE_TABS.filter((t) => gatableOff.includes(t))
   const showPlayer = !hiddenTabs.includes('player')
   const showCalendar = !hiddenTabs.includes('calendar')
@@ -144,6 +153,61 @@ function QalbShellInner({
       })
     })
   }
+
+  // Back gesture chain (har screen par kaam karta hai):
+  //   full player modal → playlist sheet → login sheet → tab → home → minimize
+  useEffect(() => {
+    tabRef.current = tab
+    backChainRef.current = setTab
+  }, [tab])
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null
+    let alive = true
+    void onNativeBackButton(() => {
+      try {
+        // 1. Full player modal khula? → band karo
+        const p = usePlayerStore.getState()
+        if (p.fullOpen) {
+          p.closeFull()
+          void nativeBackHandled()
+          return
+        }
+        // 2. Add-to-playlist sheet khuli? → band karo
+        const picker = usePlaylistPicker.getState()
+        if (picker.open) {
+          picker.closePicker()
+          void nativeBackHandled()
+          return
+        }
+        // 3. Login sheet khuli? → band karo
+        const auth = useQalbAuth.getState()
+        if (auth.loginOpen) {
+          auth.closeLogin()
+          void nativeBackHandled()
+          return
+        }
+        // 4. Home se doosre tab par? → home par wapas
+        if (tabRef.current !== 'home') {
+          backChainRef.current('home')
+          void nativeBackHandled()
+          return
+        }
+        // 5. Root screen — app background (home-button jaisa, exit nahi)
+        void nativeMinimizeApp()
+      } catch {
+        void nativeMinimizeApp()
+      }
+    }).then((fn) => {
+      if (!alive) fn()
+      else unlisten = fn
+    })
+    return () => {
+      alive = false
+      unlisten?.()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Remote se tab disable hua jo active tha → home par wapas
   useEffect(() => {

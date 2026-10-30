@@ -30,6 +30,12 @@ export interface QalbNativePluginInterface {
     eventName: 'mediaAction',
     listenerFunc: (data: { action: QalbMediaAction }) => void
   ): Promise<PluginListenerHandle> & PluginListenerHandle
+  addListener(
+    eventName: 'backButton',
+    listenerFunc: () => void
+  ): Promise<PluginListenerHandle> & PluginListenerHandle
+  backHandled(): Promise<void>
+  minimizeApp(): Promise<void>
   // ── Crash Guard (boot health / recovery) ──
   markSessionOk(): Promise<void>
   getBootHealth(): Promise<{ bootCount: number; crashLoop: boolean }>
@@ -106,6 +112,43 @@ export async function onNativeMediaAction(cb: (action: QalbMediaAction) => void)
     }
   } catch {
     return () => {}
+  }
+}
+
+// ── Back navigation (v0.2.2) ─────────────────────────────────────
+// Android back gesture/button → JS view-stack decision.
+// Native 500ms fallback hai — JS dead ho to app khud background jati hai.
+
+/** Android back gesture/button → JS ko event do */
+export async function onNativeBackButton(cb: () => void) {
+  if (!isNativeApp()) return () => {}
+  try {
+    const handle = await QalbNative.addListener('backButton', () => cb())
+    return () => {
+      handle.remove().catch(() => {})
+    }
+  } catch {
+    return () => {}
+  }
+}
+
+/** JS ne back handle kar liya (modal/sheet/tab band hua) — native fallback cancel */
+export async function nativeBackHandled() {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.backHandled()
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** Root screen par back → app background (home-button jaisa, exit nahi) */
+export async function nativeMinimizeApp() {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.minimizeApp()
+  } catch {
+    /* non-fatal */
   }
 }
 

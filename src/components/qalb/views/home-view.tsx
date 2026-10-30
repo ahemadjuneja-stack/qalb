@@ -19,8 +19,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search,
-  ShieldCheck,
-  ShieldAlert,
   Loader2,
   Play,
   ChevronDown,
@@ -315,34 +313,9 @@ export function HomeView() {
           ))}
         </div>
 
-        {/* guardian verdict */}
-        {guardian && phase !== 'idle' && (
-          <div
-            className={`mt-3 flex items-start gap-2.5 rounded-xl border p-3 text-[12px] leading-relaxed ${
-              guardian.valid
-                ? 'border-emerald-400/25 bg-emerald-400/[0.07] text-emerald-100'
-                : 'border-red-400/25 bg-red-400/[0.06] text-red-100'
-            }`}
-            role="status"
-          >
-            {guardian.valid ? (
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-            ) : (
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-            )}
-            <span>
-              <b className="font-semibold">
-                {guardian.valid ? 'Verified' : 'Blocked'}:
-              </b>{' '}
-              {guardian.reason}
-              {guardian.valid && guardian.refinedQuery && (
-                <span className="mt-1 block text-emerald-300/80">
-                  Search: <i>“{guardian.refinedQuery}”</i>
-                </span>
-              )}
-            </span>
-          </div>
-        )}
+        {/* NOTE: guardian verdict box hataya gaya — "Paak kalaam search" text
+            har search ke baad dikhta tha. Valid searches me ab koi extra text
+            nahi; blocked searches ka warning neeche wale blocked state me hai. */}
 
         {/* category quick chips */}
         {phase === 'idle' && (

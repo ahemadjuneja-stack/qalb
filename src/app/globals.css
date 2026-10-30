@@ -457,7 +457,7 @@
   animation: qalb-ph-beat 1.5s ease-in-out infinite;
 }
 
-/* Filled line — box-shadow glow pulse (transform touch nahi karta) */
+/* Filled line — glow pulse (bounce v0.2.2 me neeche .qalb-ph-line rule me) */
 @keyframes qalb-ph-glow {
   0%, 100% {
     box-shadow: 0 0 4px 0 rgba(16, 185, 129, 0.3);
@@ -471,9 +471,6 @@
   40% {
     box-shadow: 0 0 9px 1px rgba(16, 185, 129, 0.6), 0 0 18px 3px rgba(16, 185, 129, 0.25);
   }
-}
-.qalb-ph-line {
-  animation: qalb-ph-glow 1.5s ease-in-out infinite;
 }
 
 /* Full-player thumb — ripple thump (Radix translateX safe: no transform) */
@@ -503,6 +500,34 @@
   animation: qalb-thumb-thump 1.5s ease-out infinite;
 }
 
+/* ═══ HEARTBEAT BOUNCE (v0.2.2) — poori music line upar-niche upar-niche
+   lub-dub rhythm me uchhalti hai (dil ki dhadkan jaisi). Wrapper par
+   transform safe hai — andar ka Radix positioning transform untouched. */
+@keyframes qalb-slider-bounce {
+  0%, 100% { transform: translateY(0); }
+  12% { transform: translateY(-3.5px); }
+  24% { transform: translateY(0); }
+  36% { transform: translateY(-2px); }
+  52% { transform: translateY(0); }
+}
+.qalb-heartbeat-slider {
+  animation: qalb-slider-bounce 1.5s ease-in-out infinite;
+}
+
+/* Mini-player filled line — glow ke sath sath halka upar-niche bounce */
+@keyframes qalb-line-bounce {
+  0%, 100% { transform: translateY(0); }
+  12% { transform: translateY(-2.5px); }
+  24% { transform: translateY(0); }
+  36% { transform: translateY(-1.5px); }
+  52% { transform: translateY(0); }
+}
+.qalb-ph-line {
+  animation:
+    qalb-ph-glow 1.5s ease-in-out infinite,
+    qalb-line-bounce 1.5s ease-in-out infinite;
+}
+
 /* Elapsed time halka sa pulse — heartbeat ke sath sync feel */
 @keyframes qalb-ph-text {
   0%, 100% { opacity: 0.75; }
@@ -523,6 +548,7 @@
   .qalb-divider,
   .qalb-ph-dot,
   .qalb-ph-line,
+  .qalb-heartbeat-slider,
   .qalb-heartbeat-slider [data-slot='slider-range'],
   .qalb-heartbeat-slider [data-slot='slider-thumb'],
   .qalb-ph-text {
