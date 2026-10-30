@@ -179,16 +179,25 @@ jobs:
                 echo "web app ab: appId=${APPID:-FAIL}"
               fi
               # Identity Toolkit API (OTP REST isi se chalta hai) — enable/
-              # confirm, best-effort
-              if gcloud services enable identitytoolkit.googleapis.com --project="$FPID" >/dev/null 2>&1; then
+              # confirm, best-effort (error log karte hain — IAM ka pata chalega)
+              ET=$(gcloud services enable identitytoolkit.googleapis.com --project="$FPID" 2>&1 || true)
+              if [ -z "$ET" ]; then
                 echo "identitytoolkit API: enabled/confirmed"
               else
-                echo "identitytoolkit API enable FAIL — console se enable karna hoga"
+                echo "identitytoolkit API enable FAIL: $(printf '%s' "$ET" | head -c 200)"
               fi
               if [ -n "$APPID" ]; then
-                WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
-                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
-                KEY=$(printf '%s' "$WC" | jq -r '.apiKey // empty' 2>/dev/null || true)
+                # webConfig pehli baar propagation ke baad hi key deta hai
+                # (run 58: app bani, par key 5s me ready nahi thi) — retry
+                WC=""
+                for i in $(seq 1 8); do
+                  WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+                    "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
+                  KEY=$(printf '%s' "$WC" | jq -r '.apiKey // empty' 2>/dev/null || true)
+                  [ -n "$KEY" ] && break
+                  echo "webConfig try $i: key abhi nahi aayi — 8s intezar..."
+                  sleep 8
+                done
                 [ -n "$KEY" ] && SRC="webConfig(${APPID})"
               fi
               # Path 2 fallback: GCP API Keys manager — gcloud native (auth/
