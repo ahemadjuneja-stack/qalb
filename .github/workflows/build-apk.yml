@@ -194,6 +194,10 @@ jobs:
                   WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
                     "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
                   KEY=$(printf '%s' "$WC" | jq -r '.apiKey // empty' 2>/dev/null || true)
+                  # diagnostics: error ho to message dikhao (AIza values mask)
+                  if [ -z "$KEY" ] && [ "$i" = "1" ]; then
+                    echo "webConfig err: $(printf '%s' "$WC" | sed 's/AIzaSy[A-Za-z0-9_-]*/[KEY-MASKED]/g' | head -c 250)"
+                  fi
                   [ -n "$KEY" ] && break
                   echo "webConfig try $i: key abhi nahi aayi — 8s intezar..."
                   sleep 8
@@ -207,6 +211,17 @@ jobs:
               if [ -z "$KEY" ]; then
                 KL=$(gcloud services api-keys list --project="$FPID" --format=json 2>/dev/null || true)
                 echo "apikeys(gcloud): $(printf '%s' "$KL" | jq -c '[.[] | {name: (.name // null | split("/")[-1]), displayName: (.displayName // null)}]' 2>/dev/null || echo 'parse-fail')"
+                # Zero keys? Firebase ka auto 'Web key' provision nahi hua —
+                # khud create karne ki koshish (best-effort; IAM na ho to
+                # console se karna hoga — neeche FIX message)
+                if [ "$(printf '%s' "$KL" | jq -r '(. // []) | length' 2>/dev/null || echo 0)" = "0" ]; then
+                  echo "zero API keys — 'Web key' khud create kar rahe hain..."
+                  CR=$(gcloud services api-keys create --project="$FPID" \
+                    --display-name="Web key (auto created by Google Firebase service)" \
+                    --format=json 2>&1 || true)
+                  echo "key create: $(printf '%s' "$CR" | sed 's/AIzaSy[A-Za-z0-9_-]*/[KEY-MASKED]/g' | head -c 220)"
+                  KL=$(gcloud services api-keys list --project="$FPID" --format=json 2>/dev/null || true)
+                fi
                 KNAME=$(printf '%s' "$KL" | jq -r '[.[] | select((.displayName // "") | test("Web key"; "i"))][0].name // empty' 2>/dev/null || true)
                 if [ -n "$KNAME" ]; then
                   KEY=$(gcloud services api-keys describe "$KNAME" --project="$FPID" --format='value(keyString)' 2>/dev/null || true)
