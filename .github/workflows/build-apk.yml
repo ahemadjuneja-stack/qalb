@@ -144,31 +144,36 @@ jobs:
               # poora build nahi girayega (run 55 me jq parse error se fail
               # hua tha). Bad response → key khaali → warning, build chalega.
               # Path 1: Firebase web app → webConfig (official route)
-              WA=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+              # (http status/content_type log karte hain — body NAHI, usme
+              #  masked secrets aa sakte hain; run 55/56 me non-JSON response
+              #  aa raha tha, is se root cause dikhega)
+              WA=$(curl -sS -m 20 --retry 2 -w '\n|%{http_code}|%{content_type}' -H "Authorization: Bearer $TOKEN" \
                 "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" 2>/dev/null || true)
-              echo "webApps head: $(printf '%s' "$WA" | head -c 150)"
-              APPID=$(printf '%s' "$WA" | jq -r '.apps[0].appId // empty' 2>/dev/null || true)
+              echo "webApps meta: $(printf '%s' "$WA" | tail -1) bodyLen=$(printf '%s' "$WA" | head -n -1 2>/dev/null | wc -c)"
+              APPID=$(printf '%s' "$WA" | head -n -1 2>/dev/null | jq -r '.apps[0].appId // empty' 2>/dev/null || true)
               if [ -n "$APPID" ]; then
                 WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
                   "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
-                echo "webConfig head: $(printf '%s' "$WC" | sed 's/AIzaSy[A-Za-z0-9_-]*/[MASKED]/g' | head -c 150)"
                 KEY=$(printf '%s' "$WC" | jq -r '.apiKey // empty' 2>/dev/null || true)
                 [ -n "$KEY" ] && SRC="webConfig(${APPID})"
               fi
-              # Path 2 fallback: GCP API Keys manager — Firebase project me
-              # "Web key (auto created by Google Firebase service)" hota hi hai.
-              # keyString LOG NAHI karte (GitHub khud mask karta hai, phir bhi).
+              # Path 2 fallback: GCP API Keys manager — gcloud native (auth/
+              # transport isi khud handle karta hai — raw curl se zyada bharosemand).
+              # Firebase projects me "Web key (auto created by Google Firebase
+              # service)" hota hi hai. keyString LOG NAHI karte.
               if [ -z "$KEY" ]; then
-                AK=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
-                  "https://apikeys.googleapis.com/v1/projects/${FPID}/locations/global/keys?pageSize=100" 2>/dev/null || true)
-                echo "apikeys: $(printf '%s' "$AK" | jq -c '{keys: ((.keys // []) | length), names: [(.keys // [])[] | .displayName], err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
-                KEY=$(printf '%s' "$AK" | jq -r '[(.keys // [])[] | select((.displayName // "") | test("Web key"; "i"))][0].keyString // empty' 2>/dev/null || true)
-                if [ -n "$KEY" ]; then
-                  SRC="apikeys-web-key"
+                KL=$(gcloud services api-keys list --project="$FPID" --format=json 2>/dev/null || true)
+                echo "apikeys(gcloud): $(printf '%s' "$KL" | jq -c '[.[] | {name: (.name // null | split("/")[-1]), displayName: (.displayName // null)}]' 2>/dev/null || echo 'parse-fail')"
+                KNAME=$(printf '%s' "$KL" | jq -r '[.[] | select((.displayName // "") | test("Web key"; "i"))][0].name // empty' 2>/dev/null || true)
+                if [ -n "$KNAME" ]; then
+                  KEY=$(gcloud services api-keys describe "$KNAME" --project="$FPID" --format='value(keyString)' 2>/dev/null || true)
+                  [ -n "$KEY" ] && SRC="apikeys-web-key"
                 else
-                  # koi "Web key" naam wali nahi — pehli UNRESTRICTED key (web pattern)
-                  KEY=$(printf '%s' "$AK" | jq -r '[(.keys // [])[] | select((.restrictions.androidKeyRestrictions.androidApplications // []) == [] and ((.restrictions.iosKeyRestrictions.iosApplications // []) == []))][0].keyString // empty' 2>/dev/null || true)
-                  [ -n "$KEY" ] && SRC="apikeys-unrestricted"
+                  KNAME=$(printf '%s' "$KL" | jq -r '[.[] | select((.restrictions.androidKeyRestrictions.androidApplications // []) == [] and ((.restrictions.iosKeyRestrictions.iosApplications // []) == []))][0].name // empty' 2>/dev/null || true)
+                  if [ -n "$KNAME" ]; then
+                    KEY=$(gcloud services api-keys describe "$KNAME" --project="$FPID" --format='value(keyString)' 2>/dev/null || true)
+                    [ -n "$KEY" ] && SRC="apikeys-unrestricted"
+                  fi
                 fi
               fi
             else
@@ -194,11 +199,14 @@ jobs:
           # YT_API_KEY (GitHub secret, optional) → APK me direct YouTube search
           mv src/app/api .api-routes-backup
           MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" npx next build
-          # sanity: API key bake hui? (login iske bina kaam nahi karega)
-          if grep -rq 'AIzaSy' out/_next/static --include='*.js' 2>/dev/null; then
-            echo "✅ Firebase Web API key APK bundle me baked hai"
+          # sanity: DISCOVERED key really bake hui? (bundle me InnerTube ke
+          # AIzaSy keys pehle se hote hain — isliye full discovered key hi
+          # grep karte hain, warna false-positive milta tha — run 56)
+          BKEY="${{ steps.authcfg.outputs.apiKey }}"
+          if [ -n "$BKEY" ] && grep -rqF "$BKEY" out/_next/static --include='*.js' 2>/dev/null; then
+            echo "✅ Discovered Firebase Web API key bundle me baked hai"
           else
-            echo "⚠️ Bundle me AIzaSy* key nahi mili — login setup adhoora rahega (upar ka FIX dekho)"
+            echo "⚠️ Discovered key bundle me NAHI mili (keyLen=${#BKEY}) — login setup adhoora rahega"
           fi
 
       # ── 5. Capacitor Android project ──────────────────────────────
