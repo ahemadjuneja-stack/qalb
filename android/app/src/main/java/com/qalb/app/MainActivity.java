@@ -53,4 +53,36 @@ public class MainActivity extends BridgeActivity {
             // dispatcher na mile to default Android behaviour rehne do
         }
     }
+
+    // ── App background/foreground events (v0.3.2) ────────────────────
+    // Minimize par reel ka sound band karna hai (naat/qawwali player ko
+    // background me chalne dete hain — wo foreground service hai). Android
+    // WebView me document.hidden reliably fire NAHI hota, isliye hum
+    // lifecycle se seedha JS ko window event bhejte hain — ReelsView isko
+    // sunke active reel iframe pause/resume karta hai.
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().evaluateJavascript(
+                    "try{window.dispatchEvent(new CustomEvent('qalbAppBg',{detail:{bg:true}}))}catch(e){}",
+                    null);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.getWebView().evaluateJavascript(
+                    "try{window.dispatchEvent(new CustomEvent('qalbAppBg',{detail:{bg:false}}))}catch(e){}",
+                    null);
+            }
+        } catch (Exception ignored) {
+        }
+    }
 }

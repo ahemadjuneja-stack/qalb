@@ -15,6 +15,14 @@
 //    (Gallery → Movies → Qalb), progress % ke sath.
 //  • Like ❤️: global Firestore count + per-device state.
 //  • Naat conflict: reel play → naat pause; naat play → reel pause.
+//  • v0.3.2 APP MINIMIZE → reel sound BAND (naat player background me
+//    chalta rahega — sound sirf Player me naat/qawwali par zinda hai).
+//    MainActivity onPause/onResume → 'qalbAppBg' window event (WebView me
+//    document.hidden reliable nahi) + visibilitychange fallback.
+//  • v0.3.2 LOADING SPINNER KABHI NAHI: video ACTUALLY start hone tak
+//    reel ki thumbnail iframe ke upar dikhti hai (YT ka buffering spinner
+//    chhup jata hai) — YT playerState message se start detect, 3.2s
+//    fallback timer.
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Download, Heart, Loader2, RefreshCw, SearchX } from 'lucide-react'
@@ -39,6 +47,19 @@ import { usePlayerStore } from '@/lib/player-store'
 function ytCommand(iframe: HTMLIFrameElement | null, func: string, args: unknown[] = []) {
   try {
     iframe?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*')
+  } catch {
+    /* iframe not ready */
+  }
+}
+
+// YT embed ko batao hum player events sun rahe hain (handshake) — isi ke
+// baad wo window.parent ko infoDelivery (playerState) bhejta hai.
+function ytListen(iframe: HTMLIFrameElement | null) {
+  try {
+    iframe?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+      '*'
+    )
   } catch {
     /* iframe not ready */
   }
@@ -69,6 +90,7 @@ interface ReelCardProps {
   item: ReelItem
   active: boolean // visible && current index (play chalu)
   mounted: boolean // active ±2 (iframe pre-mount — instant swipe)
+  suspended: boolean // app background — sound band (v0.3.2)
   liked: boolean
   likeCount: number
   dl: DlState | 'idle'
@@ -81,6 +103,7 @@ const ReelCard = memo(function ReelCard({
   item,
   active,
   mounted,
+  suspended,
   liked,
   likeCount,
   dl,
@@ -120,6 +143,58 @@ const ReelCard = memo(function ReelCard({
     pausedRef.current = false
     ytCommand(iframeRef.current, 'pauseVideo')
   }, [active])
+
+  // v0.3.2: app minimize → reel PAUSE (sound band); wapas aao → resume.
+  // pausedRef chheda nahi — agar user ne khud tap-pause kiya tha to
+  // resume par wahi haalat lautti hai.
+  useEffect(() => {
+    if (!active) return
+    if (suspended) {
+      ytCommand(iframeRef.current, 'pauseVideo')
+      return
+    }
+    if (pausedRef.current) return
+    const t = window.setTimeout(() => ytCommand(iframeRef.current, 'playVideo'), 120)
+    return () => window.clearTimeout(t)
+  }, [active, suspended])
+
+  // v0.3.2: video START hua ya nahi — YT iframe khud window.parent ko
+  // infoDelivery (playerState) bhejta hai (enablejsapi=1). e.source se
+  // pata chalta hai kaunsa player bol raha hai. 1 = playing.
+  const [videoStarted, setVideoStarted] = useState(false)
+  const [coverFallback, setCoverFallback] = useState(false)
+  useEffect(() => {
+    if (!mounted) return
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== iframeRef.current?.contentWindow) return
+      try {
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        if (d?.event === 'infoDelivery' && d?.info?.playerState === 1) setVideoStarted(true)
+      } catch {
+        /* non-JSON message — ignore */
+      }
+    }
+    window.addEventListener('message', onMsg)
+    const t1 = window.setTimeout(() => ytListen(iframeRef.current), 600)
+    const t2 = window.setTimeout(() => ytListen(iframeRef.current), 2000)
+    return () => {
+      window.removeEventListener('message', onMsg)
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [mounted])
+
+  // safety: YT messages na aaye to 3.2s baad cover hata do — video ka
+  // spinner dikh sakta hai, lekin reel kabhi thumb ke niche stuck nahi
+  useEffect(() => {
+    if (!active) return
+    const t = window.setTimeout(() => setCoverFallback(true), 3200)
+    return () => window.clearTimeout(t)
+  }, [active])
+
+  // cover = thumbnail overlay: active nahi (feed me thumb) YA video abhi
+  // start nahi hua (YT ka black+spinner chhupa rehta hai)
+  const showCover = !active || (!videoStarted && !coverFallback)
 
   // 2.5s dwell → watched (interest algorithm + seen/repeat-block)
   useEffect(() => {
@@ -197,7 +272,21 @@ const ReelCard = memo(function ReelCard({
           allow="autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
         />
-      ) : (
+      ) : null}
+
+      {/* v0.3.2: cover — video start hone tak thumbnail dikhti rahi hai
+          (YT ka buffering spinner / black screen kabhi nahi jhalakta).
+          touch-overlay (z-[1], DOM me baad me) tap/swipe leta hai. */}
+      {mounted && showCover && (
+        <img
+          src={item.thumb}
+          alt={item.title}
+          loading="lazy"
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover"
+        />
+      )}
+      {!mounted && (
         <img src={item.thumb} alt={item.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
       )}
 
@@ -285,6 +374,9 @@ export function ReelsView({ visible }: { visible: boolean }) {
   const [downloadedSet, setDownloadedSet] = useState<Set<string>>(new Set())
   const [hasMore, setHasMore] = useState(true)
   const [toast, setToast] = useState<string | null>(null)
+  // v0.3.2: app background (minimize) — reel sound band
+  const [suspended, setSuspended] = useState(false)
+  const [showLoader, setShowLoader] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
   const busyDlRef = useRef<string | null>(null)
@@ -318,6 +410,32 @@ export function ReelsView({ visible }: { visible: boolean }) {
       alive = false
     }
   }, [visible, loaded, reloadTick])
+
+  // v0.3.2: app minimize/background → suspended=true. Native path:
+  // MainActivity onPause/onResume 'qalbAppBg' bhejta hai (guaranteed —
+  // WebView me document.hidden fire nahi hota). Web/PWA fallback:
+  // visibilitychange.
+  useEffect(() => {
+    const onBg = (e: Event) => setSuspended((e as CustomEvent).detail?.bg !== false)
+    const onVis = () => setSuspended(document.hidden)
+    window.addEventListener('qalbAppBg', onBg)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('qalbAppBg', onBg)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
+
+  // feed loader 400ms der se — cache-first instant load par spinner
+  // flash nahi hota (sirf sach me slow network par dikhta hai)
+  useEffect(() => {
+    if (!loading) {
+      setShowLoader(false)
+      return
+    }
+    const t = window.setTimeout(() => setShowLoader(true), 400)
+    return () => window.clearTimeout(t)
+  }, [loading])
 
   // YT/googlevideo preconnect — swipe ke waqt iframe connection warm rahe
   useEffect(() => {
@@ -481,7 +599,7 @@ export function ReelsView({ visible }: { visible: boolean }) {
         paddingTop: 'env(safe-area-inset-top)',
       }}
     >
-      {loading && (
+      {showLoader && (
         <div className="flex h-full flex-col items-center justify-center gap-3 text-white/70">
           <Loader2 className="h-8 w-8 animate-spin text-emerald-300" />
           <p className="text-sm">Reels load ho rahi hain…</p>
@@ -518,6 +636,7 @@ export function ReelsView({ visible }: { visible: boolean }) {
                 item={item}
                 active={visible && i === activeIdx}
                 mounted={Math.abs(i - activeIdx) <= 2}
+                suspended={suspended}
                 liked={myLikes.has(item.videoId)}
                 likeCount={
                   Math.max(0, counts[item.videoId] ?? 0) +
