@@ -151,6 +151,40 @@ jobs:
                 "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" 2>/dev/null || true)
               echo "webApps meta: $(printf '%s' "$WA" | tail -1) bodyLen=$(printf '%s' "$WA" | head -n -1 2>/dev/null | wc -c)"
               APPID=$(printf '%s' "$WA" | head -n -1 2>/dev/null | jq -r '.apps[0].appId // empty' 2>/dev/null || true)
+              # Path 1b: web app hi nahi hai (ROOT CAUSE — project me kabhi
+              # web app register nahi hua, isliye Web API key exist hi nahi
+              # karti). One-time: 'Qalb Web' app khud bana do — console me
+              # Project settings > General > Your apps > Web app add karne
+              # ke barabar. Idempotent — agla run list se mil jayega.
+              if [ -z "$APPID" ]; then
+                echo "web app nahi mila — one-time 'Qalb Web' app create kar rahe hain..."
+                CREATE=$(curl -sS -m 30 -X POST -H "Authorization: Bearer $TOKEN" \
+                  -H "Content-Type: application/json" -d '{"displayName": "Qalb Web"}' \
+                  "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" 2>/dev/null || true)
+                OP=$(printf '%s' "$CREATE" | jq -r '.name // empty' 2>/dev/null || true)
+                if [ -n "$OP" ]; then
+                  for i in $(seq 1 20); do
+                    if printf '%s' "$CREATE" | jq -e '.done == true' >/dev/null 2>&1; then break; fi
+                    sleep 3
+                    CREATE=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                      "https://firebase.googleapis.com/v1/${OP}" 2>/dev/null || true)
+                  done
+                  echo "create op: done=$(printf '%s' "$CREATE" | jq -r '.done // false' 2>/dev/null || echo '?') err=$(printf '%s' "$CREATE" | jq -r '.error.message // null' 2>/dev/null || echo '?')"
+                else
+                  echo "create call ka koi operation nahi louta: $(printf '%s' "$CREATE" | jq -r '.error.message // "unknown"' 2>/dev/null || echo 'non-json')"
+                fi
+                WA=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+                  "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" 2>/dev/null || true)
+                APPID=$(printf '%s' "$WA" | jq -r '.apps[0].appId // empty' 2>/dev/null || true)
+                echo "web app ab: appId=${APPID:-FAIL}"
+              fi
+              # Identity Toolkit API (OTP REST isi se chalta hai) — enable/
+              # confirm, best-effort
+              if gcloud services enable identitytoolkit.googleapis.com --project="$FPID" >/dev/null 2>&1; then
+                echo "identitytoolkit API: enabled/confirmed"
+              else
+                echo "identitytoolkit API enable FAIL — console se enable karna hoga"
+              fi
               if [ -n "$APPID" ]; then
                 WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
                   "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
