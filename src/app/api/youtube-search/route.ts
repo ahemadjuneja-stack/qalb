@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { cacheGet, cacheSet, cacheKey } from '@/lib/search-cache'
-import { youtubeSearchPage } from '@/lib/youtube-search-source'
+import { youtubeSearchPage, youtubeShortsSearch, type RawShort } from '@/lib/youtube-search-source'
 import { filterSearchResults } from '@/lib/result-filter'
 import type { QalbTrack } from '@/lib/types'
 
@@ -116,6 +116,21 @@ export async function GET(req: Request) {
     const q = (searchParams.get('q') || '').trim()
     const cont = searchParams.get('cont')
     const strict = searchParams.get('strict') === '1'
+
+    // ── SHORTS mode (v0.2.5 — Islamic Reels feed) ──
+    // Sirf guaranteed-vertical Shorts (shortsLockupViewModel parse).
+    // result-filter yahan skip — queries khud Islamic-specific hain +
+    // app-side block-list (`reelConfig/blocked`) user control deta hai.
+    if (searchParams.get('shorts') === '1') {
+      if (!q) return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
+      const sKey = cacheKey(['yt-shorts', q])
+      const sCached = cacheGet<RawShort[]>(sKey)
+      if (sCached) return NextResponse.json({ shorts: sCached, source: 'cache' })
+      const shorts = await youtubeShortsSearch(q)
+      cacheSet(sKey, shorts, CACHE_TTL)
+      return NextResponse.json({ shorts, source: shorts.length ? 'innertube' : 'empty' })
+    }
+
     if (!q && !cont) {
       return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
     }

@@ -1,17 +1,19 @@
 'use client'
 
-// Qalb — 4-Tab Bottom Navigation (Spotify/YouTube Music style)
-// Tabs: Home, Player, Calendar, Profile
+// Qalb — 5-Tab Bottom Navigation (Spotify/YouTube Music style)
+// Tabs: Home, Player, Reels, Calendar, Profile
+// (v0.2.5: Reels tab — Islamic Shorts feed, Player ke bagal me)
 // NOTE: Store tab temporarily removed — wapas lana ho to
 // { key: 'store', label: 'Store', icon: ShoppingBag } add karo + shell me StoreView render
 
-import { Home, Disc3, CalendarDays, UserRound } from 'lucide-react'
+import { Home, Disc3, Clapperboard, CalendarDays, UserRound } from 'lucide-react'
 
-export type QalbTab = 'home' | 'player' | 'calendar' | 'profile'
+export type QalbTab = 'home' | 'player' | 'reels' | 'calendar' | 'profile'
 
 const TABS: { key: QalbTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: 'home', label: 'Home', icon: Home },
   { key: 'player', label: 'Player', icon: Disc3 },
+  { key: 'reels', label: 'Reels', icon: Clapperboard },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'profile', label: 'Profile', icon: UserRound },
 ]

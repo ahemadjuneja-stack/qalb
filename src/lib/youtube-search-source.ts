@@ -143,6 +143,107 @@ function collectVideos(node: any, videos: RawVideo[], tokens: string[], depth = 
   for (const key of Object.keys(node)) collectVideos(node[key], videos, tokens, depth + 1)
 }
 
+// ── Shorts collector (v0.2.5 — Islamic Reels ke liye) ────────────
+// shortsLockupViewModel = YouTube Shorts shelf ke items — YE GUARANTEED
+// 9:16 VERTICAL hote hain (YouTube khud sirf Shorts isi me daalta hai,
+// thumbnail bhi isOriginalAspectRatio: true vertical aata hai — tested).
+// reelItemRenderer = purane layouts ka shorts item (fallback).
+
+export interface RawShort {
+  videoId: string
+  title: string
+  views: string
+}
+
+function collectShorts(node: any, shorts: RawShort[], depth = 0): void {
+  if (!node || typeof node !== 'object' || depth > 80) return
+  if (Array.isArray(node)) {
+    for (const item of node) collectShorts(item, shorts, depth + 1)
+    return
+  }
+
+  const lockup = node.shortsLockupViewModel
+  if (lockup && typeof lockup === 'object') {
+    const videoId =
+      lockup?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId ??
+      (typeof lockup?.entityId === 'string'
+        ? lockup.entityId.replace('shorts-shelf-item-', '')
+        : null)
+    const title =
+      lockup?.overlayMetadata?.primaryText?.content ??
+      (typeof lockup?.accessibilityText === 'string'
+        ? lockup.accessibilityText.split(',').slice(0, -1).join(',')
+        : null)
+    const views = lockup?.overlayMetadata?.secondaryText?.content ?? ''
+    if (typeof videoId === 'string' && videoId && title) {
+      shorts.push({ videoId, title, views })
+    }
+  }
+
+  const reel = node.reelItemRenderer
+  if (reel && typeof reel === 'object') {
+    const videoId = typeof reel.videoId === 'string' ? reel.videoId : null
+    const title =
+      reel.headline?.simpleText ??
+      reel.headline?.runs?.[0]?.text ??
+      null
+    const views = reel.viewCountText?.simpleText ?? ''
+    if (videoId && title) shorts.push({ videoId, title, views })
+  }
+
+  for (const key of Object.keys(node)) collectShorts(node[key], shorts, depth + 1)
+}
+
+function dedupeShorts(shorts: RawShort[]): RawShort[] {
+  const seen = new Set<string>()
+  const out: RawShort[] = []
+  for (const s of shorts) {
+    if (seen.has(s.videoId)) continue
+    seen.add(s.videoId)
+    out.push(s)
+  }
+  return out
+}
+
+/**
+ * Sirf YouTube SHORTS (guaranteed 9:16 vertical) search — Islamic Reels feed.
+ * InnerTube WEB endpoint, NO API KEY, NO quota. Har query ~15-40 shorts laata hai
+ * (Shorts shelf se — landscape videos in me aa hi nahi sakte).
+ */
+export async function youtubeShortsSearch(q: string): Promise<RawShort[]> {
+  const query = q.trim()
+  if (!query) return []
+  const data = await httpPostJson(
+    `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
+    {
+      'User-Agent': DESKTOP_UA,
+      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
+      'X-YouTube-Client-Name': '1',
+      'X-YouTube-Client-Version': CLIENT_VERSION,
+      Referer: 'https://www.youtube.com/',
+    },
+    { ...INNERTUBE_CONTEXT, query }
+  ).catch(() => null)
+  const shorts: RawShort[] = []
+  if (data) collectShorts(data, shorts)
+  if (shorts.length) return dedupeShorts(shorts)
+
+  // fallback: HTML scrape (same parse)
+  const html = await httpGetText(
+    `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en&gl=IN`,
+    {
+      'User-Agent': DESKTOP_UA,
+      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
+      Cookie: 'SOCS=CAI; CONSENT=YES+cb',
+    }
+  ).catch(() => null)
+  if (html) {
+    const parsed = extractYtInitialData(html)
+    if (parsed) collectShorts(parsed, shorts)
+  }
+  return dedupeShorts(shorts)
+}
+
 function pageFromData(data: any): YTSearchPage | null {
   if (!data || typeof data !== 'object') return null
   const videos: RawVideo[] = []

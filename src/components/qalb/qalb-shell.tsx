@@ -22,6 +22,7 @@ import { MiniPlayer } from '@/components/qalb/mini-player'
 import { FullPlayerModal } from '@/components/qalb/full-player-modal'
 import { HomeView } from '@/components/qalb/views/home-view'
 import { PlayerView } from '@/components/qalb/views/player-view'
+import { ReelsView } from '@/components/qalb/views/reels-view'
 import { CalendarView } from '@/components/qalb/views/calendar-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
@@ -54,7 +55,7 @@ import { usePlaylistPicker } from '@/lib/user-playlists'
 import { APP_BUILD } from '@/lib/app-build'
 
 // Tab-level feature flags (remoteConfig.disabledFeatures se aate hain)
-const GATABLE_TABS: QalbTab[] = ['player', 'calendar']
+const GATABLE_TABS: QalbTab[] = ['player', 'reels', 'calendar']
 
 export function QalbShellCore() {
   // SSR + pehli client frame: inert splash (localStorage/bridge abhi nahi padhte)
@@ -138,6 +139,7 @@ function QalbShellInner({
 
   const hiddenTabs = GATABLE_TABS.filter((t) => gatableOff.includes(t))
   const showPlayer = !hiddenTabs.includes('player')
+  const showReels = !hiddenTabs.includes('reels')
   const showCalendar = !hiddenTabs.includes('calendar')
 
   const setTab = (next: QalbTab) => {
@@ -228,6 +230,11 @@ function QalbShellInner({
           {showPlayer && (
             <div style={{ display: tab === 'player' ? 'block' : 'none' }}>
               <PlayerView />
+            </div>
+          )}
+          {showReels && (
+            <div style={{ display: tab === 'reels' ? 'block' : 'none' }}>
+              <ReelsView visible={tab === 'reels'} />
             </div>
           )}
           {showCalendar && (

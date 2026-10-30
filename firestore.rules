@@ -34,6 +34,16 @@ service cloud.firestore {
     // Doc `remoteConfig/app` Firebase console se manually banaya/edit hota hai.
     match /remoteConfig/{doc} { allow read: if true;  allow write: if false; }
 
+    // ── ISLAMIC REELS (v0.2.5) ──
+    // reels: curated/pinned reels (videoId, title, category, order, active)
+    //        — console/service-account se manage, public read-only.
+    match /reels/{doc}      { allow read: if true;  allow write: if false; }
+    // reelConfig/blocked: block-list (array `ids`) — public read-only.
+    match /reelConfig/{doc} { allow read: if true;  allow write: if false; }
+    // reelMeta/likes: global like counts (map videoId → int). Increment
+    // transform se update hota hai — v1 me open write (sirf counts data).
+    match /reelMeta/{doc}   { allow read: if true;  allow write: if true; }
+
     // ── PRIVATE: CI keystore + secrets — CLIENT KE LIYE POORA BAND ──
     // (keystore base64 yahin rehti hai — bahar kabhi nahi jayegi)
     match /ci_private/{doc}  { allow read: if false; allow write: if false; }
