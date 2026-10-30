@@ -162,19 +162,29 @@ export async function checkForUpdateEngine(force = false): Promise<AppVersionInf
   set({ lastCheckAt: Date.now(), lastCheckOk: true, checkingSince: 0 })
   checkAttempt = 0
 
-  // ── OTA web bundle (v0.3.0): silent live update ─────────────────
-  // webCode/webUrl Firestore doc me CI publish karta hai. Eligible ho to
-  // background download — agli app start par khud lag jayega (WhatsApp
-  // jaisa). OTA sambhal lega to APK popup suppress (web update hi kaafi).
+  // ── OTA web bundle (v0.3.0) — v0.3.4 ME SAFED KIYA GAYA ───────────
+  // OTA (silent web update) SIRF tab jab installed APK already latest ho.
+  // Naya APK available hai to HAMESHA APK prompt — warna native fixes
+  // (WebView me kabhi na lagne wale) users tak pahunchte hi nahi.
+  //
+  // BUG (v0.3.3): CI ka webMinNative heuristic empty commit par purana
+  // gate (43) inherit kar gaya — naya APK 45 aane par bhi OTA chal gaya
+  // aur APK prompt suppress ho gaya. User ke paas naya web bundle +
+  // PURANA native engine — sound/download fix kabhi lage hi nahi.
   const nativeCode = await getNativeCode()
-  const webOta = maybeOtaUpdate(latest, nativeCode)
-  if (webOta) {
-    set({ phase: 'idle', info: null })
-    return null
+  if (latest.versionCode <= nativeCode) {
+    const webOta = maybeOtaUpdate(latest, nativeCode)
+    if (webOta) {
+      set({ phase: 'idle', info: null })
+      return null
+    }
   }
 
-  // same/older version → idle
-  if (latest.versionCode <= QALB.currentVersionCode) {
+  // same/older version → idle — REAL installed APK ke sath compare karo.
+  // (Pehle QALB.currentVersionCode = APP_BUILD use hota tha, jo bundle ke
+  // sath aata hai — OTA lage chuke bundle me wo APK se aage badh chuka
+  // hota hai, isliye purane APK ka update prompt yahan chhup jata tha.)
+  if (latest.versionCode <= nativeCode) {
     // stale APKs clean kar do (space bachao)
     // NOTE: plugin version-aware hai — pending update ka APK (naya
     // versionCode) SURAKSHIT rehta hai, sirf purane delete hote hain.

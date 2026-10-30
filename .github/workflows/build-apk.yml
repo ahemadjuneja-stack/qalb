@@ -55,6 +55,10 @@ jobs:
       # ── 1. Checkout + environment ─────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # webMinNative heuristic pichli release ke commit se diff karta
+          # hai — full history chahiye
+          fetch-depth: 0
 
       # Capacitor CLI ko Node >= 22 chahiye
       - name: Setup Node 22
@@ -253,18 +257,27 @@ jobs:
 
       # ── 8b. webMinNative — OTA compatibility gate ────────────────
       # Web bundle SIRF unhi APKs par lagega jo is build ke native code ke
-      # sath compatible hain. Is push me android/ / capacitor config / npm
-      # deps badle → gate = is build ka versionCode (purane APKs pe OTA
-      # band, APK update hi raasta). Web-only fix → pichla gate inherit
-      # (purane APKs par bhi OTA chalta rahega).
+      # sath compatible hain.
+      #
+      # v0.3.4 FIX: pichli PUBLISHED release ke commit se diff karte hain.
+      # (Pehle github.event.before use hota tha — re-run/empty-commit par
+      # wo diff khaali deta hai aur purana gate inherit ho jata tha:
+      # v0.3.3 me is bug se OTA chal gaya aur APK prompt kabhi nahi dikha.)
       - name: Resolve webMinNative (OTA gate)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           MINNATIVE=""
-          BEFORE="${{ github.event.before }}"
-          if [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -q '^0*$'; then
-            CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}" \
+          LAST_SHA=$(gh release view --repo "${{ github.repository }}" --json body -q .body 2>/dev/null \
+            | grep -o 'commit [0-9a-f]\{40\}' | awk '{print $2}' | head -1 || true)
+          if [ -n "$LAST_SHA" ] && git cat-file -e "$LAST_SHA" 2>/dev/null; then
+            CHANGED=$(git diff --name-only "$LAST_SHA" "${{ github.sha }}" \
               -- android/ capacitor.config.json package.json package-lock.json | head -1 || true)
             [ -n "$CHANGED" ] && MINNATIVE="${{ steps.ver.outputs.versionCode }}"
+            echo "gate check: $LAST_SHA..HEAD changed=[${CHANGED:-nothing}]"
+          else
+            # pichli release ka commit nahi mila — SAFE default: APK hi update raasta
+            MINNATIVE="${{ steps.ver.outputs.versionCode }}"
           fi
           if [ -z "$MINNATIVE" ]; then
             TOKEN=$(gcloud auth print-access-token)
@@ -274,7 +287,7 @@ jobs:
             if [ -n "$PREV" ]; then MINNATIVE="$PREV"; else MINNATIVE="${{ steps.ver.outputs.versionCode }}"; fi
           fi
           echo "WEB_MIN_NATIVE=$MINNATIVE" >> "$GITHUB_ENV"
-          echo "webMinNative gate: $MINNATIVE"
+          echo "webMinNative gate: $MINNATIVE (base: ${LAST_SHA:-none})"
 
       # ── 9. Publish version to Firestore (appVersions/latest) ──────
       # App isi doc ko poll karta hai — versionCode bara ho to update prompt,
@@ -285,6 +298,10 @@ jobs:
           TOKEN=$(gcloud auth print-access-token)
           DOC_URL="https://firestore.googleapis.com/v1/projects/${FPID}/databases/(default)/documents/appVersions/latest"
           RELEASE_NOTES=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }} --jq '.commit.message' | head -1 | cut -c1-500)
+          # [mandatory] commit message me ho to popup dismiss NAHI hota —
+          # bade native fixes wali release ke liye
+          if echo "$RELEASE_NOTES" | grep -qi '\[mandatory\]'; then MANDATORY=true; else MANDATORY=false; fi
+          echo "mandatory: $MANDATORY"
           curl -sS -X PATCH "$DOC_URL" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Content-Type: application/json" \
@@ -294,7 +311,7 @@ jobs:
                 \"versionName\": {\"stringValue\": \"${{ steps.ver.outputs.versionName }}\"},
                 \"apkUrl\":      {\"stringValue\": \"${APK_URL}\"},
                 \"releaseNotes\": {\"stringValue\": $(printf '%s' "$RELEASE_NOTES" | jq -Rs .)},
-                \"mandatory\":   {\"booleanValue\": false},
+                \"mandatory\":   {\"booleanValue\": ${MANDATORY}},
                 \"webCode\":      {\"integerValue\": \"${{ steps.ver.outputs.versionCode }}\"},
                 \"webUrl\":       {\"stringValue\": \"${WEB_URL}\"},
                 \"webSha256\":    {\"stringValue\": \"${WEB_SHA}\"},
@@ -302,6 +319,6 @@ jobs:
                 \"publishedAt\": {\"timestampValue\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}
               }
             }" | jq -e '.fields.versionCode.integerValue' >/dev/null \
-            && echo "Firestore updated: v${{ steps.ver.outputs.versionName }} (code ${{ steps.ver.outputs.versionCode }})"
+            && echo "Firestore updated: v${{ steps.ver.outputs.versionName }} (code ${{ steps.ver.outputs.versionCode }}, mandatory=$MANDATORY)"
         env:
           GH_TOKEN: ${{ github.token }}

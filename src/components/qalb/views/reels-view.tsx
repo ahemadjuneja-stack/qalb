@@ -71,6 +71,13 @@ function fmtCount(n: number): string {
   return n > 0 ? String(n) : ''
 }
 
+// v0.3.4: title se hashtags hatao (#shorts #islamic …) — saaf text dikhe.
+// Sab kuch tag hai to purana title hi lautao (khaali na dikhe).
+function cleanTitle(t: string): string {
+  const noTags = t.replace(/#[^\s#]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return noTags || t
+}
+
 // ── FULL-SCREEN COVER FIT (v0.3.1) ─────────────────────────────
 // YT player video ko iframe ke andar "contain" karta hai (bars).
 // Jugad: iframe ko hi video ke aspect me screen se bada stretch karo +
@@ -316,7 +323,7 @@ const ReelCard = memo(function ReelCard({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
       <div className="pointer-events-none absolute bottom-[3.4rem] left-4 right-[4.6rem]">
         <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
-          {item.title}
+          {cleanTitle(item.title)}
         </p>
         <p className="mt-0.5 text-xs text-white/70">{item.views}</p>
       </div>
