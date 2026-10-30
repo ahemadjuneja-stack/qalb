@@ -52,6 +52,7 @@ import {
 } from '@/plugins/qalb-native'
 import { usePlayerStore } from '@/lib/player-store'
 import { usePlaylistPicker } from '@/lib/user-playlists'
+import { useBackStack } from '@/lib/back-stack'
 import { otaBoot, useOtaStore } from '@/lib/ota'
 import { APP_BUILD } from '@/lib/app-build'
 
@@ -210,6 +211,14 @@ function QalbShellInner({
         const auth = useQalbAuth.getState()
         if (auth.loginOpen) {
           auth.closeLogin()
+          void nativeBackHandled()
+          return
+        }
+        // 3.5. View-level drill-ins (v0.3.1): active tab ke andar ke
+        //      sub-screens — home search/Kalaamkar results, calendar ke
+        //      sub-tabs (tasbih/other), profile name-editing. Har view
+        //      apna handler khud register karta hai (back-stack.ts).
+        if (useBackStack.getState().handleBack(tabRef.current)) {
           void nativeBackHandled()
           return
         }

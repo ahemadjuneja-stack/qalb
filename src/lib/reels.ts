@@ -81,6 +81,11 @@ const SEEN_CAP = 500
 const STATS_KEY = 'qalb_reel_watch_v1'
 const QROT_KEY = 'qalb_reel_qrot_v1'
 const DL_KEY = 'qalb_reel_downloads_v1'
+// v0.3.1: pichle session ke top reels — naye session me sabse NEECHE bhejte
+// hain (user rule: app kholte hi pehli reel hamesha nayi ho)
+const LAST_TOP_KEY = 'qalb_reel_lasttop_v1'
+// module-load = naya session (app kill → WebView naya process)
+let sessionFeedBuilt = false
 
 // ── Firestore REST (public-read pattern — remote-data.ts jaisa) ──
 
@@ -417,9 +422,42 @@ export interface ReelsFeed {
  *  2. cache pool khatam (sab dekh li) → fresh network pool
  *  3. network fail → purana cache (repeat allowed, khali se behtar)
  */
+/**
+ * v0.3.1 — Naye session ki pehli feed me pichle session ke top reels ko
+ * sabse neeche bhejo (har app-open par pehli reel NAYI lage).
+ */
+function demoteLastTop(items: ReelItem[]): ReelItem[] {
+  try {
+    if (sessionFeedBuilt) return items // isi session me feed ban chuki — koi demote nahi
+    sessionFeedBuilt = true
+    const raw = localStorage.getItem(LAST_TOP_KEY)
+    const lastTop: string[] = raw ? (JSON.parse(raw) as string[]) : []
+    if (!Array.isArray(lastTop) || !lastTop.length) return items
+    const top = new Set(lastTop.filter((x) => typeof x === 'string'))
+    if (!top.size) return items
+    const front = items.filter((i) => !top.has(i.videoId))
+    const back = items.filter((i) => top.has(i.videoId))
+    return [...front, ...back]
+  } catch {
+    return items
+  }
+}
+
+function saveLastTop(items: ReelItem[]) {
+  try {
+    localStorage.setItem(
+      LAST_TOP_KEY,
+      JSON.stringify(items.slice(0, 3).map((i) => i.videoId))
+    )
+  } catch {
+    /* private mode */
+  }
+}
+
 export async function getReels(): Promise<ReelsFeed> {
   const seen = getSeenReels()
   const cached = readCache()
+  let pool: ReelItem[] | null = null
 
   if (cached) {
     // v0.2.7: cached pool me corrupt/undefined entries ho to bhi safe
@@ -427,26 +465,39 @@ export async function getReels(): Promise<ReelsFeed> {
       (i): i is ReelItem => Boolean(i && typeof i === 'object' && i.videoId)
     )
     const usable = dedupeById(clean.filter((i) => !seen.has(i.videoId)))
-    if (usable.length >= 8) return { items: applyInterestOrder(usable) }
+    if (usable.length >= 8) pool = usable
     // pool khatam — niche fresh network load hoga
   }
 
-  try {
-    const fresh = await fetchPool(seen)
-    if (fresh.length > 0) {
-      writeCache(fresh)
-      return { items: applyInterestOrder(fresh) }
+  if (!pool) {
+    try {
+      const fresh = await fetchPool(seen)
+      if (fresh.length > 0) {
+        writeCache(fresh)
+        pool = fresh
+      }
+    } catch {
+      /* network fail → niche cache fallback */
     }
-  } catch {
-    /* network fail → cache fallback */
   }
 
-  // network fail → cached pool repeat (khali feed se behtar)
-  if (cached?.length) {
-    clearSeen()
-    return { items: applyInterestOrder(dedupeById(cached)) }
+  if (!pool && cached?.length) {
+    // v0.3.1 FIX (repeat-reel bug): network fail par seen WIPE NAHI karte —
+    // pehle wahi reels dobara dikhna shuru ho jati thi. Jitne unseen bache
+    // hain wahi dikhao; sach me sab dekh liye to hi repeat (order shuffled).
+    const unseen = dedupeById(cached.filter((i) => !seen.has(i.videoId)))
+    if (unseen.length >= 8) {
+      pool = unseen
+    } else {
+      clearSeen()
+      pool = dedupeById(cached)
+    }
   }
-  return { items: [] }
+
+  if (!pool || !pool.length) return { items: [] }
+  const items = demoteLastTop(applyInterestOrder(pool))
+  saveLastTop(items)
+  return { items }
 }
 
 /**

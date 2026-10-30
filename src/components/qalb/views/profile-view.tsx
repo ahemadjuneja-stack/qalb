@@ -26,6 +26,7 @@ import { QALB } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import { useQalbAuth } from '@/lib/auth'
 import { getTasteProfile, useTasteStore } from '@/lib/recommend'
+import { useViewBackHandler } from '@/lib/back-stack'
 import type { SavedDownload } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
@@ -42,6 +43,13 @@ export function ProfileView() {
   const logout = useQalbAuth((s) => s.logout)
   const tasteV = useTasteStore((s) => s.v)
   const { toast } = useToast()
+
+  // Back gesture (v0.3.1): naam editing khuli ho to pehle wo band
+  useViewBackHandler('profile-edit', 'profile', () => {
+    if (!editing) return false
+    setEditing(false)
+    return true
+  })
 
   const { checking, update, hasUpdate, checkForUpdate, installUpdate } = useAppUpdate()
 

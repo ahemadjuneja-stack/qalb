@@ -58,6 +58,7 @@ import {
   type UserPlaylist,
 } from '@/lib/user-playlists'
 import type { QalbPlaylist, QalbTrack, SearchValidationResult } from '@/lib/types'
+import { useViewBackHandler } from '@/lib/back-stack'
 
 type Phase = 'idle' | 'validating' | 'blocked' | 'searching' | 'results'
 
@@ -106,6 +107,17 @@ export function HomeView() {
   const openLogin = useQalbAuth((s) => s.openLogin)
   const uid = user?.uid ?? null
   const tasteV = useTasteStore((s) => s.v) // play hone par feed refresh
+
+  // Back gesture (v0.3.1): search results / Kalaamkar station / guardian
+  // screen khuli ho to wapas home feed par — "har screen par back chale"
+  useViewBackHandler('home-search', 'home', () => {
+    if (phase === 'idle') return false
+    searchIdRef.current++ // chalu search generation cancel
+    setPhase('idle')
+    setResults([])
+    setGuardian(null)
+    return true
+  })
 
   const playQueue = usePlayerStore((s) => s.playQueue)
   const openFull = usePlayerStore((s) => s.openFull)

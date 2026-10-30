@@ -16,7 +16,7 @@
 //  • Like ❤️: global Firestore count + per-device state.
 //  • Naat conflict: reel play → naat pause; naat play → reel pause.
 
-import { memo, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Download, Heart, Loader2, RefreshCw, SearchX } from 'lucide-react'
 import {
   clearReelsCache,
@@ -50,16 +50,14 @@ function fmtCount(n: number): string {
   return n > 0 ? String(n) : ''
 }
 
-// ── FULL-SCREEN COVER FIT ────────────────────────────────────────
-// YT player video ko iframe ke andar "contain" karta hai (black bars).
-// Jugad: iframe ko hi video ke exact 9:16 aspect me screen se bada
-// stretch karo + center — bars container ke bahar crop ho jate hain.
-// Purane WebView (dvh/max unsupported) me style drop hota hai →
-// h-full w-full class fallback (pehle jaisa contain) — kabhi toota nahi.
-const REEL_COVER_STYLE: CSSProperties = {
-  width: 'max(103%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom)) * 9 / 16))',
-  height: 'max(103%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom)) * 16 / 9))',
-}
+// ── FULL-SCREEN COVER FIT (v0.3.1) ─────────────────────────────
+// YT player video ko iframe ke andar "contain" karta hai (bars).
+// Jugad: iframe ko hi video ke aspect me screen se bada stretch karo +
+// center — bars crop. v0.3.1 se style globals.css me hai (.qalb-reel-cover-*):
+//   • vh fallback → dvh (har WebView me kam-se-kam full-card cover)
+//   • thumbnail ke natural aspect se portrait/land class chunti hain —
+//     landscape bayan videos bhi ab poora bhar ke dikhte hain
+//   • root ab full-bleed inset-0 hai — side white border kabhi nahi
 
 // ── download state (per reel) ────────────────────────────────────
 
@@ -91,6 +89,14 @@ const ReelCard = memo(function ReelCard({
   onWatched,
 }: ReelCardProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  // thumbnail ke natural aspect se cover class (port = 9:16, land = 16:9)
+  const [aspect, setAspect] = useState<'port' | 'land'>('port')
+  const onThumbLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const im = e.currentTarget
+    if (im.naturalWidth > 0 && im.naturalHeight > 0) {
+      setAspect(im.naturalWidth / im.naturalHeight > 1.05 ? 'land' : 'port')
+    }
+  }, [])
   // tap-toggle state (assume chal raha hai jab active — YT se state read karna
   // cross-origin round-trip maangta hai, assumption-based toggle kaafi hai)
   const pausedRef = useRef(false)
@@ -176,14 +182,16 @@ const ReelCard = memo(function ReelCard({
         alt=""
         aria-hidden
         loading="lazy"
+        onLoad={onThumbLoad}
         className="absolute inset-0 h-full w-full scale-125 object-cover opacity-40 blur-2xl"
       />
 
       {mounted ? (
         <iframe
           ref={iframeRef}
-          className="absolute left-1/2 top-1/2 h-full w-full max-w-none -translate-x-1/2 -translate-y-1/2"
-          style={REEL_COVER_STYLE}
+          className={`qalb-reel-cover absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 ${
+            aspect === 'land' ? 'qalb-reel-cover-land' : 'qalb-reel-cover-port'
+          }`}
           src={`https://www.youtube.com/embed/${item.videoId}?playsinline=1&enablejsapi=1&controls=0&rel=0&modestbranding=1&iv_load_policy=3&fs=0`}
           title={item.title}
           allow="autoplay; encrypted-media; picture-in-picture"
@@ -339,6 +347,17 @@ export function ReelsView({ visible }: { visible: boolean }) {
     if (st.isPlaying) st.pause()
   }, [visible, activeIdx])
 
+  // v0.3.1: reels khule to page ka background bhi kaala — kisi bhi
+  // gap/overscroll/gesture-area me white kabhi na jhalke
+  useEffect(() => {
+    if (!visible) return
+    const prev = document.body.style.backgroundColor
+    document.body.style.backgroundColor = '#000'
+    return () => {
+      document.body.style.backgroundColor = prev
+    }
+  }, [visible])
+
   // dwell-watch → algorithm stats (reels.ts recordReelWatch)
   const onWatched = useCallback((item: ReelItem) => {
     recordReelWatch(item.videoId, item.category)
@@ -456,7 +475,7 @@ export function ReelsView({ visible }: { visible: boolean }) {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-[45] mx-auto max-w-md bg-black md:max-w-lg"
+      className="fixed inset-0 z-[45] bg-black"
       style={{
         bottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
         paddingTop: 'env(safe-area-inset-top)',

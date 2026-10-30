@@ -555,3 +555,34 @@
     animation: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Qalb Reels — full-screen cover fit (v0.3.1)
+   YT iframe ko video ke aspect me stretch karke center — YouTube ke
+   letterbox bars card ke bahar crop. Layered fallbacks:
+     1. base 100% (sab WebView me kam-se-kam poori card dhak jaye)
+     2. vh-based max() (dvh na ho to bhi cover)
+     3. dvh + safe-area exact cover (naye WebView)
+   Portrait (9:16 shorts) aur landscape (16:9 bayan) dono ke liye alag
+   class — ReelCard thumbnail ke natural aspect se class chunta hai.
+   ═══════════════════════════════════════════════════════════════════ */
+.qalb-reel-cover {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+
+.qalb-reel-cover-port {
+  width: max(106%, calc((100vh - 3.5rem) * 9 / 16));
+  height: max(106%, calc((100vh - 3.5rem) * 16 / 9));
+  width: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 9 / 16));
+  height: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 16 / 9));
+}
+
+.qalb-reel-cover-land {
+  width: max(106%, calc((100vh - 3.5rem) * 16 / 9));
+  height: max(106%, calc((100vh - 3.5rem) * 9 / 16));
+  width: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 16 / 9));
+  height: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 9 / 16));
+}

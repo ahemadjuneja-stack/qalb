@@ -30,6 +30,7 @@ import { PRAYER_CITIES } from '@/lib/qalb'
 import { getGujchandHijri, type GujchandHijri } from '@/lib/gujchand'
 import type { AladhanTimings, HijriDate, PrayerData } from '@/lib/types'
 import { TasbihCounter } from './tasbih-counter'
+import { useViewBackHandler } from '@/lib/back-stack'
 
 const HIJRI_ADJUST_KEY = 'qalb_hijri_adjust_v1'
 // LOCATION: FIXED JUNAGADH — app hamesha Junagadh (Gujarat) ke auqaat dikhayegi
@@ -259,6 +260,13 @@ export function CalendarView() {
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(() => new Date())
   const [tab, setTab] = useState<CalTab>('fard')
+
+  // Back gesture (v0.3.1): tasbih/other sub-tab se wapas fard par
+  useViewBackHandler('cal-tab', 'calendar', () => {
+    if (tab === 'fard') return false
+    setTab('fard')
+    return true
+  })
   // GUJARAT CHAND COMMITTEE hijri — auto (gujchand.com)
   const [gujchand, setGujchand] = useState<GujchandHijri | null>(null)
   // fallback: Sunni Hanafi local ruyat adjust — Hindustan me chand aksar 1 din baad

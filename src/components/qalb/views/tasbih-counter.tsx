@@ -2,12 +2,12 @@
 
 // Qalb — Digital Tasbih Counter (Calendar tab ke andar "Tasbih" tab)
 // - Dhikr chips: SubhanAllah / Alhamdulillah / Allahu Akbar / Kalima / Astaghfirullah
-// - Target: 33 / 99 / 100 / Free — target complete par double vibration + round++
-// - Haptics: navigator.vibrate (Android WebView VIBRATE permission ke saath)
+// - Target: 33 / 99 / 100 / Free — target complete par round++
+// - v0.3.1: vibration hata di (user request) — ab sirf visual pulse
 // - Count/round/dhikr/target localStorage me save — app band karke bhi yaad rahe
 
 import { useEffect, useRef, useState } from 'react'
-import { RotateCcw, Infinity as InfinityIcon, Vibrate } from 'lucide-react'
+import { RotateCcw, Infinity as InfinityIcon } from 'lucide-react'
 
 const TASBIH_KEY = 'qalb_tasbih_v1'
 
@@ -20,14 +20,6 @@ const DHIKRS = [
 ] as const
 
 const TARGETS = [33, 99, 100] as const
-
-function buzz(pattern: number | number[]) {
-  try {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(pattern)
-  } catch {
-    /* vibration unavailable — silently skip */
-  }
-}
 
 interface TasbihState {
   dhikrIdx: number
@@ -82,11 +74,9 @@ export function TasbihCounter() {
     setTimeout(() => setPulse(false), 140)
     setSt((s) => {
       if (target !== null && s.count + 1 >= target) {
-        // round complete — double buzz + auto reset, round count++
-        buzz([50, 70, 50])
+        // round complete — auto reset, round count++
         return { ...s, count: 0, rounds: s.rounds + 1 }
       }
-      buzz(14)
       return { ...s, count: s.count + 1 }
     })
   }
@@ -190,7 +180,6 @@ export function TasbihCounter() {
         <button
           type="button"
           onClick={() => {
-            buzz(20)
             setSt((s) => ({ ...s, count: 0 }))
           }}
           className="ml-1 flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] font-bold text-rose-400 ring-1 ring-rose-500/25 transition hover:bg-rose-500/20"
@@ -201,7 +190,7 @@ export function TasbihCounter() {
       </div>
 
       <p className="flex items-center justify-center gap-1.5 text-center text-[10px] text-emerald-200/30">
-        <Vibrate className="h-3 w-3" /> Tap par halki vibration, round mukammal par double buzz
+        Har tap par count save hota hai — app band karke bhi yaad rahega
       </p>
     </div>
   )

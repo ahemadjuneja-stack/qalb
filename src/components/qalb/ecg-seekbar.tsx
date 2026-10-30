@@ -259,9 +259,6 @@ export function EcgSeekbar({
             height: compact ? 8 : 13,
             background: '#a7f3d0',
             border: '2.5px solid rgba(16, 185, 129, 0.9)',
-            boxShadow: compact
-              ? '0 0 6px 1px rgba(16,185,129,0.55)'
-              : '0 0 10px 2px rgba(16,185,129,0.75)',
           }}
         />
       </span>
