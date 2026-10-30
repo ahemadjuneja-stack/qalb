@@ -140,31 +140,34 @@ jobs:
             SRC="auto-discover"
             TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
             if [ -n "$TOKEN" ]; then
+              # NOTE: har network/jq call failure-proof — ek kharab response
+              # poora build nahi girayega (run 55 me jq parse error se fail
+              # hua tha). Bad response → key khaali → warning, build chalega.
               # Path 1: Firebase web app → webConfig (official route)
-              WA=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
-                "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps")
-              echo "webApps: $(echo "$WA" | jq -c '{apps: ((.apps // []) | length), err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
-              APPID=$(echo "$WA" | jq -r '.apps[0].appId // empty')
+              WA=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+                "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" 2>/dev/null || true)
+              echo "webApps head: $(printf '%s' "$WA" | head -c 150)"
+              APPID=$(printf '%s' "$WA" | jq -r '.apps[0].appId // empty' 2>/dev/null || true)
               if [ -n "$APPID" ]; then
-                WC=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
-                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig")
-                echo "webConfig: $(echo "$WC" | jq -c '{hasKey: (.apiKey != null), err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
-                KEY=$(echo "$WC" | jq -r '.apiKey // empty')
+                WC=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" 2>/dev/null || true)
+                echo "webConfig head: $(printf '%s' "$WC" | sed 's/AIzaSy[A-Za-z0-9_-]*/[MASKED]/g' | head -c 150)"
+                KEY=$(printf '%s' "$WC" | jq -r '.apiKey // empty' 2>/dev/null || true)
                 [ -n "$KEY" ] && SRC="webConfig(${APPID})"
               fi
               # Path 2 fallback: GCP API Keys manager — Firebase project me
               # "Web key (auto created by Google Firebase service)" hota hi hai.
               # keyString LOG NAHI karte (GitHub khud mask karta hai, phir bhi).
               if [ -z "$KEY" ]; then
-                AK=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
-                  "https://apikeys.googleapis.com/v1/projects/${FPID}/locations/global/keys?pageSize=100")
-                echo "apikeys: $(echo "$AK" | jq -c '{keys: ((.keys // []) | length), names: [(.keys // [])[] | .displayName], err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
-                KEY=$(echo "$AK" | jq -r '[(.keys // [])[] | select((.displayName // "") | test("Web key"; "i"))][0].keyString // empty')
+                AK=$(curl -sS -m 20 --retry 2 -H "Authorization: Bearer $TOKEN" \
+                  "https://apikeys.googleapis.com/v1/projects/${FPID}/locations/global/keys?pageSize=100" 2>/dev/null || true)
+                echo "apikeys: $(printf '%s' "$AK" | jq -c '{keys: ((.keys // []) | length), names: [(.keys // [])[] | .displayName], err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
+                KEY=$(printf '%s' "$AK" | jq -r '[(.keys // [])[] | select((.displayName // "") | test("Web key"; "i"))][0].keyString // empty' 2>/dev/null || true)
                 if [ -n "$KEY" ]; then
                   SRC="apikeys-web-key"
                 else
                   # koi "Web key" naam wali nahi — pehli UNRESTRICTED key (web pattern)
-                  KEY=$(echo "$AK" | jq -r '[(.keys // [])[] | select((.restrictions.androidKeyRestrictions.androidApplications // []) == [] and ((.restrictions.iosKeyRestrictions.iosApplications // []) == []))][0].keyString // empty')
+                  KEY=$(printf '%s' "$AK" | jq -r '[(.keys // [])[] | select((.restrictions.androidKeyRestrictions.androidApplications // []) == [] and ((.restrictions.iosKeyRestrictions.iosApplications // []) == []))][0].keyString // empty' 2>/dev/null || true)
                   [ -n "$KEY" ] && SRC="apikeys-unrestricted"
                 fi
               fi
