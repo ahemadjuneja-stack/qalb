@@ -136,6 +136,14 @@ jobs:
         run: |
           KEY="${{ vars.FIREBASE_WEB_API_KEY }}"
           SRC="github-variable"
+          # Path 0: committed config file (.firebase/web-apikey.txt) — tab
+          # use hota hai jab GitHub variable set na ho. Web API key PUBLIC
+          # identifier hai (har Firebase web app ke bundle me hoti hai) —
+          # repo me rakhna standard hai. File ke pehle line par sirf key.
+          if [ -z "$KEY" ] && [ -f .firebase/web-apikey.txt ]; then
+            KEY=$(head -1 .firebase/web-apikey.txt | tr -d '[:space:]')
+            [ -n "$KEY" ] && SRC="committed-file"
+          fi
           if [ -z "$KEY" ]; then
             SRC="auto-discover"
             TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
