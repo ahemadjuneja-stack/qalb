@@ -218,6 +218,7 @@ jobs:
                   echo "zero API keys — 'Web key' khud create kar rahe hain..."
                   CR=$(gcloud services api-keys create --project="$FPID" \
                     --display-name="Web key (auto created by Google Firebase service)" \
+                    --api-target=identitytoolkit.googleapis.com \
                     --format=json 2>&1 || true)
                   echo "key create: $(printf '%s' "$CR" | sed 's/AIzaSy[A-Za-z0-9_-]*/[KEY-MASKED]/g' | head -c 220)"
                   KL=$(gcloud services api-keys list --project="$FPID" --format=json 2>/dev/null || true)
