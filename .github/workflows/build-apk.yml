@@ -140,15 +140,36 @@ jobs:
             SRC="auto-discover"
             TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
             if [ -n "$TOKEN" ]; then
-              APPID=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
-                "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps" \
-                | jq -r '.apps[0].appId // empty')
+              # Path 1: Firebase web app → webConfig (official route)
+              WA=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                "https://firebase.googleapis.com/v1beta1/projects/${FPID}/webApps")
+              echo "webApps: $(echo "$WA" | jq -c '{apps: ((.apps // []) | length), err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
+              APPID=$(echo "$WA" | jq -r '.apps[0].appId // empty')
               if [ -n "$APPID" ]; then
-                KEY=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
-                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig" \
-                  | jq -r '.apiKey // empty')
-                SRC="auto-discover(${APPID})"
+                WC=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                  "https://firebase.googleapis.com/v1alpha/projects/-/apps/${APPID}/webConfig")
+                echo "webConfig: $(echo "$WC" | jq -c '{hasKey: (.apiKey != null), err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
+                KEY=$(echo "$WC" | jq -r '.apiKey // empty')
+                [ -n "$KEY" ] && SRC="webConfig(${APPID})"
               fi
+              # Path 2 fallback: GCP API Keys manager — Firebase project me
+              # "Web key (auto created by Google Firebase service)" hota hi hai.
+              # keyString LOG NAHI karte (GitHub khud mask karta hai, phir bhi).
+              if [ -z "$KEY" ]; then
+                AK=$(curl -sS -m 20 -H "Authorization: Bearer $TOKEN" \
+                  "https://apikeys.googleapis.com/v1/projects/${FPID}/locations/global/keys?pageSize=100")
+                echo "apikeys: $(echo "$AK" | jq -c '{keys: ((.keys // []) | length), names: [(.keys // [])[] | .displayName], err: (.error.message // null)}' 2>/dev/null || echo 'parse-fail')"
+                KEY=$(echo "$AK" | jq -r '[(.keys // [])[] | select((.displayName // "") | test("Web key"; "i"))][0].keyString // empty')
+                if [ -n "$KEY" ]; then
+                  SRC="apikeys-web-key"
+                else
+                  # koi "Web key" naam wali nahi — pehli UNRESTRICTED key (web pattern)
+                  KEY=$(echo "$AK" | jq -r '[(.keys // [])[] | select((.restrictions.androidKeyRestrictions.androidApplications // []) == [] and ((.restrictions.iosKeyRestrictions.iosApplications // []) == []))][0].keyString // empty')
+                  [ -n "$KEY" ] && SRC="apikeys-unrestricted"
+                fi
+              fi
+            else
+              echo "gcloud token nahi mila — service account auth fail?"
             fi
           fi
           echo "apiKey=$KEY" >> "$GITHUB_OUTPUT"
