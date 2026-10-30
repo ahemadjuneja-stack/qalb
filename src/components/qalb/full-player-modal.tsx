@@ -22,7 +22,7 @@ import {
   Check,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Slider } from '@/components/ui/slider'
+import { EcgSeekbar } from '@/components/qalb/ecg-seekbar'
 import { usePlayerStore, useCurrentTrack } from '@/lib/player-store'
 import { downloadTrack, isDownloaded } from '@/lib/downloads'
 import { useToast } from '@/hooks/use-toast'
@@ -202,17 +202,14 @@ export function FullPlayerModal() {
             </div>
           )}
 
-          {/* seek — chalte waqt line + thumb qalb ki tarah dhadakte hain */}
+          {/* seek — ECG heartbeat line: dhadakta hua waveform, drag/tap se seek */}
           <div className="px-6 pt-6">
-            <Slider
-              value={[Math.min(position, duration || 1)]}
-              max={duration > 0 ? duration : 100}
-              step={1}
-              onValueChange={(v) => seek(v[0] ?? 0)}
-              aria-label="Seek"
-              className={`[&_[data-slot=slider-range]]:bg-emerald-400 [&_[data-slot=slider-thumb]]:border-emerald-400 [&_[data-slot=slider-track]]:bg-emerald-400/15 ${
-                isPlaying && !isBuffering ? 'qalb-heartbeat-slider' : ''
-              }`}
+            <EcgSeekbar
+              position={Math.min(position, duration || 1)}
+              duration={duration > 0 ? duration : 0}
+              onSeek={(s) => seek(s)}
+              isPlaying={isPlaying && !isBuffering}
+              interactive
             />
             <div className="mt-1.5 flex justify-between text-[11px] tabular-nums text-emerald-200/50">
               <span className={isPlaying ? 'qalb-ph-text' : ''}>{fmt(position)}</span>

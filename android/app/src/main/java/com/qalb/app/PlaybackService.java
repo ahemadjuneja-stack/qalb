@@ -12,6 +12,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
@@ -86,12 +87,13 @@ public class PlaybackService extends Service {
     private static final int SAGE_TRACK = 0xFFD7E3D2;   // seek track (halka sage)
     private static final int ACCENT = SAGE_ACCENT;      // system chrome accent
 
-    // ── Seek line bitmap geometry ─────────────────────────────────────
-    // Bitmap fitXY se notification width par stretch hota hai — line uniform
-    // hai isliye stretch me koi distortion nahi. Height 48px ≈ 18dp @2.7x.
+    // ── Seek bitmap geometry (ECG heartbeat waveform) ──────────────
+    // Bitmap fitXY se notification width par stretch hota hai — ECG waveform
+    // uniform repeat hota hai isliye stretch me distortion nahi.
     private static final int SEEK_W = 600;
-    private static final int SEEK_H = 48;
-    private static final float SEEK_OFFSET_PX = 9f;     // bounce amplitude (~3.3dp)
+    private static final int SEEK_H = 64;
+    private static final float SEEK_OFFSET_PX = 8f;     // bounce amplitude (~3dp)
+    private static final int SEEK_PULSES = 5;           // itne heartbeats poori line me
 
     private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -495,11 +497,40 @@ public class PlaybackService extends Service {
         }
     }
 
-    // ── seek line bitmaps (heartbeat bounce frames) ──────────────────
+    // ── seek bitmaps (ECG heartbeat waveform frames) ─────────────────
 
     /**
-     * Ek seek-line frame render karo. yOffset = line ka vertical bounce
-     * (heartbeat: -amp / 0 / +amp). Track sage, fill emerald, round caps.
+     * ECG/EKG heartbeat waveform path — image reference jaisi:
+     * flat → P bump (chhota upar) → Q dip → R spike (lamba upar) →
+     * S dip (neeche) → recover → T wave → flat … repeat
+     */
+    private static Path buildEcgPath() {
+        Path p = new Path();
+        float baseY = SEEK_H / 2f;
+        float pw = SEEK_W / (float) SEEK_PULSES;
+        p.moveTo(0, baseY);
+        for (int i = 0; i < SEEK_PULSES; i++) {
+            float x0 = i * pw;
+            p.lineTo(x0 + 0.14f * pw, baseY);                       // flat
+            p.quadTo(x0 + 0.19f * pw, baseY - 10f,                  // P wave bump
+                    x0 + 0.24f * pw, baseY);
+            p.lineTo(x0 + 0.36f * pw, baseY);                       // flat
+            p.lineTo(x0 + 0.40f * pw, baseY + 8f);                  // Q dip
+            p.lineTo(x0 + 0.46f * pw, baseY - 30f);                 // R spike (lamba upar)
+            p.lineTo(x0 + 0.51f * pw, baseY + 16f);                 // S dip (neeche)
+            p.lineTo(x0 + 0.55f * pw, baseY);                       // recover
+            p.lineTo(x0 + 0.63f * pw, baseY);                       // flat
+            p.quadTo(x0 + 0.68f * pw, baseY - 12f,                  // T wave
+                    x0 + 0.73f * pw, baseY);
+            p.lineTo(x0 + pw, baseY);                               // pulse end
+        }
+        return p;
+    }
+
+    /**
+     * Ek ECG seek frame render karo. yOffset = waveform ka vertical bounce
+     * (heartbeat: -amp / 0 / +amp). Track sage, traveled hissa emerald glow
+     * ke sath — player ke ECG seekbar jaisa look.
      */
     private static Bitmap renderSeekFrame(float progress, float yOffset) {
         try {
@@ -508,24 +539,35 @@ public class PlaybackService extends Service {
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setStyle(Paint.Style.STROKE);
             p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
 
-            float cy = SEEK_H / 2f + yOffset;
-            float pad = SEEK_H * 0.24f;           // rounded caps ke liye side padding
-            float stroke = SEEK_H * 0.22f;        // line thickness (~10.5px ≈ 4dp)
-            float span = SEEK_W - pad * 2f;
-            float prog = Math.max(0f, Math.min(1f, progress));
-            float endX = pad + span * prog;
+            Path ecg = buildEcgPath();
+            c.save();
+            c.translate(0, yOffset);
 
-            // track (poori line — halka sage)
+            // track — poori ECG line halki sage me
             p.setColor(SAGE_TRACK);
-            p.setStrokeWidth(stroke);
-            c.drawLine(pad, cy, SEEK_W - pad, cy, p);
+            p.setStrokeWidth(SEEK_H * 0.09f);
+            c.drawPath(ecg, p);
 
-            // fill (sunne tak — emerald)
+            // progress — traveled hissa bright emerald + glow
+            float prog = Math.max(0f, Math.min(1f, progress));
             if (prog > 0f) {
+                float endX = SEEK_W * prog;
+                c.save();
+                c.clipRect(0f, -SEEK_H, endX, SEEK_H * 2f);
+                // glow pass (wide, semi-transparent)
                 p.setColor(SAGE_ACCENT);
-                c.drawLine(pad, cy, endX, cy, p);
+                p.setAlpha(80);
+                p.setStrokeWidth(SEEK_H * 0.24f);
+                c.drawPath(ecg, p);
+                // main line
+                p.setAlpha(255);
+                p.setStrokeWidth(SEEK_H * 0.10f);
+                c.drawPath(ecg, p);
+                c.restore();
             }
+            c.restore();
             return bmp;
         } catch (Exception e) {
             return null;

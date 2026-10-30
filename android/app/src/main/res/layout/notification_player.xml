@@ -70,11 +70,11 @@
             android:contentDescription="Band karein" />
     </LinearLayout>
 
-    <!-- Row 2: heartbeat seek line -->
+    <!-- Row 2: ECG heartbeat seek waveform -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="18dp"
-        android:layout_marginTop="6dp"
+        android:layout_height="22dp"
+        android:layout_marginTop="5dp"
         android:layout_marginStart="14dp"
         android:layout_marginEnd="14dp">
 
