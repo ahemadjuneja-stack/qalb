@@ -61,7 +61,7 @@ public class MainActivity extends BridgeActivity {
     // lifecycle se seedha JS ko window event bhejte hain — ReelsView isko
     // sunke active reel iframe pause/resume karta hai.
     @Override
-    protected void onPause() {
+    public void onPause() {
         super.onPause();
         try {
             if (bridge != null && bridge.getWebView() != null) {
@@ -74,7 +74,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         try {
             if (bridge != null && bridge.getWebView() != null) {
