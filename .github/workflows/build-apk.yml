@@ -279,8 +279,22 @@ jobs:
               | grep -o 'commit [0-9a-f]\{40\}' | awk '{print $2}' | head -1 || true)
           fi
           if [ -n "$LAST_SHA" ] && git cat-file -e "$LAST_SHA" 2>/dev/null; then
+            # v0.3.6 FIX: package.json/lock ka sirf "version" line change
+            # har release me hota hai — wo NATIVE change NAHI hai. Pehle
+            # ye bhi gate ON kar detа tha → pure-web releases ka OTA purane
+            # APKs par kabhi pahunchta hi nahi tha. Ab gate sirf tab ON:
+            # android/ + capacitor.config.json change, YA package files me
+            # version ke siwa koi ASLI change (naya plugin/deps).
             CHANGED=$(git diff --name-only "$LAST_SHA" "${{ github.sha }}" \
-              -- android/ capacitor.config.json package.json package-lock.json | head -1 || true)
+              -- android/ capacitor.config.json | head -1 || true)
+            for PKG in package.json package-lock.json; do
+              if git diff --name-only "$LAST_SHA" "${{ github.sha }}" -- "$PKG" | grep -q .; then
+                NONVER=$(git diff "$LAST_SHA" "${{ github.sha }}" -- "$PKG" \
+                  | grep -E '^[+-]' | grep -vE '^[+-]{3}' \
+                  | grep -vE '^[+-][[:space:]]*"version"[[:space:]]*:' | head -1 || true)
+                if [ -n "$NONVER" ]; then CHANGED="$PKG"; break; fi
+              fi
+            done
             [ -n "$CHANGED" ] && MINNATIVE="${{ steps.ver.outputs.versionCode }}"
             echo "gate check: $LAST_TAG ($LAST_SHA)..HEAD changed=[${CHANGED:-nothing}]"
           else
