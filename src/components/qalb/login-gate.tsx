@@ -1,11 +1,10 @@
 'use client'
 
-// Qalb — LOGIN GATE (v0.4.0) — "app download hote hi sab se pehle"
+// Qalb — LOGIN GATE (v0.4.1) — "app download hote hi sab se pehle"
 // ─────────────────────────────────────────────────────────────────
 // Full-screen pehli launch screen (pehli baar — na user, na guest-skip):
-//   • Background: 4 AI-generated 9:16 posters (naat/bayan/reels/calendar)
-//     crossfade slideshow + slow ken-burns zoom — user ko turant pata
-//     chalta hai app ke andar kis tarha ka content hai.
+//   • Background SIMPLE (user request): deep-emerald gradient + halki
+//     glow + faint moon watermark — koi images nahi, clean look.
 //   • Header me Qalb ka brand logo (app ke andar wala hi).
 //   • Login: Google (GIS one-tap) ya Mobile OTP (+91) — lib/auth.ts ke
 //     REST flows. Login hote hi gate gayab, app khul jaati hai.
@@ -17,7 +16,7 @@
 // nahi hota. Refresh token auto-renew lib/auth.ts ensureIdToken me.
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, Smartphone } from 'lucide-react'
+import { ArrowLeft, Loader2, Moon, Smartphone } from 'lucide-react'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
 import {
   authErrorMessage,
@@ -29,26 +28,12 @@ import {
   verifyPhoneOtp,
 } from '@/lib/auth'
 
-const POSTERS = [
-  { src: '/posters/naat.jpg', label: 'Naat • Kalaam', emoji: '🎤' },
-  { src: '/posters/bayan.jpg', label: 'Bayan • Waaz', emoji: '🕌' },
-  { src: '/posters/reels.jpg', label: 'Islamic Reels', emoji: '📱' },
-  { src: '/posters/calendar.jpg', label: 'Islami Calendar', emoji: '🌙' },
-]
-
 type Step = 'entry' | 'phone' | 'otp'
 
 export function LoginGate() {
   const user = useQalbAuth((s) => s.user)
   const guest = useQalbAuth((s) => s.guest)
   const continueAsGuest = useQalbAuth((s) => s.continueAsGuest)
-
-  // slideshow
-  const [slide, setSlide] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setSlide((s) => (s + 1) % POSTERS.length), 4_500)
-    return () => clearInterval(t)
-  }, [])
 
   // login steps
   const [step, setStep] = useState<Step>(hasPhoneSession() ? 'otp' : 'entry')
@@ -126,65 +111,44 @@ export function LoginGate() {
   }
 
   return (
-    // NOTE: 'dark' class force — gate poster wali hamesha-dark screen hai.
+    // NOTE: 'dark' class force — gate hamesha-dark screen hai.
     // Light theme user ke liye bhi emerald-* utilities dark values use
     // karein (theme ramp .dark scope pe flip hota hai).
     <div
-      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#06130D]"
+      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#07160F]"
       role="dialog"
       aria-modal="true"
       aria-label="Qalb — login"
     >
-      {/* ── poster slideshow (4 AI posters, crossfade + ken-burns) ── */}
-      {POSTERS.map((p, i) => (
-        <div
-          key={p.src}
-          className="absolute inset-0 transition-opacity duration-[1400ms] ease-in-out"
-          style={{ opacity: i === slide ? 1 : 0 }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={p.src}
-            alt=""
-            className={`h-full w-full object-cover ${i === slide ? 'qalb-gate-poster' : ''}`}
-            draggable={false}
-          />
-        </div>
-      ))}
-
-      {/* legibility gradients — upar logo, niche buttons */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/75 via-black/35 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t from-[#04100A]/97 via-[#04100A]/80 to-transparent" />
+      {/* SIMPLE background: do halki emerald glows (upar logo, niche card) */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(70% 38% at 50% 6%, rgba(16,185,129,0.10), transparent 62%), radial-gradient(85% 42% at 50% 108%, rgba(16,185,129,0.09), transparent 58%)',
+        }}
+      />
+      {/* faint moon watermark — center me, bilkul subtle */}
+      <Moon
+        className="pointer-events-none absolute left-1/2 top-[36%] h-64 w-64 -translate-x-1/2 -translate-y-1/2 text-emerald-200/[0.05]"
+        strokeWidth={0.7}
+        aria-hidden
+      />
 
       {/* content */}
       <div className="relative z-[1] flex h-full flex-col">
         {/* header — Qalb brand logo (app ke andar wala hi) */}
-        <div className="flex flex-col items-center pt-[calc(env(safe-area-inset-top)+3.2rem)]">
-          <QalbLogo className="h-16 w-auto drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]" />
+        <div className="flex flex-col items-center pt-[calc(env(safe-area-inset-top)+4.6rem)]">
+          <QalbLogo className="h-16 w-auto" />
         </div>
 
-        {/* beech me poster caption chip — abhi kaunsa content dikh raha */}
-        <div className="mt-auto flex justify-center pb-3">
-          <div className="flex items-center gap-2 rounded-full bg-black/45 px-4 py-1.5 backdrop-blur-md">
-            <span className="text-[13px]">{POSTERS[slide].emoji}</span>
-            <span className="text-[12px] font-bold tracking-wide text-white/90">
-              {POSTERS[slide].label}
-            </span>
-          </div>
-        </div>
-        <div className="mb-5 flex justify-center gap-1.5">
-          {POSTERS.map((p, i) => (
-            <span
-              key={p.src}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === slide ? 'w-5 bg-emerald-400' : 'w-1.5 bg-white/35'
-              }`}
-            />
-          ))}
-        </div>
+        {/* content hint — simple text line (user ko pata chale app me kya hai) */}
+        <p className="mt-auto mb-4 text-center text-[10.5px] font-bold tracking-[0.22em] text-emerald-200/45">
+          NAAT • BAYAN • REELS • CALENDAR
+        </p>
 
         {/* bottom card — headline + login steps */}
-        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-emerald-400/15 bg-[#0B1F17]/85 px-5 pb-6 pt-5 backdrop-blur-xl">
+        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-emerald-400/15 bg-[#0B1F17]/90 px-5 pb-6 pt-5">
           {step === 'entry' && (
             <>
               <h1 className="text-center text-[22px] font-extrabold leading-tight text-emerald-50">
