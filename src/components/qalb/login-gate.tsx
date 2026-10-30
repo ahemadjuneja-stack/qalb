@@ -126,7 +126,15 @@ export function LoginGate() {
   }
 
   return (
-    <div className="fixed inset-0 z-[90] overflow-hidden bg-[#06130D]" role="dialog" aria-modal="true" aria-label="Qalb — login">
+    // NOTE: 'dark' class force — gate poster wali hamesha-dark screen hai.
+    // Light theme user ke liye bhi emerald-* utilities dark values use
+    // karein (theme ramp .dark scope pe flip hota hai).
+    <div
+      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#06130D]"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Qalb — login"
+    >
       {/* ── poster slideshow (4 AI posters, crossfade + ken-burns) ── */}
       {POSTERS.map((p, i) => (
         <div

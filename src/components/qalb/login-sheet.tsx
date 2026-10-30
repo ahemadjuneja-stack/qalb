@@ -122,7 +122,7 @@ export function LoginSheet() {
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60 backdrop-blur-sm"
+      className="dark fixed inset-0 z-[95] flex items-end justify-center bg-black/60 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Qalb me login karein"
