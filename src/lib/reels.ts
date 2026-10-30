@@ -244,6 +244,8 @@ function dedupeById(items: ReelItem[]): ReelItem[] {
   const seen = new Set<string>()
   const out: ReelItem[] = []
   for (const it of items) {
+    // v0.2.7: undefined/null/garbage entries kahin se bhi aa jayein — feed me ja hi nahi sakti
+    if (!it || typeof it !== 'object' || !it.videoId) continue
     if (seen.has(it.videoId)) continue
     seen.add(it.videoId)
     out.push(it)
@@ -304,9 +306,15 @@ export function applyInterestOrder(items: ReelItem[]): ReelItem[] {
       }
     }
     if (!best) break
-    out.push(groups.get(best)![picked[best]++])
+    // v0.2.7 FIX: picked[best] pehle initialize karo — `undefined++` = NaN
+    // hota hai aur NaN index se `undefined` feed me ghus ke crash karta tha
+    const idx = picked[best] ?? 0
+    const g = groups.get(best)!
+    if (!g[idx]) break // safety — kabhi undefined push na ho
+    out.push(g[idx])
+    picked[best] = idx + 1
   }
-  return out
+  return out.filter((r): r is ReelItem => Boolean(r && r.videoId))
 }
 
 /** Reel 2.5s+ dekhi gayi → seen mark + category interest badhao */
@@ -414,7 +422,11 @@ export async function getReels(): Promise<ReelsFeed> {
   const cached = readCache()
 
   if (cached) {
-    const usable = dedupeById(cached.filter((i) => !seen.has(i.videoId)))
+    // v0.2.7: cached pool me corrupt/undefined entries ho to bhi safe
+    const clean = cached.filter(
+      (i): i is ReelItem => Boolean(i && typeof i === 'object' && i.videoId)
+    )
+    const usable = dedupeById(clean.filter((i) => !seen.has(i.videoId)))
     if (usable.length >= 8) return { items: applyInterestOrder(usable) }
     // pool khatam — niche fresh network load hoga
   }
