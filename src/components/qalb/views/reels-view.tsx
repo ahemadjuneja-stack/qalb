@@ -11,13 +11,9 @@
 //    preconnect — swipe karte hi reel chalu, loading nahi.
 //  • INFINITE: end se 4 pehle background me fresh batch (rotating
 //    queries, duplicate-free).
-//  • v0.3.6 WHATSAPP STATUS: action rail me WhatsApp button — dabate hi
-//    whatsapp:// deep link se WhatsApp "Send to…" khulta hai (My status
-//    wahan option hai). 100% LEGAL: sirf OFFICIAL YouTube link jata hai
-//    (video file nahi — file share YouTube rules ke khilaf hota hai).
-//    Download button hata diya: YouTube ka bot-check ab har third-party
-//    downloader ko block karta hai (saare InnerTube clients + yt-dlp
-//    live-verified LOGIN_REQUIRED).
+//  • v0.3.7 ACTION RAIL SIRF LIKE: download button pehle hi hata (YouTube
+//    bot-check har third-party downloader ko block karta hai) — ab WhatsApp
+//    status share bhi hata diya (user request). Rail me bas ❤️ Like.
 //  • Like ❤️: global Firestore count + per-device state.
 //  • Naat conflict: reel play → naat pause; naat play → reel pause.
 //  • v0.3.2 APP MINIMIZE → reel sound BAND (naat player background me
@@ -80,15 +76,6 @@ function cleanTitle(t: string): string {
   return noTags || t
 }
 
-// WhatsApp logo (simple-icons ka path) — brand icons lucide me nahi hote
-function WhatsAppIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-    </svg>
-  )
-}
-
 // ── FULL-SCREEN COVER FIT (v0.3.1) ─────────────────────────────
 // YT player video ko iframe ke andar "contain" karta hai (bars).
 // Jugad: iframe ko hi video ke aspect me screen se bada stretch karo +
@@ -109,7 +96,6 @@ interface ReelCardProps {
   liked: boolean
   likeCount: number
   onLike: () => void
-  onShare: () => void // WhatsApp status share (legal link share) — v0.3.6
   onWatched: () => void // 2.5s dwell — algorithm + repeat-block mark
 }
 
@@ -122,7 +108,6 @@ const ReelCard = memo(function ReelCard({
   liked,
   likeCount,
   onLike,
-  onShare,
   onWatched,
 }: ReelCardProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
@@ -332,7 +317,8 @@ const ReelCard = memo(function ReelCard({
         <p className="mt-0.5 text-xs text-white/70">{item.views}</p>
       </div>
 
-      {/* action rail — Instagram style: ❤️ + WhatsApp status */}
+      {/* action rail — Instagram style: sirf ❤️ Like (v0.3.7: download
+          + WhatsApp share dono hata diye) */}
       <div className="absolute bottom-[3.4rem] right-3 z-[2] flex flex-col items-center gap-4">
         <button
           type="button"
@@ -346,21 +332,6 @@ const ReelCard = memo(function ReelCard({
             }`}
           />
           <span className="text-[11px] font-semibold text-white drop-shadow">{fmtCount(likeCount)}</span>
-        </button>
-
-        {/* v0.3.6: WhatsApp status — LEGAL link share. Tap → whatsapp://
-            deep link seedha WhatsApp "Send to…" kholtа hai (My status top
-            option). Video-file share NAHI — sirf official YouTube link. */}
-        <button
-          type="button"
-          aria-label="WhatsApp status par share karo"
-          onClick={onShare}
-          className="flex min-h-[2.75rem] min-w-[2.75rem] flex-col items-center justify-center gap-0.5 rounded-full bg-black/25 px-2 py-1.5 backdrop-blur-sm transition active:scale-90"
-        >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#25D366] shadow-[0_1px_3px_rgba(0,0,0,0.7)]">
-            <WhatsAppIcon className="h-[15px] w-[15px] text-white" />
-          </span>
-          <span className="text-[10px] font-semibold text-white drop-shadow">Status</span>
         </button>
       </div>
     </div>
@@ -378,7 +349,6 @@ export function ReelsView({ visible }: { visible: boolean }) {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [reloadTick, setReloadTick] = useState(0)
   const [hasMore, setHasMore] = useState(true)
-  const [toast, setToast] = useState<string | null>(null)
   // v0.3.2: app background (minimize) — reel sound band
   const [suspended, setSuspended] = useState(false)
   // v0.3.3: foreground wapas → resume re-run trigger
@@ -386,13 +356,6 @@ export function ReelsView({ visible }: { visible: boolean }) {
   const [showLoader, setShowLoader] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
-  const toastTimer = useRef<number>(0)
-
-  const showToast = useCallback((msg: string) => {
-    setToast(msg)
-    window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2400)
-  }, [])
 
   // pehli visible par load (tab open hote hi — cache-first = instant)
   useEffect(() => {
@@ -553,55 +516,6 @@ export function ReelsView({ visible }: { visible: boolean }) {
     [myLikes]
   )
 
-  // ── v0.3.6: WhatsApp STATUS share (download ka legal badal) ─────
-  // YouTube ab har third-party downloader ko bot-check se block karta
-  // hai (live-verified: saare InnerTube clients + yt-dlp = LOGIN_REQUIRED).
-  // Isliye download button gaya; uski jagah WhatsApp share — 100% legal:
-  // sirf OFFICIAL YouTube link jata hai (file nahi), wahi jo YouTube ka
-  // apna share button karta hai. Status par link se thumbnail preview
-  // khud ban jata hai.
-  const shareReel = useCallback(
-    async (item: ReelItem) => {
-      const url = `https://youtu.be/${item.videoId}`
-      const text = `${cleanTitle(item.title)} — Qalb par suniye:\n${url}`
-      // 1) Seedha WhatsApp: whatsapp:// deep link. Capacitor launchIntent
-      //    external scheme par ACTION_VIEW startActivity karta hai (app
-      //    na ho to ActivityNotFoundException chupchaap catch hota hai)
-      //    aur hamesha true lauta ke page navigation rok deta hai —
-      //    isliye background-check safe hai.
-      let wentBg = false
-      const onBg = () => {
-        wentBg = true
-      }
-      document.addEventListener('visibilitychange', onBg)
-      try {
-        window.location.href = `whatsapp://send?text=${encodeURIComponent(text)}`
-      } catch {
-        /* ignore — niche fallback chalega */
-      }
-      await new Promise((r) => setTimeout(r, 1400))
-      document.removeEventListener('visibilitychange', onBg)
-      if (wentBg || document.hidden) return // WhatsApp khul gaya
-      // 2) WhatsApp nahi mila → system share sheet (WhatsApp usme bhi hota hai)
-      try {
-        if (typeof navigator.share === 'function') {
-          await navigator.share({ title: 'Qalb — Islamic Naat & Reels', text, url })
-          return
-        }
-      } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') return
-      }
-      // 3) Last resort: link clipboard me — WhatsApp me paste kar do
-      try {
-        await navigator.clipboard.writeText(url)
-        showToast('Link copy ho gaya — WhatsApp status me paste karo')
-      } catch {
-        showToast('WhatsApp app nahi mili')
-      }
-    },
-    [showToast]
-  )
-
   const retry = useCallback(() => {
     clearReelsCache()
     setHasMore(true)
@@ -658,21 +572,12 @@ export function ReelsView({ visible }: { visible: boolean }) {
                 (myLikes.has(item.videoId) && !(counts[item.videoId] ?? 0) ? 1 : 0)
               }
               onLike={() => toggleLike(item.videoId)}
-              onShare={() => void shareReel(item)}
               onWatched={() => onWatched(item)}
             />
           ))}
         </div>
       )}
 
-      {/* toast — share / info messages */}
-      {toast && (
-        <div className="pointer-events-none absolute inset-x-6 bottom-6 z-[3] flex justify-center">
-          <span className="rounded-full bg-black/85 px-4 py-2 text-center text-xs font-medium text-white shadow-lg backdrop-blur-sm">
-            {toast}
-          </span>
-        </div>
-      )}
     </div>
   )
 }
