@@ -268,13 +268,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           MINNATIVE=""
-          LAST_SHA=$(gh release view --repo "${{ github.repository }}" --json body -q .body 2>/dev/null \
-            | grep -o 'commit [0-9a-f]\{40\}' | awk '{print $2}' | head -1 || true)
+          # NOTE: is run ka release (step 8) ABHI create hua hai — usko skip
+          # karo, warna LAST_SHA = current commit ho jayega (diff khaali →
+          # galat inherit). Pichli release chahiye.
+          CUR_TAG="v${{ steps.ver.outputs.versionName }}-${{ github.run_number }}"
+          LAST_TAG=$(gh release list --repo "${{ github.repository }}" --limit 10 --json tagName -q '.[].tagName' 2>/dev/null \
+            | grep -vx "$CUR_TAG" | head -1 || true)
+          if [ -n "$LAST_TAG" ]; then
+            LAST_SHA=$(gh release view "$LAST_TAG" --repo "${{ github.repository }}" --json body -q .body 2>/dev/null \
+              | grep -o 'commit [0-9a-f]\{40\}' | awk '{print $2}' | head -1 || true)
+          fi
           if [ -n "$LAST_SHA" ] && git cat-file -e "$LAST_SHA" 2>/dev/null; then
             CHANGED=$(git diff --name-only "$LAST_SHA" "${{ github.sha }}" \
               -- android/ capacitor.config.json package.json package-lock.json | head -1 || true)
             [ -n "$CHANGED" ] && MINNATIVE="${{ steps.ver.outputs.versionCode }}"
-            echo "gate check: $LAST_SHA..HEAD changed=[${CHANGED:-nothing}]"
+            echo "gate check: $LAST_TAG ($LAST_SHA)..HEAD changed=[${CHANGED:-nothing}]"
           else
             # pichli release ka commit nahi mila — SAFE default: APK hi update raasta
             MINNATIVE="${{ steps.ver.outputs.versionCode }}"
