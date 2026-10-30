@@ -598,11 +598,52 @@ export async function likeReelRemote(videoId: string, delta: 1 | -1): Promise<vo
 
 /**
  * Reel ka progressive mp4 (360p, video+audio ek file) stream URL.
- * InnerTube player endpoint — ANDROID client pehle (clean URLs),
- * IOS fallback. Fail hone par null (UI "abhi download nahi ho sakti").
+ * InnerTube player endpoint.
+ *
+ * v0.3.3: YouTube ne purane ANDROID/IOS clients (19.09.x) ko bot-check
+ * me block kar diya ("Sign in to confirm you're not a bot" — formats
+ * khali aa jaate hain). ANDROID_VR client abhi bina login ke deta hai
+ * (test: itag 18 mp4, HTTP 206 verified). VR 1.61.34 + purana ANDROID
+ * fallback ke taur par rakhe hain. Fail hone par null (UI "abhi
+ * download nahi ho sakti").
  */
 const CLIENT_TRIES = [
   {
+    key: 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w',
+    headers: {
+      'User-Agent':
+        'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      'X-YouTube-Client-Name': '28',
+      'X-YouTube-Client-Version': '1.60.19',
+    },
+    client: {
+      clientName: 'ANDROID_VR',
+      clientVersion: '1.60.19',
+      androidSdkVersion: 32,
+      deviceModel: 'Quest 3',
+      hl: 'en',
+      gl: 'IN',
+    },
+  },
+  {
+    key: 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w',
+    headers: {
+      'User-Agent':
+        'com.google.android.apps.youtube.vr.oculus/1.61.34 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      'X-YouTube-Client-Name': '28',
+      'X-YouTube-Client-Version': '1.61.34',
+    },
+    client: {
+      clientName: 'ANDROID_VR',
+      clientVersion: '1.61.34',
+      androidSdkVersion: 32,
+      deviceModel: 'Quest 3',
+      hl: 'en',
+      gl: 'IN',
+    },
+  },
+  {
+    // purana ANDROID client — YouTube kabhi wapas enable kare to fallback
     key: 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w',
     headers: {
       'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 14) gzip',
@@ -613,21 +654,6 @@ const CLIENT_TRIES = [
       clientName: 'ANDROID',
       clientVersion: '19.09.37',
       androidSdkVersion: 34,
-      hl: 'en',
-      gl: 'IN',
-    },
-  },
-  {
-    key: 'AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc',
-    headers: {
-      'User-Agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X) gzip',
-      'X-YouTube-Client-Name': '5',
-      'X-YouTube-Client-Version': '19.09.3',
-    },
-    client: {
-      clientName: 'IOS',
-      clientVersion: '19.09.3',
-      deviceModel: 'iPhone14,3',
       hl: 'en',
       gl: 'IN',
     },

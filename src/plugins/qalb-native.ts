@@ -59,6 +59,8 @@ export interface QalbNativePluginInterface {
     eventName: 'downloadProgress',
     listenerFunc: (data: ReelDownloadProgress) => void
   ): Promise<PluginListenerHandle> & PluginListenerHandle
+  // ── App background media pause (v0.3.3) ──
+  setBgPauseMedia(options: { pause: boolean }): Promise<void>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -271,5 +273,19 @@ export async function nativeCancelReelDownload(id: string) {
     await QalbNative.cancelDownload({ id })
   } catch {
     /* non-fatal */
+  }
+}
+
+// ── App background media pause (v0.3.3) ────────────────────────────
+// Reels tab dikh raha ho + naat CHUP ho to flag ON — app minimize hote
+// hi MainActivity WebView ka media NATIVELY pause kar deta hai (reel
+// sound band). Naat chal rahi ho to flag OFF — naat background me
+// chalti rahegi. Purane APK par method nahi milega — silent ignore.
+export async function nativeSetBgPauseMedia(pause: boolean) {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.setBgPauseMedia({ pause })
+  } catch {
+    /* purana APK — method nahi hai */
   }
 }

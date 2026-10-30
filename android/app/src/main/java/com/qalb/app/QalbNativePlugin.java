@@ -452,4 +452,26 @@ public class QalbNativePlugin extends Plugin {
         }
         call.resolve(res);
     }
+
+    // ── App background media pause (v0.3.3) ──────────────────────────
+    // RULE: reel ka awaaz app minimize hote hi BAND (naat/qawwali player
+    // background me chalta rahega). JS se iframe pause background me ho
+    // hi nahi pata (WebView renderer freeze — v0.3.2 ka JS-only fix
+    // isliye fail hua tha), isliye MainActivity app pause hone par
+    // WebView.onPause() NATIVELY call karta hai — media pipeline
+    // guaranteed rukti hai.
+    private static volatile boolean bgPauseArmed = false;
+
+    /** JS ReelsView set karta hai: reels dikh rahe + naat CHUP = true */
+    @PluginMethod
+    public void setBgPauseMedia(PluginCall call) {
+        Boolean pause = call.getBoolean("pause", Boolean.FALSE);
+        bgPauseArmed = Boolean.TRUE.equals(pause);
+        call.resolve();
+    }
+
+    /** MainActivity.onPause() isse poochta hai */
+    public static boolean shouldPauseMediaOnBg() {
+        return bgPauseArmed;
+    }
 }

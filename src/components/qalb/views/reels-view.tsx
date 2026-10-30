@@ -40,7 +40,7 @@ import {
   setReelLiked,
   type ReelItem,
 } from '@/lib/reels'
-import { isNativeApp, nativeCancelReelDownload, nativeDownloadReel } from '@/plugins/qalb-native'
+import { isNativeApp, nativeCancelReelDownload, nativeDownloadReel, nativeSetBgPauseMedia } from '@/plugins/qalb-native'
 import { usePlayerStore } from '@/lib/player-store'
 
 // YT iframe ko postMessage se control (enablejsapi=1 zaroori src me)
@@ -91,6 +91,7 @@ interface ReelCardProps {
   active: boolean // visible && current index (play chalu)
   mounted: boolean // active ±2 (iframe pre-mount — instant swipe)
   suspended: boolean // app background — sound band (v0.3.2)
+  fgTick: number // app foreground aane par +1 — resume re-run (v0.3.3)
   liked: boolean
   likeCount: number
   dl: DlState | 'idle'
@@ -104,6 +105,7 @@ const ReelCard = memo(function ReelCard({
   active,
   mounted,
   suspended,
+  fgTick,
   liked,
   likeCount,
   dl,
@@ -146,7 +148,8 @@ const ReelCard = memo(function ReelCard({
 
   // v0.3.2: app minimize → reel PAUSE (sound band); wapas aao → resume.
   // pausedRef chheda nahi — agar user ne khud tap-pause kiya tha to
-  // resume par wahi haalat lautti hai.
+  // resume par wahi haalat lautti hai. fgTick: foreground wapas aane par
+  // forced re-run (bg me suspended set nahi hua ho to bhi resume chale).
   useEffect(() => {
     if (!active) return
     if (suspended) {
@@ -156,7 +159,7 @@ const ReelCard = memo(function ReelCard({
     if (pausedRef.current) return
     const t = window.setTimeout(() => ytCommand(iframeRef.current, 'playVideo'), 120)
     return () => window.clearTimeout(t)
-  }, [active, suspended])
+  }, [active, suspended, fgTick])
 
   // v0.3.2: video START hua ya nahi — YT iframe khud window.parent ko
   // infoDelivery (playerState) bhejta hai (enablejsapi=1). e.source se
@@ -376,6 +379,8 @@ export function ReelsView({ visible }: { visible: boolean }) {
   const [toast, setToast] = useState<string | null>(null)
   // v0.3.2: app background (minimize) — reel sound band
   const [suspended, setSuspended] = useState(false)
+  // v0.3.3: foreground wapas → resume re-run trigger
+  const [fgTick, setFgTick] = useState(0)
   const [showLoader, setShowLoader] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
@@ -411,20 +416,45 @@ export function ReelsView({ visible }: { visible: boolean }) {
     }
   }, [visible, loaded, reloadTick])
 
-  // v0.3.2: app minimize/background → suspended=true. Native path:
-  // MainActivity onPause/onResume 'qalbAppBg' bhejta hai (guaranteed —
-  // WebView me document.hidden fire nahi hota). Web/PWA fallback:
-  // visibilitychange.
+  // v0.3.2/0.3.3: app minimize/background → suspended=true. Native path:
+  // MainActivity onPause 'qalbAppBg' bhejta hai. Web/PWA fallback:
+  // visibilitychange. Foreground par suspended=false + fgTick++ (reel
+  // resume, chahe background event pahuncha ho ya na).
   useEffect(() => {
     const onBg = (e: Event) => setSuspended((e as CustomEvent).detail?.bg !== false)
-    const onVis = () => setSuspended(document.hidden)
+    const onFg = () => {
+      setSuspended(false)
+      setFgTick((t) => t + 1)
+    }
+    const onVis = () => {
+      if (document.hidden) setSuspended(true)
+      else onFg()
+    }
     window.addEventListener('qalbAppBg', onBg)
+    window.addEventListener('qalbAppFg', onFg)
     document.addEventListener('visibilitychange', onVis)
     return () => {
       window.removeEventListener('qalbAppBg', onBg)
+      window.removeEventListener('qalbAppFg', onFg)
       document.removeEventListener('visibilitychange', onVis)
     }
   }, [])
+
+  // v0.3.3 GUARANTEED bg-pause: reels dikh rahe + naat CHUP → native flag
+  // ON. App minimize par MainActivity WebView ka media NATIVELY pause
+  // karta hai (background me JS execute nahi hota — v0.3.2 ka JS-only
+  // fix isliye fail hua tha). Naat shuru ho to flag OFF — wo background
+  // me chalti rahegi. Naat play/pause par bhi turant re-arm hota hai.
+  useEffect(() => {
+    const sync = () => {
+      const naatPlaying = usePlayerStore.getState().isPlaying
+      void nativeSetBgPauseMedia(visible && !naatPlaying)
+    }
+    sync()
+    return usePlayerStore.subscribe((s, prev) => {
+      if (s.isPlaying !== prev.isPlaying) sync()
+    })
+  }, [visible])
 
   // feed loader 400ms der se — cache-first instant load par spinner
   // flash nahi hota (sirf sach me slow network par dikhta hai)
@@ -637,6 +667,7 @@ export function ReelsView({ visible }: { visible: boolean }) {
                 active={visible && i === activeIdx}
                 mounted={Math.abs(i - activeIdx) <= 2}
                 suspended={suspended}
+                fgTick={fgTick}
                 liked={myLikes.has(item.videoId)}
                 likeCount={
                   Math.max(0, counts[item.videoId] ?? 0) +
