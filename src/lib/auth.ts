@@ -535,6 +535,9 @@ export async function verifyPhoneOtp(code: string): Promise<QalbUser> {
 const OAUTH_REDIRECT_URI = 'qalb://oauth2redirect' // dev-web fallback
 const OAUTH_STATE_KEY = 'qalb_oauth_state_v1'
 const OAUTH_VERIFIER_KEY = 'qalb_oauth_verifier_v1'
+// authorize me jo redirect_uri gaya (loopback port dynamic hai) — token
+// exchange me WOHI wapas bhejni hoti hai, warna Google redirect_uri_mismatch
+const OAUTH_REDIRECT_KEY = 'qalb_oauth_redirect_v1'
 
 /** base64url random string (state / nonce / PKCE verifier) */
 function oauthRandom(numBytes: number): string {
@@ -693,10 +696,18 @@ async function exchangeGoogleCode(code: string, clientId: string): Promise<strin
     /* ignore */
   }
   if (!verifier) throw new Error('google-fail')
+  // authorize wali redirect_uri (loopback port ke saath) wapas use karo
+  let redirectUri = OAUTH_REDIRECT_URI
+  try {
+    redirectUri = window.localStorage.getItem(OAUTH_REDIRECT_KEY) ?? OAUTH_REDIRECT_URI
+    window.localStorage.removeItem(OAUTH_REDIRECT_KEY)
+  } catch {
+    /* ignore */
+  }
   const body = new URLSearchParams({
     code,
     client_id: clientId,
-    redirect_uri: OAUTH_REDIRECT_URI,
+    redirect_uri: redirectUri,
     grant_type: 'authorization_code',
     code_verifier: verifier,
   })
@@ -829,6 +840,7 @@ export async function googleSignIn(): Promise<QalbUser> {
   try {
     window.localStorage.setItem(OAUTH_STATE_KEY, state)
     window.localStorage.setItem(OAUTH_VERIFIER_KEY, verifier)
+    window.localStorage.setItem(OAUTH_REDIRECT_KEY, redirectUri)
   } catch {
     /* ignore */
   }

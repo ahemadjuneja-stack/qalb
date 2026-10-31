@@ -274,8 +274,15 @@ jobs:
           if [ -z "$GCID" ] && [ -f .firebase/google-clientid.txt ]; then
             GCID=$(head -1 .firebase/google-clientid.txt | tr -d '[:space:]')
           fi
-          echo "google login: clientIdLen=${#GCID} secretLen=${#GCSECRET_VAR}"
-          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" NEXT_PUBLIC_GOOGLE_CLIENT_ID="$GCID" NEXT_PUBLIC_GOOGLE_CLIENT_SECRET="$GCSECRET_VAR" npx next build
+          # secret — GitHub secret, warna committed file (desktop-client ka
+          # secret Google ke hisaab se installed app me embed hota hi hai,
+          # PKCE hi asli protection hai)
+          GCSECRET="$GCSECRET_VAR"
+          if [ -z "$GCSECRET" ] && [ -f .firebase/google-secret.txt ]; then
+            GCSECRET=$(head -1 .firebase/google-secret.txt | tr -d '[:space:]')
+          fi
+          echo "google login: clientIdLen=${#GCID} secretLen=${#GCSECRET}"
+          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" NEXT_PUBLIC_GOOGLE_CLIENT_ID="$GCID" NEXT_PUBLIC_GOOGLE_CLIENT_SECRET="$GCSECRET" npx next build
           # sanity: DISCOVERED key really bake hui? (bundle me InnerTube ke
           # AIzaSy keys pehle se hote hain — isliye full discovered key hi
           # grep karte hain, warna false-positive milta tha — run 56)
