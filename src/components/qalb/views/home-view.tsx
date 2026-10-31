@@ -326,15 +326,19 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* BRAND BANNER — user ka asli image (PNG) + zinda dhadkan ECG line */}
-      <div className="relative overflow-hidden rounded-2xl shadow-[0_10px_30px_-12px_rgba(69,2,19,0.6)] ring-1 ring-gold/30">
-        <img
-          src="/brand/qalb-banner.png"
-          alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
-          className="w-full"
-        />
-        {/* ECG animation — banner ki dhadkan (user ki demand) */}
-        <BannerEcg className="opacity-90" />
+      {/* OFFICIAL LOGO BANNER — naya red-white QALB + zinda dhadkan + shine */}
+      <div className="relative overflow-hidden rounded-2xl shadow-[0_10px_30px_-12px_rgba(187,0,0,0.5)] ring-1 ring-red-600/25">
+        <div className="relative flex h-32 items-center justify-center bg-[#bb0000] dark:bg-black">
+          {/* light theme: asli red logo (red bg strip me seamless) */}
+          <img src="/brand/qalb-logo.png" alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed" className="h-24 w-auto dark:hidden" />
+          {/* dark theme: black & white logo (YouTube noir) */}
+          <img src="/brand/qalb-logo-bw.png" alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed" className="hidden h-24 w-auto dark:block" />
+          {/* animations — shine sweep + ECG dhadkan banner ke edge par */}
+          <div className="qalb-shine" aria-hidden="true" />
+          <div className="absolute inset-x-0 bottom-0 h-9">
+            <BannerEcg className="opacity-90" />
+          </div>
+        </div>
       </div>
 
       {/* greeting + actions — global QalbHeader (banner + section) shell me hai */}

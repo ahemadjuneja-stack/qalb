@@ -76,157 +76,155 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB LIGHT THEME — "ROSE WINE" (v0.5.4 banner-matched)
-  Beige/coffee KHATAM — ab banner ki family: rose-ivory bg + wine
-  maroon ink + gold. Banner (apna maroon bg) light me bhi card jaisa
-  saaf dikhta hai.
+  QALB LIGHT THEME — "RED & WHITE" (v0.5.6)
+  User ka hukum: red & white combination — red/dark-red accents,
+  safed background. COFFEE KAHIN NAHI. Brand red #bb0000 (official
+  logo ka exact color) — buttons, chips, links sab red family.
   ═══════════════════════════════════════════════════════════════
 */
 :root {
   --radius: 0.75rem;
-  --background: #f9eef0;
-  --foreground: #330b17;
-  --card: #fffbfc;
-  --card-foreground: #330b17;
-  --popover: #fffbfc;
-  --popover-foreground: #330b17;
-  --primary: #8c1230;
-  --primary-foreground: #fff6f7;
-  --secondary: #f6e3e7;
-  --secondary-foreground: #5d1425;
-  --muted: #f5e4e8;
-  --muted-foreground: #96666f;
-  --accent: #f9e5e9;
-  --accent-foreground: #8c1230;
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #bb0000;
+  --primary-foreground: #ffffff;
+  --secondary: #f9ecec;
+  --secondary-foreground: #7a0012;
+  --muted: #f6f6f6;
+  --muted-foreground: #6b6b6b;
+  --accent: #fdeeee;
+  --accent-foreground: #bb0000;
   --destructive: #c22030;
-  --border: rgba(51, 11, 23, 0.1);
-  --input: rgba(51, 11, 23, 0.12);
-  --ring: #8c1230;
-  --gold: #a4761c;
-  --chart-1: #b13a4d;
-  --chart-2: #a4761c;
-  --chart-3: #8c1230;
-  --chart-4: #330b17;
-  --chart-5: #c98a4e;
-  --sidebar: #fffbfc;
-  --sidebar-foreground: #330b17;
-  --sidebar-primary: #b13a4d;
-  --sidebar-primary-foreground: #fff6f7;
-  --sidebar-accent: #f9e5e9;
-  --sidebar-accent-foreground: #8c1230;
-  --sidebar-border: rgba(51, 11, 23, 0.1);
-  --sidebar-ring: #b13a4d;
+  --border: rgba(23, 23, 23, 0.1);
+  --input: rgba(23, 23, 23, 0.12);
+  --ring: #bb0000;
+  --gold: #bb0000;
+  --chart-1: #bb0000;
+  --chart-2: #8a0015;
+  --chart-3: #d02030;
+  --chart-4: #171717;
+  --chart-5: #e01e2f;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #bb0000;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fdeeee;
+  --sidebar-accent-foreground: #bb0000;
+  --sidebar-border: rgba(23, 23, 23, 0.1);
+  --sidebar-ring: #bb0000;
 
-  /* emerald ramp — LIGHT me ye "wine ink" ke roop me kaam karte hain */
-  --q-em-50: #330b17;
-  --q-em-100: #4b1a26;
-  --q-em-200: #96666f;
-  --q-em-300: #a63045;
-  --q-em-400: #b03048;
-  --q-em-500: #b13a4d;
-  --q-em-600: #962c3f;
-  --q-em-700: #7d1d31;
-  --q-em-800: #a4898d;
-  --q-em-900: #f0dbe0;
-  --q-em-950: #f9eef0;
+  /* emerald ramp — LIGHT: ink text + red accents + white tints */
+  --q-em-50: #141414;
+  --q-em-100: #2b2b2b;
+  --q-em-200: #6f6f6f;
+  --q-em-300: #bb0000;
+  --q-em-400: #d02030;
+  --q-em-500: #c01422;
+  --q-em-600: #a50019;
+  --q-em-700: #8a0015;
+  --q-em-800: #efdede;
+  --q-em-900: #f8ecec;
+  --q-em-950: #fff5f5;
 
   /* app-level theme tokens */
-  --glow: rgba(217, 164, 79, 0.35);
-  --shadow-float: rgba(51, 11, 23, 0.18);
-  --text-glow-color: rgba(164, 118, 28, 0.25);
-  --glass-bg: rgba(253, 242, 244, 0.93);
-  --card-surface-bg: linear-gradient(165deg, #ffffff, #fdf3f5);
-  --card-surface-border: rgba(51, 11, 23, 0.08);
-  --player-bg: linear-gradient(180deg, #fbeef1, #f5dfe4);
-  --popup-bg: rgba(255, 250, 251, 0.97);
-  --scroll-thumb: rgba(51, 11, 23, 0.2);
-  --grad-emerald-1: #c4384e;
-  --grad-emerald-2: #a0203a;
-  --grad-emerald-3: #6d1024;
-  --grad-gold-1: #e3c476;
-  --grad-gold-2: #cda03e;
-  --grad-gold-3: #a4761c;
+  --glow: rgba(187, 0, 0, 0.28);
+  --shadow-float: rgba(26, 0, 4, 0.16);
+  --text-glow-color: rgba(187, 0, 0, 0.18);
+  --glass-bg: rgba(255, 255, 255, 0.93);
+  --card-surface-bg: linear-gradient(165deg, #ffffff, #fdf4f4);
+  --card-surface-border: rgba(23, 23, 23, 0.08);
+  --player-bg: linear-gradient(180deg, #ffffff, #fdf1f1);
+  --popup-bg: rgba(255, 255, 255, 0.97);
+  --scroll-thumb: rgba(23, 23, 23, 0.2);
+  --grad-emerald-1: #e0455a;
+  --grad-emerald-2: #bb0000;
+  --grad-emerald-3: #7a0012;
+  --grad-gold-1: #e0455a;
+  --grad-gold-2: #bb0000;
+  --grad-gold-3: #7a0012;
 
   /* red/amber — LIGHT me deep (light bg par readable) */
   --q-red-100: #7f1d1d;
   --q-red-200: #991b1b;
   --q-red-300: #b91c1c;
-  --q-amber-200: #92400e;
+  --q-amber-200: #a81020;
 }
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB DARK THEME — "MIDNIGHT MAROON" (v0.5.5 — 70% DARK)
-  User ka hukum: "Theme ko 70% dark kro" — pichhla maroon (#380a17)
-  ab 70% gehra: deep maroon-black (#1a0510 family) — banner ki asli
-  #440112–#6f051b family ke bilkul neeche. Banner apni crimson
-  brightness se ab card jaisa UBHRA hua dikhta hai (perfect match).
-  Gold #e9c46a same rakha — dark par full contrast.
+  QALB DARK THEME — "NOIR" (v0.5.6 — YouTube style BLACK & WHITE)
+  User ka hukum: "app ka color black and white hona chahiye YouTube
+  ki tarha" — near-black bg + white text + grey surfaces. Red
+  (#bb0000 brand) sirf accents me — YouTube subscribe-jaisa.
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #1a0510;
-  --foreground: #f8ece6;
-  --card: #250a17;
-  --card-foreground: #f8ece6;
-  --popover: #280b19;
-  --popover-foreground: #f8ece6;
-  --primary: #e9c46a;
-  --primary-foreground: #1a0510;
-  --secondary: #2e0d1b;
-  --secondary-foreground: #f0d8cf;
-  --muted: #2e0d1b;
-  --muted-foreground: #d8a9a2;
-  --accent: #351022;
-  --accent-foreground: #f0c987;
-  --destructive: #ff6b6b;
-  --border: rgba(233, 196, 106, 0.15);
-  --input: rgba(233, 196, 106, 0.18);
-  --ring: #e9c46a;
-  --gold: #e9c46a;
-  --chart-1: #e9c46a;
-  --chart-2: #f0c987;
-  --chart-3: #d9a54e;
-  --chart-4: #f8ece6;
-  --chart-5: #d31f3f;
-  --sidebar: #250a17;
-  --sidebar-foreground: #f8ece6;
-  --sidebar-primary: #e9c46a;
-  --sidebar-primary-foreground: #1a0510;
-  --sidebar-accent: #351022;
-  --sidebar-accent-foreground: #f0c987;
-  --sidebar-border: rgba(233, 196, 106, 0.15);
-  --sidebar-ring: #e9c46a;
+  --background: #0f0f0f;
+  --foreground: #f5f5f5;
+  --card: #1a1a1a;
+  --card-foreground: #f5f5f5;
+  --popover: #1e1e1e;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #0f0f0f;
+  --secondary: #232323;
+  --secondary-foreground: #e5e5e5;
+  --muted: #232323;
+  --muted-foreground: #a3a3a3;
+  --accent: #282828;
+  --accent-foreground: #ffffff;
+  --destructive: #ff5a5f;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #f5f5f5;
+  --gold: #f5f5f5;
+  --chart-1: #f5f5f5;
+  --chart-2: #e5e5e5;
+  --chart-3: #d4d4d4;
+  --chart-4: #ffffff;
+  --chart-5: #e01e2f;
+  --sidebar: #1a1a1a;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #f5f5f5;
+  --sidebar-primary-foreground: #0f0f0f;
+  --sidebar-accent: #282828;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: #f5f5f5;
 
-  /* emerald ramp — DARK (70% dark): gold accents + deep maroon-black ramp */
-  --q-em-50: #f8ece6;
-  --q-em-100: #f0d8cf;
-  --q-em-200: #d8aca4;
-  --q-em-300: #f0c987;
-  --q-em-400: #e6b566;
-  --q-em-500: #d9a54e;
-  --q-em-600: #c08a3e;
-  --q-em-700: #6e1129;
-  --q-em-800: #2f0c1c;
-  --q-em-900: #250a17;
-  --q-em-950: #1a0510;
+  /* emerald ramp — DARK: white/grey YouTube-noir ramp */
+  --q-em-50: #f5f5f5;
+  --q-em-100: #e5e5e5;
+  --q-em-200: #c9c9c9;
+  --q-em-300: #ededed;
+  --q-em-400: #d4d4d4;
+  --q-em-500: #a3a3a3;
+  --q-em-600: #8a8a8a;
+  --q-em-700: #5c5c5c;
+  --q-em-800: #2e2e2e;
+  --q-em-900: #232323;
+  --q-em-950: #0f0f0f;
 
   /* app-level theme tokens */
-  --glow: rgba(230, 181, 102, 0.45);
-  --shadow-float: rgba(8, 0, 4, 0.8);
-  --text-glow-color: rgba(240, 201, 135, 0.35);
-  --glass-bg: rgba(26, 5, 16, 0.93);
-  --card-surface-bg: linear-gradient(165deg, rgba(47, 12, 28, 0.95), rgba(22, 4, 13, 0.97));
-  --card-surface-border: rgba(233, 196, 106, 0.14);
-  --player-bg: linear-gradient(180deg, #351022, #1a0510);
-  --popup-bg: rgba(32, 8, 20, 0.97);
-  --scroll-thumb: rgba(230, 181, 102, 0.28);
-  --grad-emerald-1: #f1d9a0;
-  --grad-emerald-2: #dfaa4e;
-  --grad-emerald-3: #b07d2f;
-  --grad-gold-1: #f1d9a0;
-  --grad-gold-2: #dfaa4e;
-  --grad-gold-3: #a8762a;
+  --glow: rgba(255, 255, 255, 0.28);
+  --shadow-float: rgba(0, 0, 0, 0.8);
+  --text-glow-color: rgba(255, 255, 255, 0.22);
+  --glass-bg: rgba(15, 15, 15, 0.92);
+  --card-surface-bg: linear-gradient(165deg, #1f1f1f, #141414);
+  --card-surface-border: rgba(255, 255, 255, 0.1);
+  --player-bg: linear-gradient(180deg, #232323, #0f0f0f);
+  --popup-bg: rgba(26, 26, 26, 0.97);
+  --scroll-thumb: rgba(255, 255, 255, 0.25);
+  --grad-emerald-1: #ff4d5e;
+  --grad-emerald-2: #e01e2f;
+  --grad-emerald-3: #960f1d;
+  --grad-gold-1: #ffffff;
+  --grad-gold-2: #e0e0e0;
+  --grad-gold-3: #bdbdbd;
 
   /* red/amber — DARK me original light tints */
   --q-red-100: #fee2e2;
@@ -256,11 +254,10 @@
     -webkit-tap-highlight-color: transparent;
   }
   .dark body {
-    /* 70% dark — banner ki gehrai, sirf halka crimson depth glow */
+    /* YouTube-noir — pure black base + halka brand-red corner glow */
     background-image:
-      radial-gradient(1100px 560px at 85% -12%, rgba(233, 196, 106, 0.06), transparent 60%),
-      radial-gradient(900px 500px at -15% 16%, rgba(147, 1, 37, 0.22), transparent 55%),
-      radial-gradient(1200px 800px at 50% 120%, rgba(116, 4, 29, 0.26), transparent 60%);
+      radial-gradient(1100px 560px at 85% -12%, rgba(224, 30, 47, 0.09), transparent 60%),
+      radial-gradient(900px 500px at -15% 16%, rgba(224, 30, 47, 0.05), transparent 55%);
   }
 }
 
@@ -364,24 +361,24 @@
   gehra red/gold, dark theme me bright.
 */
 :root {
-  --qalb-gold-a: #8c6b1f;
-  --qalb-gold-b: #d4af37;
-  --qalb-gold-c: #f5d97a;
+  --qalb-gold-a: #7a0012;
+  --qalb-gold-b: #bb0000;
+  --qalb-gold-c: #e0455a;
   --qalb-pearl-a: #cfc7b6;
   --qalb-pearl-b: #efeadf;
   --qalb-pearl-c: #ffffff;
-  --qalb-ekg: #b98a24;
-  --qalb-ekg-pulse: #e9c46a;
+  --qalb-ekg: #8a0015;
+  --qalb-ekg-pulse: #ffffff;
 }
 .dark {
-  --qalb-gold-a: #a87d22;
-  --qalb-gold-b: #e0b84a;
-  --qalb-gold-c: #f7dd8a;
+  --qalb-gold-a: #bdbdbd;
+  --qalb-gold-b: #e5e5e5;
+  --qalb-gold-c: #ffffff;
   --qalb-pearl-a: #d8d2c4;
   --qalb-pearl-b: #f2ede3;
   --qalb-pearl-c: #ffffff;
-  --qalb-ekg: #d4af37;
-  --qalb-ekg-pulse: #f6e3ae;
+  --qalb-ekg: #3d3d3d;
+  --qalb-ekg-pulse: #ffffff;
 }
 
 /* Heartbeat — dil ki asli rhythm jaisa double-thump */
@@ -442,6 +439,21 @@
 }
 .qalb-ecg-pulse {
   animation: qalb-ecg-banner 3.4s linear infinite;
+}
+
+/* Banner SHINE sweep — QALB letters par roshni ki lehar (premium feel) */
+@keyframes qalb-shine-sweep {
+  0% { transform: translateX(-140%) skewX(-16deg); }
+  58%, 100% { transform: translateX(320%) skewX(-16deg); }
+}
+.qalb-shine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.14), transparent);
+  animation: qalb-shine-sweep 4.6s ease-in-out infinite;
+  pointer-events: none;
 }
 
 /* Header ke neeche shimmering gold-red divider */
@@ -569,6 +581,7 @@
   .qalb-glow-pulse,
   .qalb-ekg-pulse,
   .qalb-ecg-pulse,
+  .qalb-shine,
   .qalb-spark,
   .qalb-divider,
   .qalb-ph-dot,

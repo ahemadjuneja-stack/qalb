@@ -164,42 +164,37 @@ export function LoginGate() {
     // Light theme user ke liye bhi emerald-* utilities dark values use
     // karein (theme ramp .dark scope pe flip hota hai).
     <div
-      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#2A0512]"
+      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#0f0f0f]"
       role="dialog"
       aria-modal="true"
       aria-label="Qalb — login"
     >
-      {/* SIMPLE background: banner jaisi crimson + gold glows */}
+      {/* SIMPLE background: YouTube-noir + halka brand-red glows */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(70% 38% at 50% 6%, rgba(147,1,37,0.28), transparent 62%), radial-gradient(85% 42% at 50% 108%, rgba(147,1,37,0.22), transparent 58%), radial-gradient(40% 22% at 50% 20%, rgba(233,196,106,0.08), transparent 70%)',
+            'radial-gradient(70% 38% at 50% 6%, rgba(224,30,47,0.14), transparent 62%), radial-gradient(85% 42% at 50% 108%, rgba(224,30,47,0.1), transparent 58%)',
         }}
       />
       {/* faint moon watermark — center me, bilkul subtle */}
       <Moon
-        className="pointer-events-none absolute left-1/2 top-[36%] h-64 w-64 -translate-x-1/2 -translate-y-1/2 text-emerald-200/[0.05]"
+        className="pointer-events-none absolute left-1/2 top-[36%] h-64 w-64 -translate-x-1/2 -translate-y-1/2 text-white/[0.04]"
         strokeWidth={0.7}
         aria-hidden
       />
 
       {/* content */}
       <div className="relative z-[1] flex h-full flex-col">
-        {/* header — user ka EXACT brand icon + banner (app ke andar wale hi) */}
+        {/* OFFICIAL LOGO — heart-wala purana poster HATA DIYA (user ki demand) */}
         <div className="flex flex-col items-center pt-[calc(env(safe-area-inset-top)+4.2rem)]">
-          <img
-            src="/brand/qalb-icon.png"
-            alt="Qalb"
-            className="h-24 w-24 rounded-[1.4rem] shadow-[0_10px_34px_-10px_rgba(0,0,0,0.7)] ring-1 ring-gold/40"
-          />
-          <div className="relative mt-4 w-64 overflow-hidden rounded-xl shadow-[0_6px_22px_-8px_rgba(0,0,0,0.65)] ring-1 ring-gold/30">
+          <div className="relative w-64 overflow-hidden rounded-2xl shadow-[0_10px_34px_-10px_rgba(0,0,0,0.8)] ring-1 ring-red-600/30">
             <img
-              src="/brand/qalb-banner.png"
+              src="/brand/qalb-logo-bw.png"
               alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
               className="w-full"
             />
-            <BannerEcg className="opacity-80" />
+            <div className="qalb-shine" aria-hidden="true" />
           </div>
         </div>
 
@@ -209,7 +204,7 @@ export function LoginGate() {
         </p>
 
         {/* bottom card — headline + login steps */}
-        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-gold/20 bg-[#3A0817]/90 px-5 pb-6 pt-5">
+        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-white/10 bg-[#1a1a1a]/90 px-5 pb-6 pt-5">
           {step === 'entry' && (
             <>
               <h1 className="text-center text-[22px] font-extrabold leading-tight text-emerald-50">

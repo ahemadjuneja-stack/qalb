@@ -1,8 +1,6 @@
 'use client'
 
-import { BannerEcg } from '@/components/qalb/banner-ecg'
-
-// Qalb — Global Header (v0.5.5)
+// Qalb — Global Header (v0.5.6)
 // ─────────────────────────────────────────────────────────────────
 // HAR screen par wahi header — user ki STRICT demand:
 //   • LEFT: user ka DIEYA GAYA ASLI BANNER IMAGE (bilkul same —
@@ -28,10 +26,10 @@ export function QalbHeader({ section }: { section: QalbSection }) {
       aria-label={`Qalb — ${section}`}
     >
       <div className="flex items-center justify-between gap-3">
-        {/* user ka EXACT banner (PNG) + halki zinda dhadkan ECG line */}
-        <div className="relative shrink-0 overflow-hidden rounded-lg shadow-[0_4px_14px_-6px_rgba(69,2,19,0.55)] ring-1 ring-gold/30">
-          <img src="/brand/qalb-banner.png" alt="Qalb" className="h-11 w-auto" />
-          <BannerEcg className="opacity-50" />
+        {/* OFFICIAL LOGO tile (YouTube-style) */}
+        <div className="relative shrink-0 overflow-hidden rounded-lg shadow-[0_4px_14px_-6px_rgba(187,0,0,0.5)] ring-1 ring-red-600/30">
+          <img src="/brand/qalb-logo.png" alt="Qalb" className="h-11 w-11 dark:hidden" />
+          <img src="/brand/qalb-logo-bw.png" alt="Qalb" className="hidden h-11 w-11 dark:block" />
         </div>
         <span
           className="shrink-0 rounded-full border border-gold/35 bg-gold/10 px-3.5 py-1.5 text-[12.5px] font-extrabold tracking-wide text-gold shadow-[0_0_16px_-6px_var(--gold)]"
