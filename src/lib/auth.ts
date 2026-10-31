@@ -250,7 +250,13 @@ declare global {
     grecaptcha?: {
       render: (
         el: HTMLElement,
-        opts: { sitekey: string; size: string; callback: (t: string) => void }
+        opts: {
+          sitekey: string
+          size: string
+          callback: (t: string) => void
+          'error-callback'?: () => void
+          'expired-callback'?: () => void
+        }
       ) => number
       execute: (id: number, opts?: { action?: string }) => Promise<string> | string
     }
@@ -284,6 +290,57 @@ function loadScript(src: string, timeoutMs = 12_000): Promise<void> {
 /** Firebase project config se site key + invisible widget se token */
 let recaptchaSiteKeyCache: string | null = null
 
+// ── reCAPTCHA engine readiness (RACE FIX) ──────────────────────────
+// recaptcha/api.js ek chhota LOADER hai — asli engine (recaptcha__en.js)
+// wo ASYNC inject karta hai aur tab tak window.grecaptcha undefined
+// rehta hai. Pehle hum sirf script-tag ke load event ka wait karte the
+// → render call se pehle hi `!g` → 'auth-setup' ("Login abhi setup ho
+// raha hai") — isi race ne OTP block kiya tha. Ab onload callback
+// PEHLE define karte hain (api.js ise engine-ready hone par fire
+// karta hai) + poll safety net (repeat attempt par onload dobara nahi
+// chalta).
+let recaptchaReadyP: Promise<void> | null = null
+
+function ensureRecaptchaReady(): Promise<void> {
+  if (recaptchaReadyP) return recaptchaReadyP
+  recaptchaReadyP = new Promise<void>((resolve, reject) => {
+    let settled = false
+    const ok = () => {
+      if (!settled) {
+        settled = true
+        resolve()
+      }
+    }
+    const fail = (e: Error) => {
+      if (!settled) {
+        settled = true
+        recaptchaReadyP = null // retry possible
+        reject(e)
+      }
+    }
+    ;(window as unknown as { __qalbRecaptchaReady?: () => void }).__qalbRecaptchaReady = ok
+    loadScript(
+      'https://www.google.com/recaptcha/api.js?onload=__qalbRecaptchaReady&render=explicit',
+      15_000
+    ).catch((e) => fail(e instanceof Error ? e : new Error('script-failed')))
+    // Safety net: agar script pehle se page par loaded hai to onload
+    // dobara fire NAHI hota (dusra attempt) — grecaptcha ke aa-te hi
+    // resolve kar do.
+    const poll = setInterval(() => {
+      const g = window.grecaptcha
+      if (g && typeof g.render === 'function') {
+        clearInterval(poll)
+        ok()
+      }
+    }, 120)
+    setTimeout(() => {
+      clearInterval(poll)
+      fail(new Error('recaptcha-load-timeout'))
+    }, 20_000)
+  })
+  return recaptchaReadyP
+}
+
 async function getRecaptchaToken(apiKey: string): Promise<string> {
   // 1. site key — identitytoolkit GetRecaptchaParam (Firebase JS SDK ka
   //    standard endpoint). NOTE: pehle projects/{id}/config try kiya tha
@@ -305,20 +362,21 @@ async function getRecaptchaToken(apiKey: string): Promise<string> {
   }
   if (!siteKey) throw new Error('phone-setup')
 
-  // 2. reCAPTCHA v2 invisible widget
-  await loadScript('https://www.google.com/recaptcha/api.js?onload=__qalbRecaptchaReady&render=explicit')
+  // 2. reCAPTCHA v2 invisible widget — ENGINE fully ready hone ka wait
+  //    (sirf script-tag load ka nahi — wahi race bug tha)
+  await ensureRecaptchaReady()
   const g = window.grecaptcha
-  if (!g) throw new Error('auth-setup')
+  if (!g || typeof g.render !== 'function') throw new Error('recaptcha-fail')
 
-  let holder = document.getElementById(RECAPTCHA_DIV_ID)
-  if (!holder) {
-    holder = document.createElement('div')
-    holder.id = RECAPTCHA_DIV_ID
-    holder.style.position = 'fixed'
-    holder.style.bottom = '-9999px'
-    holder.style.right = '-9999px'
-    document.body.appendChild(holder)
-  }
+  // Har attempt par FRESH holder — purane widget par dobara render karne
+  // par reCAPTCHA "already rendered" throw karta hai (retry tooti rehti)
+  document.getElementById(RECAPTCHA_DIV_ID)?.remove()
+  const holder = document.createElement('div')
+  holder.id = RECAPTCHA_DIV_ID
+  holder.style.position = 'fixed'
+  holder.style.bottom = '-9999px'
+  holder.style.right = '-9999px'
+  document.body.appendChild(holder)
 
   return new Promise<string>((resolve, reject) => {
     try {
@@ -326,6 +384,10 @@ async function getRecaptchaToken(apiKey: string): Promise<string> {
         sitekey: siteKey as string,
         size: 'invisible',
         callback: (token: string) => resolve(token),
+        // widget-level errors (domain block, challenge fail) par hang ke
+        // bajaye turant saaf error — 20s ka wait nahi
+        'error-callback': () => reject(new Error('recaptcha-fail')),
+        'expired-callback': () => reject(new Error('recaptcha-timeout')),
       })
       const exec = g.execute(widgetId)
       if (exec && typeof (exec as Promise<string>).then === 'function') {
@@ -333,7 +395,7 @@ async function getRecaptchaToken(apiKey: string): Promise<string> {
       }
       setTimeout(() => reject(new Error('recaptcha-timeout')), 20_000)
     } catch {
-      reject(new Error('auth-setup'))
+      reject(new Error('recaptcha-fail'))
     }
   })
 }
@@ -652,6 +714,15 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
       return {
         title: 'OTP nahi bheja ja saka',
         desc: 'Network check karein ya thodi der baad try karein.',
+      }
+    case 'recaptcha-fail':
+    case 'recaptcha-timeout':
+    case 'recaptcha-load-timeout':
+    case 'script-failed':
+    case 'script-timeout':
+      return {
+        title: 'Security check load nahi ho payi',
+        desc: 'Network thoda slow lag raha hai — thodi der baad dobara try karein.',
       }
     default:
       return { title: 'Login me masla hua', desc: 'Dobara try karein.' }
