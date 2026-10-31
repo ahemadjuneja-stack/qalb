@@ -378,8 +378,10 @@ export async function nativeGoogleIdToken(
     return null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e ?? '')
-    // user ne sheet cancel ki (back / swipe) — cancel hai, fail nahi
-    if (msg.includes('cancelled') || msg.includes('api-13')) {
+    // user ne sheet khud band ki (sheet 600ms+ chali) — cancel hai, fail nahi.
+    // Baaki sab (api-10/api-13/sheet-fail-fast/play-services fail) → null,
+    // auth.ts Chrome loopback fallback chalayega — login kabhi atka nahi.
+    if (msg.includes('cancelled')) {
       return { cancelled: true }
     }
     return null

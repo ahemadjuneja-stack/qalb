@@ -621,11 +621,15 @@ public class QalbNativePlugin extends Plugin {
                 client.signOut();
             } catch (Exception ignored) {
             }
+            googleSheetStartMs = android.os.SystemClock.elapsedRealtime();
             startActivityForResult(call, client.getSignInIntent(), "googleIdTokenResult");
         } catch (Exception e) {
             call.reject("google sheet fail: " + safeMsg(e));
         }
     }
+
+    /** sheet launch ka time — instant RESULT_CANCELED = config fail, user cancel nahi */
+    private long googleSheetStartMs;
 
     /** googleIdToken sheet ka result — idToken ya cancel/fail reason */
     @ActivityCallback
@@ -633,7 +637,12 @@ public class QalbNativePlugin extends Plugin {
         if (call == null) return; // activity recreate — call mar gaya
         try {
             if (result.getResultCode() != Activity.RESULT_OK) {
-                call.reject("cancelled");
+                // sheet 600ms se bhi kam chali = wo khulti hi band ho gayi
+                // (play-services / Android client config fail) — ye user ka
+                // cancel NAHI hai, isliye alag message: JS is par Chrome
+                // loopback fallback chalata hai. Asli cancel = "cancelled".
+                long elapsed = android.os.SystemClock.elapsedRealtime() - googleSheetStartMs;
+                call.reject(elapsed < 600 ? "sheet-fail-fast" : "cancelled");
                 return;
             }
             Task<GoogleSignInAccount> task =
