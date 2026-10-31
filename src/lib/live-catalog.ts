@@ -16,6 +16,7 @@ import { Capacitor } from '@capacitor/core'
 import { QALB } from '@/lib/qalb'
 import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
+import { islamicOnly } from '@/lib/itube'
 import { filterSearchResults } from '@/lib/result-filter'
 import {
   innertubeSearchX,
@@ -214,11 +215,14 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
 
   try {
     // ── 1. TRENDING — is hafte ke sab se zyada dekhe gaye (4 parallel) ──
+    // FIX v0.5.4: pehle raw 'week' string sp me ja rahi thi (INVALID) →
+    // YouTube misc results deta tha (comedy waghera). Ab paramsFor se
+    // proper InnerTube sp token + STRICT islamic filter (islamicOnly).
     const trendPages = await Promise.all(
-      TREND_QUERIES.map((q) => timeoutPromise(searchX(q, 'week', null), 14000))
+      TREND_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('', 'week'), null), 14000))
     )
     const weekTracks = videosToTracks(trendPages.flatMap((p) => p?.videos ?? []), 'tr')
-    let trending = filterSearchResults(weekTracks, false)
+    let trending = islamicOnly(weekTracks)
       .filter((t) => (t.playCount ?? 0) > 0)
       .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
       .slice(0, 10)
@@ -226,10 +230,10 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
     // hafte kam pad jaye to month filter ka backup
     if (trending.length < 8) {
       const monthPages = await Promise.all(
-        TREND_QUERIES.slice(0, 2).map((q) => timeoutPromise(searchX(q, 'month', null), 14000))
+        TREND_QUERIES.slice(0, 2).map((q) => timeoutPromise(searchX(q, paramsFor('', 'month'), null), 14000))
       )
       const monthTracks = videosToTracks(monthPages.flatMap((p) => p?.videos ?? []), 'tr')
-      const merged = filterSearchResults(monthTracks, false)
+      const merged = islamicOnly(monthTracks)
         .filter((t) => (t.playCount ?? 0) > 0)
         .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
         .slice(0, 10)
@@ -247,21 +251,20 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
 
     // ── 2. FRESH — brand new uploads (date sort, 3 parallel) ──
     const freshPages = await Promise.all(
-      FRESH_QUERIES.map((q) => timeoutPromise(searchX(q, 'date', null), 14000))
+      FRESH_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('date', ''), null), 14000))
     )
     const freshVideos = freshPages.flatMap((p) => p?.videos ?? [])
-    const fresh = filterSearchResults(videosToTracks(freshVideos, 'fr'), false).slice(0, 30)
+    const fresh = islamicOnly(videosToTracks(freshVideos, 'fr')).slice(0, 30)
 
     // ── 3. CATEGORY SETS — mixes/moods ke liye (4 parallel, views sort) ──
     const catPages = await Promise.all(
-      CATEGORY_QUERIES.map(({ q }) => timeoutPromise(searchX(q, 'views', null), 14000))
+      CATEGORY_QUERIES.map(({ q }) => timeoutPromise(searchX(q, paramsFor('views', ''), null), 14000))
     )
     const categorySets: LiveFeedData['categorySets'] = {}
     catPages.forEach((p, i) => {
       if (!p) return
-      const tracks = filterSearchResults(
-        videosToTracks(p.videos, 'cat', CATEGORY_QUERIES[i].cat),
-        false
+      const tracks = islamicOnly(
+        videosToTracks(p.videos, 'cat', CATEGORY_QUERIES[i].cat)
       )
       if (tracks.length) categorySets[CATEGORY_QUERIES[i].cat] = tracks.slice(0, 24)
     })
@@ -270,10 +273,10 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
     let artistSet: LiveFeedData['artistSet'] = null
     if (topArtist) {
       const page = await timeoutPromise(
-        searchX(`${topArtist} best naat qawwali`, 'views', null),
+        searchX(`${topArtist} best naat qawwali`, paramsFor('views', ''), null),
         14000
       )
-      const tracks = page ? filterSearchResults(videosToTracks(page.videos, 'art'), false) : []
+      const tracks = page ? islamicOnly(videosToTracks(page.videos, 'art')) : []
       if (tracks.length >= 5) artistSet = { name: topArtist, tracks: tracks.slice(0, 20) }
     }
 

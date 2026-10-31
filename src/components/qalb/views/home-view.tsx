@@ -325,7 +325,14 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* greeting + actions — global QalbHeader (logo + section) shell me hai */}
+      {/* BRAND BANNER — user ka asli image, har theme me saaf dikhta hai */}
+      <img
+        src="/brand/qalb-banner.jpg"
+        alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
+        className="w-full rounded-2xl shadow-[0_10px_30px_-12px_rgba(69,2,19,0.6)] ring-1 ring-gold/30"
+      />
+
+      {/* greeting + actions — global QalbHeader (banner + section) shell me hai */}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">

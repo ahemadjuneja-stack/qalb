@@ -76,72 +76,73 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB LIGHT THEME — "IVORY MAROON" (v0.5.2 brand)
-  Warm ivory background, deep maroon ink text, ruby + gold accents.
-  Brand images se: deep red, sunehra gold, silver-white.
+  QALB LIGHT THEME — "ROSE WINE" (v0.5.4 banner-matched)
+  Beige/coffee KHATAM — ab banner ki family: rose-ivory bg + wine
+  maroon ink + gold. Banner (apna maroon bg) light me bhi card jaisa
+  saaf dikhta hai.
   ═══════════════════════════════════════════════════════════════
 */
 :root {
   --radius: 0.75rem;
-  --background: #f6eee8;
-  --foreground: #2e1418;
-  --card: #fffaf7;
-  --card-foreground: #2e1418;
-  --popover: #fffaf7;
-  --popover-foreground: #2e1418;
-  --primary: #9c1f31;
-  --primary-foreground: #fff5f0;
-  --secondary: #f3e4dd;
-  --secondary-foreground: #5a2830;
-  --muted: #f2e6e0;
-  --muted-foreground: #8a6b6b;
-  --accent: #f7e3d8;
-  --accent-foreground: #9c1f31;
+  --background: #f9eef0;
+  --foreground: #330b17;
+  --card: #fffbfc;
+  --card-foreground: #330b17;
+  --popover: #fffbfc;
+  --popover-foreground: #330b17;
+  --primary: #8c1230;
+  --primary-foreground: #fff6f7;
+  --secondary: #f6e3e7;
+  --secondary-foreground: #5d1425;
+  --muted: #f5e4e8;
+  --muted-foreground: #96666f;
+  --accent: #f9e5e9;
+  --accent-foreground: #8c1230;
   --destructive: #c22030;
-  --border: rgba(46, 20, 24, 0.1);
-  --input: rgba(46, 20, 24, 0.12);
-  --ring: #9c1f31;
+  --border: rgba(51, 11, 23, 0.1);
+  --input: rgba(51, 11, 23, 0.12);
+  --ring: #8c1230;
   --gold: #a4761c;
   --chart-1: #b13a4d;
   --chart-2: #a4761c;
-  --chart-3: #9c1f31;
-  --chart-4: #2e1418;
+  --chart-3: #8c1230;
+  --chart-4: #330b17;
   --chart-5: #c98a4e;
-  --sidebar: #fffaf7;
-  --sidebar-foreground: #2e1418;
+  --sidebar: #fffbfc;
+  --sidebar-foreground: #330b17;
   --sidebar-primary: #b13a4d;
-  --sidebar-primary-foreground: #fff5f0;
-  --sidebar-accent: #f7e3d8;
-  --sidebar-accent-foreground: #9c1f31;
-  --sidebar-border: rgba(46, 20, 24, 0.1);
+  --sidebar-primary-foreground: #fff6f7;
+  --sidebar-accent: #f9e5e9;
+  --sidebar-accent-foreground: #8c1230;
+  --sidebar-border: rgba(51, 11, 23, 0.1);
   --sidebar-ring: #b13a4d;
 
-  /* emerald ramp — LIGHT me ye "ink" ke roop me kaam karte hain */
-  --q-em-50: #2e1418;
-  --q-em-100: #4a2c31;
-  --q-em-200: #8a6b6b;
-  --q-em-300: #a03042;
-  --q-em-400: #ab3548;
+  /* emerald ramp — LIGHT me ye "wine ink" ke roop me kaam karte hain */
+  --q-em-50: #330b17;
+  --q-em-100: #4b1a26;
+  --q-em-200: #96666f;
+  --q-em-300: #a63045;
+  --q-em-400: #b03048;
   --q-em-500: #b13a4d;
-  --q-em-600: #9c3143;
-  --q-em-700: #852a3a;
-  --q-em-800: #a08d8d;
-  --q-em-900: #ecd9d3;
-  --q-em-950: #f6ece7;
+  --q-em-600: #962c3f;
+  --q-em-700: #7d1d31;
+  --q-em-800: #a4898d;
+  --q-em-900: #f0dbe0;
+  --q-em-950: #f9eef0;
 
   /* app-level theme tokens */
   --glow: rgba(217, 164, 79, 0.35);
-  --shadow-float: rgba(46, 20, 24, 0.18);
+  --shadow-float: rgba(51, 11, 23, 0.18);
   --text-glow-color: rgba(164, 118, 28, 0.25);
-  --glass-bg: rgba(250, 243, 238, 0.93);
-  --card-surface-bg: linear-gradient(165deg, #ffffff, #fdf6f1);
-  --card-surface-border: rgba(46, 20, 24, 0.08);
-  --player-bg: linear-gradient(180deg, #f8efe8, #f1e3db);
-  --popup-bg: rgba(253, 249, 246, 0.97);
-  --scroll-thumb: rgba(46, 20, 24, 0.2);
-  --grad-emerald-1: #c94b5c;
-  --grad-emerald-2: #ab3548;
-  --grad-emerald-3: #7e2233;
+  --glass-bg: rgba(253, 242, 244, 0.93);
+  --card-surface-bg: linear-gradient(165deg, #ffffff, #fdf3f5);
+  --card-surface-border: rgba(51, 11, 23, 0.08);
+  --player-bg: linear-gradient(180deg, #fbeef1, #f5dfe4);
+  --popup-bg: rgba(255, 250, 251, 0.97);
+  --scroll-thumb: rgba(51, 11, 23, 0.2);
+  --grad-emerald-1: #c4384e;
+  --grad-emerald-2: #a0203a;
+  --grad-emerald-3: #6d1024;
   --grad-gold-1: #e3c476;
   --grad-gold-2: #cda03e;
   --grad-gold-3: #a4761c;
@@ -155,28 +156,29 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB DARK THEME — "ROYAL MAROON" (v0.5.3 brand — DEFAULT)
-  Banner jaisa ASLI gehra wine-maroon (coffee/brown nahi!) + chamakta
-  gold + pearl-white text. Har surface me maroon ki richness.
+  QALB DARK THEME — "ROYAL CRIMSON MAROON" (v0.5.4 — DEFAULT)
+  User ke banner ke EXACT sampled colors: crimson #930125 center,
+  #74041d mid, #450213 edge. Pehle se gehra-tha (#2a0710) — ab
+  asli RED maroon ki richness har surface me + chamakta gold.
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #2a0710;
+  --background: #380a17;
   --foreground: #f8ece6;
-  --card: #380b18;
+  --card: #470d1f;
   --card-foreground: #f8ece6;
-  --popover: #3b0c1a;
+  --popover: #4b0e21;
   --popover-foreground: #f8ece6;
   --primary: #e9c46a;
-  --primary-foreground: #2a0710;
-  --secondary: #40101e;
+  --primary-foreground: #380a17;
+  --secondary: #521024;
   --secondary-foreground: #f0d8cf;
-  --muted: #40101e;
-  --muted-foreground: #d0a49b;
-  --accent: #4a1222;
+  --muted: #521024;
+  --muted-foreground: #d8a9a2;
+  --accent: #5c1226;
   --accent-foreground: #f0c987;
   --destructive: #ff6b6b;
-  --border: rgba(233, 196, 106, 0.16);
+  --border: rgba(233, 196, 106, 0.17);
   --input: rgba(233, 196, 106, 0.2);
   --ring: #e9c46a;
   --gold: #e9c46a;
@@ -184,17 +186,17 @@
   --chart-2: #f0c987;
   --chart-3: #d9a54e;
   --chart-4: #f8ece6;
-  --chart-5: #c22740;
-  --sidebar: #380b18;
+  --chart-5: #d31f3f;
+  --sidebar: #470d1f;
   --sidebar-foreground: #f8ece6;
   --sidebar-primary: #e9c46a;
-  --sidebar-primary-foreground: #2a0710;
-  --sidebar-accent: #4a1222;
+  --sidebar-primary-foreground: #380a17;
+  --sidebar-accent: #5c1226;
   --sidebar-accent-foreground: #f0c987;
-  --sidebar-border: rgba(233, 196, 106, 0.16);
+  --sidebar-border: rgba(233, 196, 106, 0.17);
   --sidebar-ring: #e9c46a;
 
-  /* emerald ramp — DARK: page maroon-950 → gold-400 accents */
+  /* emerald ramp — DARK: page crimson-maroon → gold-400 accents */
   --q-em-50: #f8ece6;
   --q-em-100: #f0d8cf;
   --q-em-200: #d8aca4;
@@ -202,20 +204,20 @@
   --q-em-400: #e6b566;
   --q-em-500: #d9a54e;
   --q-em-600: #c08a3e;
-  --q-em-700: #8e1c30;
-  --q-em-800: #5c1224;
-  --q-em-900: #420d1c;
-  --q-em-950: #2a0710;
+  --q-em-700: #7c152e;
+  --q-em-800: #571125;
+  --q-em-900: #470d1f;
+  --q-em-950: #380a17;
 
   /* app-level theme tokens */
   --glow: rgba(230, 181, 102, 0.45);
-  --shadow-float: rgba(10, 0, 3, 0.75);
+  --shadow-float: rgba(20, 0, 6, 0.75);
   --text-glow-color: rgba(240, 201, 135, 0.35);
-  --glass-bg: rgba(42, 7, 16, 0.92);
-  --card-surface-bg: linear-gradient(165deg, rgba(69, 15, 31, 0.94), rgba(36, 6, 14, 0.97));
-  --card-surface-border: rgba(233, 196, 106, 0.15);
-  --player-bg: linear-gradient(180deg, #430e1e, #2a0711);
-  --popup-bg: rgba(50, 11, 23, 0.97);
+  --glass-bg: rgba(56, 10, 23, 0.92);
+  --card-surface-bg: linear-gradient(165deg, rgba(87, 17, 37, 0.95), rgba(48, 8, 21, 0.97));
+  --card-surface-border: rgba(233, 196, 106, 0.16);
+  --player-bg: linear-gradient(180deg, #5c1128, #380a17);
+  --popup-bg: rgba(64, 12, 28, 0.97);
   --scroll-thumb: rgba(230, 181, 102, 0.28);
   --grad-emerald-1: #f1d9a0;
   --grad-emerald-2: #dfaa4e;
@@ -244,7 +246,7 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(177, 58, 77, 0.06)), transparent 60%),
+      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(147, 1, 37, 0.06)), transparent 60%),
       radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(164, 118, 28, 0.05)), transparent 55%);
     background-attachment: fixed;
     overscroll-behavior-y: none;
@@ -252,11 +254,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   .dark body {
-    /* banner jaisa depth — maroon center glow + gold corner halka */
+    /* banner jaisa depth — crimson center glow + gold corner halka */
     background-image:
       radial-gradient(1100px 560px at 85% -12%, rgba(233, 196, 106, 0.07), transparent 60%),
-      radial-gradient(900px 500px at -15% 16%, rgba(194, 39, 64, 0.2), transparent 55%),
-      radial-gradient(1200px 800px at 50% 120%, rgba(140, 22, 44, 0.22), transparent 60%);
+      radial-gradient(900px 500px at -15% 16%, rgba(147, 1, 37, 0.3), transparent 55%),
+      radial-gradient(1200px 800px at 50% 120%, rgba(116, 4, 29, 0.4), transparent 60%);
   }
 }
 

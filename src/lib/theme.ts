@@ -1,9 +1,9 @@
 'use client'
 
 // Qalb — Theme engine (Light / Dark)
-// LIGHT = "Ivory Maroon" (warm ivory + gehra maroon + gold)
-// DARK  = "Midnight Maroon" (gehra maroon raat + chamakta gold) — DEFAULT
-// v0.5.2: poora palette brand images se — deep red + gold + silver-white.
+// LIGHT = "Rose Wine" (rose-ivory + wine maroon + gold — banner family)
+// DARK  = "Royal Crimson Maroon" (banner ke EXACT reds + chamakta gold) — DEFAULT
+// v0.5.4: banner-matched palette — crimson #930125 / #74041d / #450213 + gold.
 // localStorage: qalb_theme = 'light' | 'dark' (default: dark — brand look)
 // Native side par status-bar icons bhi sync hote hain (QalbNative plugin).
 

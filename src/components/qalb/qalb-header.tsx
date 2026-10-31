@@ -1,18 +1,17 @@
 'use client'
 
-// Qalb — Global Header (v0.5.2)
+// Qalb — Global Header (v0.5.4)
 // ─────────────────────────────────────────────────────────────────
-// HAR screen par wahi header — user request:
-//   • LEFT: Qalb brand logo (dil + ECG heartbeat line — animated,
-//     pulse line ECG pe daudti rehti hai + sparkles twinkle)
+// HAR screen par wahi header — user ki STRICT demand:
+//   • LEFT: user ka DIEYA GAYA ASLI BANNER IMAGE (bilkul same —
+//     koi drawing nahi, koi replacement nahi). Image apna maroon
+//     bg leke aati hai → LIGHT theme me bhi hamesha saaf dikhti hai.
 //   • RIGHT: is waqt kaunsa section khula hai — iPlayer / iTube /
 //     Calendar / Profile (gold chip, theme se matching)
 //   • Neeche shimmering gold-red divider (qalb-divider)
 //
 // Shell me ek dafa mount hota hai — tab badalne par sirf section
 // label badalta hai. Sticky glass — scroll par bhi upar chipakta hai.
-
-import { QalbLogo } from '@/components/qalb/qalb-logo'
 
 export type QalbSection =
   | 'iPlayer'
@@ -27,7 +26,12 @@ export function QalbHeader({ section }: { section: QalbSection }) {
       aria-label={`Qalb — ${section}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <QalbLogo className="h-10 w-auto shrink-0" />
+        {/* user ka EXACT banner — v0.5.3 wali drawn logo hata di gayi */}
+        <img
+          src="/brand/qalb-banner.jpg"
+          alt="Qalb"
+          className="h-11 w-auto shrink-0 rounded-lg shadow-[0_4px_14px_-6px_rgba(69,2,19,0.55)] ring-1 ring-gold/30"
+        />
         <span
           className="shrink-0 rounded-full border border-gold/35 bg-gold/10 px-3.5 py-1.5 text-[12.5px] font-extrabold tracking-wide text-gold shadow-[0_0_16px_-6px_var(--gold)]"
           aria-current="page"
