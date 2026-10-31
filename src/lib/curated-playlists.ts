@@ -42,19 +42,19 @@ const byArtist = (name: string) =>
 
 const BASE_PLAYLISTS: QalbPlaylist[] = [
   pl('cur-top', 'top-trending-kalam', 'Top Trending Kalam',
-    'Sab se suniye jaane wale naat, qawwali aur nasheed', '🌟', '#10B981',
+    'Sab se suniye jaane wale naat, qawwali aur nasheed', '🌟', '#C0455A',
     ALL_SORTED.slice(0, 12)),
 
   pl('cur-naat', 'naat-sharif', 'Naat Sharif',
-    'Pyare Nabi ﷺ ki shameed barkein — behtareen naatein', '🕌', '#34D399',
+    'Pyare Nabi ﷺ ki shameed barkein — behtareen naatein', '🕌', '#DF9B62',
     NAAT),
 
   pl('cur-qawwali', 'sufi-qawwali', 'Sufi Qawwali',
-    'Ruhani mehfilon ki shahkar qawwaliyan', '🎵', '#0EA47A',
+    'Ruhani mehfilon ki shahkar qawwaliyan', '🎵', '#B13A4D',
     QAWWALI),
 
   pl('cur-nasheed', 'nasheed-gold', 'Nasheed Gold',
-    'Dil ko chhoo lene wale international nasheed', '🌙', '#2DD4BF',
+    'Dil ko chhoo lene wale international nasheed', '🌙', '#C98A4E',
     NASHEED),
 
   pl('cur-nusrat', 'nusrat-mehfil', 'Ustad Nusrat Mehfil',
@@ -62,11 +62,11 @@ const BASE_PLAYLISTS: QalbPlaylist[] = [
     byArtist('Nusrat')),
 
   pl('cur-owais', 'owais-raza-qadri', 'Owais Raza Qadri',
-    'Alhaj Owais Raza Qadri ki mashhoor naatein', '🎤', '#059669',
+    'Alhaj Owais Raza Qadri ki mashhoor naatein', '🎤', '#a63a4a',
     byArtist('Owais')),
 
   pl('cur-maher-sami', 'maher-zain-sami-yusuf', 'Maher Zain & Sami Yusuf',
-    'Modern nasheed ke do sab se bare sitare', '💎', '#14B8A6',
+    'Modern nasheed ke do sab se bare sitare', '💎', '#A63A4A',
     [...byArtist('Maher'), ...byArtist('Sami')]),
 
   pl('cur-hamd', 'hamd-o-sana', 'Hamd-o-Sana',

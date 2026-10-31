@@ -1,9 +1,10 @@
 'use client'
 
 // Qalb — Theme engine (Light / Dark)
-// LIGHT = "Emerald Ivory" (warm ivory + gehra sabz + gold)
-// DARK  = "Midnight Emerald" (sabz-kaali raat + chamakta emerald)
-// localStorage: qalb_theme = 'light' | 'dark' (default: light — sage reference theme)
+// LIGHT = "Ivory Maroon" (warm ivory + gehra maroon + gold)
+// DARK  = "Midnight Maroon" (gehra maroon raat + chamakta gold) — DEFAULT
+// v0.5.2: poora palette brand images se — deep red + gold + silver-white.
+// localStorage: qalb_theme = 'light' | 'dark' (default: dark — brand look)
 // Native side par status-bar icons bhi sync hote hain (QalbNative plugin).
 
 type QalbNativeInterface = {
@@ -29,12 +30,12 @@ export type QalbTheme = 'light' | 'dark'
 export const THEME_KEY = 'qalb_theme'
 
 export function getTheme(): QalbTheme {
-  if (typeof window === 'undefined') return 'light'
+  if (typeof window === 'undefined') return 'dark'
   try {
-    // default LIGHT (sage) — user ne reference image me yahi manga tha
-    return window.localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
+    // default DARK (brand) — sirf 'light' save hone par light
+    return window.localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'
   } catch {
-    return 'light'
+    return 'dark'
   }
 }
 
@@ -48,11 +49,11 @@ export function applyTheme(theme: QalbTheme) {
     /* private mode */
   }
   // native status bar icons sync (light theme → dark icons)
-  void nativePlugin()?.setStatusBarStyle({ dark: theme === 'dark' }).catch(() => {})
+  void nativePlugin()?.setStatusBarStyle({ dark: theme !== 'light' }).catch(() => {})
 }
 
 export function toggleTheme(): QalbTheme {
-  const next: QalbTheme = getTheme() === 'dark' ? 'light' : 'dark'
+  const next: QalbTheme = getTheme() === 'light' ? 'dark' : 'light'
   applyTheme(next)
   return next
 }

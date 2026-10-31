@@ -459,15 +459,14 @@ export function CalendarView() {
 
   return (
     <div className="space-y-4 px-4 pb-8 pt-5">
-      {/* header */}
+      {/* header — global QalbHeader me "Calendar" section chip hai */}
       <header>
-        <h1 className="flex items-center gap-2 text-xl font-extrabold text-emerald-50">
-          <MoonStar className="h-5 w-5 text-emerald-400" /> Islamic Calendar
+        <p className="flex items-center gap-2 text-xs text-emerald-200/50">
+          Hijri date, namaz ke auqaat, Qibla aur tasbih
           <span className="rounded-full bg-gold/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gold">
             Sunni Hanafi
           </span>
-        </h1>
-        <p className="text-xs text-emerald-200/50">Hijri date, namaz ke auqaat, Qibla aur tasbih</p>
+        </p>
       </header>
 
       {loading ? (
@@ -480,7 +479,7 @@ export function CalendarView() {
           <section
             aria-label="Namaz dashboard"
             className="relative overflow-hidden rounded-3xl p-5 text-white shadow-[0_18px_50px_-18px_rgba(0,0,0,0.55)]"
-            style={{ background: 'linear-gradient(168deg, #14503a 0%, #0d3123 52%, #071e15 100%)' }}
+            style={{ background: 'linear-gradient(168deg, #6e2430 0%, #3a131b 52%, #200a0f 100%)' }}
           >
             {/* mosque skyline — decorative */}
             <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 opacity-[0.13]">

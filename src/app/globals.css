@@ -76,75 +76,75 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB LIGHT THEME — "EMERALD IVORY"
-  Warm ivory background, deep emerald ink text, green + gold accents.
-  Classic Islamic palette: safed chamka, gehra sabz, halka sunehra.
+  QALB LIGHT THEME — "IVORY MAROON" (v0.5.2 brand)
+  Warm ivory background, deep maroon ink text, ruby + gold accents.
+  Brand images se: deep red, sunehra gold, silver-white.
   ═══════════════════════════════════════════════════════════════
 */
 :root {
   --radius: 0.75rem;
-  --background: #eef3e8;
-  --foreground: #1c2f24;
-  --card: #ffffff;
-  --card-foreground: #1c2f24;
-  --popover: #ffffff;
-  --popover-foreground: #1c2f24;
-  --primary: #35714f;
-  --primary-foreground: #f2faf4;
-  --secondary: #e6efdc;
-  --secondary-foreground: #2c4534;
-  --muted: #e9f0e0;
-  --muted-foreground: #5a6e61;
-  --accent: #dfeee0;
-  --accent-foreground: #246b47;
-  --destructive: #dc2626;
-  --border: rgba(28, 47, 36, 0.1);
-  --input: rgba(28, 47, 36, 0.12);
-  --ring: #35714f;
-  --gold: #a9821f;
-  --chart-1: #0f9163;
-  --chart-2: #a9821f;
-  --chart-3: #0b7a52;
-  --chart-4: #17281f;
-  --chart-5: #6b8a3c;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #17281f;
-  --sidebar-primary: #0f9163;
-  --sidebar-primary-foreground: #f3fbf4;
-  --sidebar-accent: #e2f0e4;
-  --sidebar-accent-foreground: #0b7a52;
-  --sidebar-border: rgba(23, 40, 31, 0.1);
-  --sidebar-ring: #0f9163;
+  --background: #f6eee8;
+  --foreground: #2e1418;
+  --card: #fffaf7;
+  --card-foreground: #2e1418;
+  --popover: #fffaf7;
+  --popover-foreground: #2e1418;
+  --primary: #9c1f31;
+  --primary-foreground: #fff5f0;
+  --secondary: #f3e4dd;
+  --secondary-foreground: #5a2830;
+  --muted: #f2e6e0;
+  --muted-foreground: #8a6b6b;
+  --accent: #f7e3d8;
+  --accent-foreground: #9c1f31;
+  --destructive: #c22030;
+  --border: rgba(46, 20, 24, 0.1);
+  --input: rgba(46, 20, 24, 0.12);
+  --ring: #9c1f31;
+  --gold: #a4761c;
+  --chart-1: #b13a4d;
+  --chart-2: #a4761c;
+  --chart-3: #9c1f31;
+  --chart-4: #2e1418;
+  --chart-5: #c98a4e;
+  --sidebar: #fffaf7;
+  --sidebar-foreground: #2e1418;
+  --sidebar-primary: #b13a4d;
+  --sidebar-primary-foreground: #fff5f0;
+  --sidebar-accent: #f7e3d8;
+  --sidebar-accent-foreground: #9c1f31;
+  --sidebar-border: rgba(46, 20, 24, 0.1);
+  --sidebar-ring: #b13a4d;
 
   /* emerald ramp — LIGHT me ye "ink" ke roop me kaam karte hain */
-  --q-em-50: #17281f;
-  --q-em-100: #33473b;
-  --q-em-200: #5a6e61;
-  --q-em-300: #0b7a52;
-  --q-em-400: #0e8a5c;
-  --q-em-500: #0f9163;
-  --q-em-600: #0c7e56;
-  --q-em-700: #0a6b47;
-  --q-em-800: #8fa697;
-  --q-em-900: #cbe0cd;
-  --q-em-950: #e7efe3;
+  --q-em-50: #2e1418;
+  --q-em-100: #4a2c31;
+  --q-em-200: #8a6b6b;
+  --q-em-300: #a03042;
+  --q-em-400: #ab3548;
+  --q-em-500: #b13a4d;
+  --q-em-600: #9c3143;
+  --q-em-700: #852a3a;
+  --q-em-800: #a08d8d;
+  --q-em-900: #ecd9d3;
+  --q-em-950: #f6ece7;
 
   /* app-level theme tokens */
-  --glow: rgba(47, 148, 96, 0.35);
-  --shadow-float: rgba(28, 47, 36, 0.18);
-  --text-glow-color: rgba(47, 148, 96, 0.22);
-  --glass-bg: rgba(250, 253, 248, 0.93);
-  --card-surface-bg: linear-gradient(165deg, #ffffff, #fafdf7);
-  --card-surface-border: rgba(28, 47, 36, 0.08);
-  --player-bg: linear-gradient(180deg, #f2f7ec, #e8f1e0);
-  --popup-bg: rgba(252, 254, 250, 0.97);
-  --scroll-thumb: rgba(28, 47, 36, 0.2);
-  --grad-emerald-1: #2fa46c;
-  --grad-emerald-2: #2f9460;
-  --grad-emerald-3: #1d6b45;
-  --grad-gold-1: #d9b54a;
-  --grad-gold-2: #c39a33;
-  --grad-gold-3: #a9821f;
+  --glow: rgba(217, 164, 79, 0.35);
+  --shadow-float: rgba(46, 20, 24, 0.18);
+  --text-glow-color: rgba(164, 118, 28, 0.25);
+  --glass-bg: rgba(250, 243, 238, 0.93);
+  --card-surface-bg: linear-gradient(165deg, #ffffff, #fdf6f1);
+  --card-surface-border: rgba(46, 20, 24, 0.08);
+  --player-bg: linear-gradient(180deg, #f8efe8, #f1e3db);
+  --popup-bg: rgba(253, 249, 246, 0.97);
+  --scroll-thumb: rgba(46, 20, 24, 0.2);
+  --grad-emerald-1: #c94b5c;
+  --grad-emerald-2: #ab3548;
+  --grad-emerald-3: #7e2233;
+  --grad-gold-1: #e3c476;
+  --grad-gold-2: #cda03e;
+  --grad-gold-3: #a4761c;
 
   /* red/amber — LIGHT me deep (light bg par readable) */
   --q-red-100: #7f1d1d;
@@ -155,73 +155,73 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB DARK THEME — "MIDNIGHT EMERALD"
-  Gehra sabz-kaali raat, chamakta emerald, sunehri touch.
+  QALB DARK THEME — "MIDNIGHT MAROON" (v0.5.2 brand — DEFAULT)
+  Gehra maroon raat (app icon jaisa), chamakta gold, warm white text.
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #0a130e;
-  --foreground: #ecf5ee;
-  --card: #0f1512;
-  --card-foreground: #ecf5ee;
-  --popover: #121915;
-  --popover-foreground: #ecf5ee;
-  --primary: #2fc98d;
-  --primary-foreground: #06231a;
-  --secondary: #141c18;
-  --secondary-foreground: #d9e7db;
-  --muted: #141c18;
-  --muted-foreground: #a9bfac;
-  --accent: #10241b;
-  --accent-foreground: #5ee3ab;
-  --destructive: #f87171;
-  --border: rgba(61, 220, 158, 0.14);
-  --input: rgba(61, 220, 158, 0.18);
-  --ring: #3ddc9e;
+  --background: #170a0d;
+  --foreground: #f6eae2;
+  --card: #1f0f13;
+  --card-foreground: #f6eae2;
+  --popover: #230f14;
+  --popover-foreground: #f6eae2;
+  --primary: #dfaa4e;
+  --primary-foreground: #241005;
+  --secondary: #2a1418;
+  --secondary-foreground: #ecd5c9;
+  --muted: #2a1418;
+  --muted-foreground: #c7a49b;
+  --accent: #33161c;
+  --accent-foreground: #f0c987;
+  --destructive: #ff6b6b;
+  --border: rgba(223, 170, 78, 0.14);
+  --input: rgba(223, 170, 78, 0.18);
+  --ring: #dfaa4e;
   --gold: #e9c46a;
-  --chart-1: #2fc98d;
+  --chart-1: #dfaa4e;
   --chart-2: #e9c46a;
-  --chart-3: #5ee3ab;
-  --chart-4: #ecf5ee;
-  --chart-5: #17805b;
-  --sidebar: #0f1512;
-  --sidebar-foreground: #ecf5ee;
-  --sidebar-primary: #2fc98d;
-  --sidebar-primary-foreground: #06231a;
-  --sidebar-accent: #10241b;
-  --sidebar-accent-foreground: #5ee3ab;
-  --sidebar-border: rgba(61, 220, 158, 0.14);
-  --sidebar-ring: #3ddc9e;
+  --chart-3: #f0c987;
+  --chart-4: #f6eae2;
+  --chart-5: #a63a4a;
+  --sidebar: #1f0f13;
+  --sidebar-foreground: #f6eae2;
+  --sidebar-primary: #dfaa4e;
+  --sidebar-primary-foreground: #241005;
+  --sidebar-accent: #33161c;
+  --sidebar-accent-foreground: #f0c987;
+  --sidebar-border: rgba(223, 170, 78, 0.14);
+  --sidebar-ring: #dfaa4e;
 
   /* emerald ramp — DARK me bright accent ke roop me */
-  --q-em-50: #ecf5ee;
-  --q-em-100: #d9e7db;
-  --q-em-200: #a9bfac;
-  --q-em-300: #5ee3ab;
-  --q-em-400: #3ddc9e;
-  --q-em-500: #2fc98d;
-  --q-em-600: #21ae75;
-  --q-em-700: #17805b;
-  --q-em-800: #14654a;
-  --q-em-900: #16382a;
-  --q-em-950: #0a130f;
+  --q-em-50: #f6eae2;
+  --q-em-100: #ecd5c9;
+  --q-em-200: #c7a49b;
+  --q-em-300: #f0c987;
+  --q-em-400: #e6b566;
+  --q-em-500: #d9a54e;
+  --q-em-600: #c08a3e;
+  --q-em-700: #a63a4a;
+  --q-em-800: #6e2430;
+  --q-em-900: #3a131b;
+  --q-em-950: #170a0d;
 
   /* app-level theme tokens */
-  --glow: rgba(61, 220, 158, 0.4);
+  --glow: rgba(230, 181, 102, 0.4);
   --shadow-float: rgba(0, 0, 0, 0.7);
-  --text-glow-color: rgba(94, 227, 171, 0.35);
-  --glass-bg: rgba(12, 18, 15, 0.91);
-  --card-surface-bg: linear-gradient(165deg, rgba(20, 30, 25, 0.92), rgba(11, 16, 13, 0.96));
-  --card-surface-border: rgba(61, 220, 158, 0.12);
-  --player-bg: linear-gradient(180deg, #0c1511, #060a08);
-  --popup-bg: rgba(16, 22, 19, 0.97);
-  --scroll-thumb: rgba(61, 220, 158, 0.25);
-  --grad-emerald-1: #58e6ae;
-  --grad-emerald-2: #2fc98d;
-  --grad-emerald-3: #14996a;
-  --grad-gold-1: #f1da96;
-  --grad-gold-2: #ddba5f;
-  --grad-gold-3: #a8842a;
+  --text-glow-color: rgba(240, 201, 135, 0.35);
+  --glass-bg: rgba(24, 11, 14, 0.91);
+  --card-surface-bg: linear-gradient(165deg, rgba(48, 20, 26, 0.92), rgba(24, 10, 14, 0.96));
+  --card-surface-border: rgba(223, 170, 78, 0.13);
+  --player-bg: linear-gradient(180deg, #1c0d11, #12070a);
+  --popup-bg: rgba(30, 14, 18, 0.97);
+  --scroll-thumb: rgba(230, 181, 102, 0.25);
+  --grad-emerald-1: #f1d9a0;
+  --grad-emerald-2: #dfaa4e;
+  --grad-emerald-3: #b07d2f;
+  --grad-gold-1: #f1d9a0;
+  --grad-gold-2: #dfaa4e;
+  --grad-gold-3: #a8762a;
 
   /* red/amber — DARK me original light tints */
   --q-red-100: #fee2e2;
@@ -243,8 +243,8 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(47, 148, 96, 0.07)), transparent 60%),
-      radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(169, 130, 31, 0.05)), transparent 55%);
+      radial-gradient(1100px 520px at 85% -12%, var(--glow-bg-1, rgba(177, 58, 77, 0.06)), transparent 60%),
+      radial-gradient(900px 460px at -15% 14%, var(--glow-bg-2, rgba(164, 118, 28, 0.05)), transparent 55%);
     background-attachment: fixed;
     overscroll-behavior-y: none;
     /* Android WebView — native app jaisi tap feel (koi grey flash nahi) */
@@ -252,8 +252,8 @@
   }
   .dark body {
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, rgba(61, 220, 158, 0.07), transparent 60%),
-      radial-gradient(900px 460px at -15% 14%, rgba(29, 107, 69, 0.12), transparent 55%);
+      radial-gradient(1100px 520px at 85% -12%, rgba(217, 165, 78, 0.06), transparent 60%),
+      radial-gradient(900px 460px at -15% 14%, rgba(166, 58, 74, 0.12), transparent 55%);
   }
 }
 
@@ -360,15 +360,15 @@
   --qalb-red-a: #b31226;
   --qalb-red-b: #e63946;
   --qalb-red-c: #ff5a5a;
-  --qalb-ekg: #2f8f5c;
-  --qalb-ekg-pulse: #46c98a;
+  --qalb-ekg: #a4761c;
+  --qalb-ekg-pulse: #d9a44e;
 }
 .dark {
   --qalb-red-a: #a10f22;
   --qalb-red-b: #ef3b4e;
   --qalb-red-c: #ff6b6b;
-  --qalb-ekg: #3ddc9e;
-  --qalb-ekg-pulse: #c2f4de;
+  --qalb-ekg: #e9c46a;
+  --qalb-ekg-pulse: #f6e3ae;
 }
 
 /* Heartbeat — dil ki asli rhythm jaisa double-thump */
@@ -460,35 +460,35 @@
 /* Filled line — glow pulse (bounce v0.2.2 me neeche .qalb-ph-line rule me) */
 @keyframes qalb-ph-glow {
   0%, 100% {
-    box-shadow: 0 0 4px 0 rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 4px 0 rgba(223, 170, 78, 0.3);
   }
   12% {
-    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.75), 0 0 24px 6px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 10px 2px rgba(223, 170, 78, 0.75), 0 0 24px 6px rgba(223, 170, 78, 0.35);
   }
   28% {
-    box-shadow: 0 0 6px 0 rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 6px 0 rgba(223, 170, 78, 0.4);
   }
   40% {
-    box-shadow: 0 0 9px 1px rgba(16, 185, 129, 0.6), 0 0 18px 3px rgba(16, 185, 129, 0.25);
+    box-shadow: 0 0 9px 1px rgba(223, 170, 78, 0.6), 0 0 18px 3px rgba(223, 170, 78, 0.25);
   }
 }
 
 /* Full-player thumb — ripple thump (Radix translateX safe: no transform) */
 @keyframes qalb-thumb-thump {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.35), 0 0 8px 1px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 0 0 rgba(223, 170, 78, 0.35), 0 0 8px 1px rgba(223, 170, 78, 0.3);
   }
   12% {
-    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.22), 0 0 20px 5px rgba(16, 185, 129, 0.55);
+    box-shadow: 0 0 0 6px rgba(223, 170, 78, 0.22), 0 0 20px 5px rgba(223, 170, 78, 0.55);
   }
   26% {
-    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18), 0 0 10px 2px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 0 2px rgba(223, 170, 78, 0.18), 0 0 10px 2px rgba(223, 170, 78, 0.4);
   }
   38% {
-    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2), 0 0 15px 3px rgba(16, 185, 129, 0.48);
+    box-shadow: 0 0 0 4px rgba(223, 170, 78, 0.2), 0 0 15px 3px rgba(223, 170, 78, 0.48);
   }
   55% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0), 0 0 8px 1px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 0 0 rgba(223, 170, 78, 0), 0 0 8px 1px rgba(223, 170, 78, 0.3);
   }
 }
 

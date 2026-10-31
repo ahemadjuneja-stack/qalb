@@ -150,7 +150,7 @@ export function AddToPlaylistSheet() {
               >
                 <span
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl"
-                  style={{ background: `${'#10B981'}18`, border: '1px solid #10B98130' }}
+                  style={{ background: `${'#C0455A'}18`, border: '1px solid #C0455A30' }}
                 >
                   {pl.emoji}
                 </span>

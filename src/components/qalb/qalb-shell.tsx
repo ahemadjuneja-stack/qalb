@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { PlayerProvider } from '@/components/qalb/player-provider'
 import { BottomNav, type QalbTab } from '@/components/qalb/bottom-nav'
+import { QalbHeader, type QalbSection } from '@/components/qalb/qalb-header'
 import { MiniPlayer } from '@/components/qalb/mini-player'
 import { FullPlayerModal } from '@/components/qalb/full-player-modal'
 import { HomeView } from '@/components/qalb/views/home-view'
@@ -144,6 +145,11 @@ function QalbShellInner({
   const showReels = !hiddenTabs.includes('reels')
   const showCalendar = !hiddenTabs.includes('calendar')
 
+  // Global header ka section label — har screen par Qalb logo (left) +
+  // section naam (right). v0.5.2 user request.
+  const section: QalbSection =
+    tab === 'reels' ? 'iTube' : tab === 'calendar' ? 'Calendar' : tab === 'profile' ? 'Profile' : 'iPlayer'
+
   const setTab = (next: QalbTab) => {
     if (next === tab) return
     scrollPos.current[tab] = window.scrollY
@@ -244,6 +250,7 @@ function QalbShellInner({
     <PlayerProvider>
       {notice && <RemoteNoticeBanner notice={notice} />}
       <div className="mx-auto min-h-screen max-w-md md:max-w-lg">
+        <QalbHeader section={section} />
         <main className="pb-40">
           <div style={{ display: tab === 'home' ? 'block' : 'none' }}>
             <HomeView />

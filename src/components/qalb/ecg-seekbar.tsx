@@ -208,7 +208,7 @@ export function EcgSeekbar({
         <path
           d={ECG_PATH}
           fill="none"
-          stroke="rgba(16, 185, 129, 0.18)"
+          stroke="rgba(223, 170, 78, 0.18)"
           strokeWidth={compact ? 4 : 3}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -220,7 +220,7 @@ export function EcgSeekbar({
           <path
             d={ECG_PATH}
             fill="none"
-            stroke="rgba(16, 185, 129, 0.35)"
+            stroke="rgba(223, 170, 78, 0.35)"
             strokeWidth={compact ? 10 : 9}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -230,7 +230,7 @@ export function EcgSeekbar({
           <path
             d={ECG_PATH}
             fill="none"
-            stroke={compact ? '#34d399' : '#10b981'}
+            stroke={compact ? '#e6b566' : '#dfaa4e'}
             strokeWidth={compact ? 4.5 : 3.5}
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -257,8 +257,8 @@ export function EcgSeekbar({
           style={{
             width: compact ? 8 : 13,
             height: compact ? 8 : 13,
-            background: '#a7f3d0',
-            border: '2.5px solid rgba(16, 185, 129, 0.9)',
+            background: '#f1d9a0',
+            border: '2.5px solid rgba(223, 170, 78, 0.9)',
           }}
         />
       </span>

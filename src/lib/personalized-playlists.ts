@@ -127,7 +127,7 @@ function tasteOrder(tracks: QalbTrack[], taste: TasteProfile, seed: number): Qal
 // ── personal mixes (SIRF isi user ke liye) ──────────────────────
 
 function personalAccent(i: number): string {
-  return ['#D4A937', '#0EA47A', '#8B5CF6'][i % 3]
+  return ['#D4A937', '#B13A4D', '#C98A4E'][i % 3]
 }
 
 function buildPersonalMixes(

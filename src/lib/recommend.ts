@@ -203,7 +203,7 @@ const CATEGORY_META: Record<string, { label: string; query: string; emoji: strin
     label: 'Naat',
     query: 'naat sharif',
     emoji: '🕌',
-    gradient: 'linear-gradient(140deg, #0e7a52, #064e3b 70%)',
+    gradient: 'linear-gradient(140deg, #9c3143, #5a1a26 70%)',
   },
   HAMD: {
     label: 'Hamd',
@@ -221,7 +221,7 @@ const CATEGORY_META: Record<string, { label: string; query: string; emoji: strin
     label: 'Nasheed',
     query: 'islamic nasheed',
     emoji: '🌙',
-    gradient: 'linear-gradient(140deg, #0d9488, #134e4a 70%)',
+    gradient: 'linear-gradient(140deg, #a63a4a, #4a1520 70%)',
   },
 }
 

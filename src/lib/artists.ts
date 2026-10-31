@@ -20,14 +20,14 @@ export const QALB_ARTISTS: QalbArtist[] = [
     role: 'Shahenshah-e-Qawwali',
     query: 'Nusrat Fateh Ali Khan qawwali',
     image: 'https://i.ytimg.com/vi/eYSaHXXFIBU/hqdefault.jpg',
-    accent: '#10B981',
+    accent: '#C0455A',
   },
   {
     name: 'Owais Raza Qadri',
     role: 'Naat Khwan',
     query: 'Owais Raza Qadri naat',
     image: 'https://i.ytimg.com/vi/mfm9Mse1ZPQ/hqdefault.jpg',
-    accent: '#0EA47A',
+    accent: '#B13A4D',
   },
   {
     name: 'Rahat Fateh Ali Khan',
@@ -41,14 +41,14 @@ export const QALB_ARTISTS: QalbArtist[] = [
     role: 'Nasheed Artist',
     query: 'Maher Zain nasheed',
     image: 'https://i.ytimg.com/vi/f4J7-WR1QOY/hqdefault.jpg',
-    accent: '#34D399',
+    accent: '#DF9B62',
   },
   {
     name: 'Sami Yusuf',
     role: 'Nasheed Artist',
     query: 'Sami Yusuf nasheed',
     image: 'https://i.ytimg.com/vi/z2_2cFityc4/hqdefault.jpg',
-    accent: '#2DD4BF',
+    accent: '#C98A4E',
   },
   {
     name: 'Amjad Sabri',
@@ -62,7 +62,7 @@ export const QALB_ARTISTS: QalbArtist[] = [
     role: 'Sufi Kalaam',
     query: 'Atif Aslam naat qawwali',
     image: 'https://i.ytimg.com/vi/74cVT_tUpck/hqdefault.jpg',
-    accent: '#14B8A6',
+    accent: '#A63A4A',
   },
   {
     name: 'Abida Parveen',

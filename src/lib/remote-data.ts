@@ -191,7 +191,7 @@ export async function fetchPlaylistsSmart(): Promise<QalbPlaylist[]> {
           name: String(d.name ?? 'Playlist'),
           description: (d.description as string | null) ?? null,
           coverEmoji: String(d.coverEmoji ?? '🕌'),
-          accentColor: String(d.accentColor ?? '#10B981'),
+          accentColor: String(d.accentColor ?? '#C0455A'),
           tracks,
           _featured: Boolean(d.featured ?? false),
           _sortOrder: Number(d.sortOrder ?? 99),

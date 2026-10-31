@@ -98,16 +98,16 @@ function playlist(
 
 export const BUNDLED_PLAYLISTS: QalbPlaylist[] = [
   playlist('bundled-pl-1', 'trending-kalam', 'Trending Kalam',
-    'Sab se suniye jaane wale naat, hamd aur qawwali', '🌟', '#10B981',
+    'Sab se suniye jaane wale naat, hamd aur qawwali', '🌟', '#C0455A',
     ['bundled-1', 'bundled-2', 'bundled-3', 'bundled-4', 'bundled-5', 'bundled-6']),
   playlist('bundled-pl-2', 'hamd-o-sana', 'Hamd-o-Sana',
     "Allah Ta'ala ki hamd mein kalaam", '🤲', '#D4A937',
     ['bundled-5', 'bundled-1', 'bundled-2']),
   playlist('bundled-pl-3', 'naat-sharif', 'Naat Sharif',
-    'Pyare Nabi ﷺ ke naat shareef', '🕌', '#34D399',
+    'Pyare Nabi ﷺ ke naat shareef', '🕌', '#DF9B62',
     ['bundled-3', 'bundled-6', 'bundled-2']),
   playlist('bundled-pl-4', 'sufi-qawwali', 'Sufi Qawwali',
-    'Ruhani sufi qawwaliyan', '🎵', '#0EA47A',
+    'Ruhani sufi qawwaliyan', '🎵', '#B13A4D',
     ['bundled-4', 'bundled-5', 'bundled-3']),
 ]
 

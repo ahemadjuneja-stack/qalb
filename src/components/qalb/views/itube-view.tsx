@@ -3,8 +3,8 @@
 // iTube — YouTube-style Islamic video hub (v0.5.0)
 // ─────────────────────────────────────────────────────────────────
 // Reels tab ki jagah. Bilkul YouTube jaisa feel:
-//   • Wordmark + search bar (rounded, top sticky)
-//   • Category chips (horizontal scroll — All/Naat/Qawwali/Bayan/…)
+//   • Shell ka global QalbHeader (logo + "iTube" section chip) upar —
+//     yahan sirf search bar + chips (v0.5.2)
 //   • Video list — 16:9 thumbnail + duration badge, title, channel,
 //     views • published
 //   • Infinite scroll (continuation)
@@ -15,7 +15,7 @@
 // non-islamic video kabhi list me nahi aata.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, Play, Search, TriangleAlert, X } from 'lucide-react'
+import { Loader2, Search, TriangleAlert, X } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
 import { viewsLabel } from '@/lib/innertube-x'
 import {
@@ -129,18 +129,8 @@ export function ITubeView({ visible }: { visible: boolean }) {
 
   return (
     <div className="pb-6" aria-label="iTube — Islamic videos">
-      {/* ── header: wordmark + search ── */}
-      <div className="glass sticky top-0 z-30 -mx-4 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2" aria-label="iTube">
-            <span className="flex h-6 w-9 items-center justify-center rounded-md bg-red-600 shadow-md">
-              <Play className="h-3.5 w-3.5 fill-white text-white" />
-            </span>
-            <span className="text-[22px] font-extrabold leading-none tracking-tight text-emerald-50">
-              iTube
-            </span>
-          </div>
-        </div>
+      {/* ── search + chips (shell header ke neeche) ── */}
+      <div className="px-0.5 pb-3 pt-1">
         <form onSubmit={submitSearch} className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-300/50" />
           <input

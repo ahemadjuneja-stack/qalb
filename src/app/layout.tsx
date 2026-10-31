@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#eef3e8",
+  themeColor: "#170a0d",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,8 +38,9 @@ export const viewport: Viewport = {
 };
 
 // Pre-paint theme boot — paint se pehle html par class lagti hai (flash nahi hota).
-// Default LIGHT (sage reference theme); user 'dark' save kare to dark.
-const themeBoot = `(function(){try{var t=localStorage.getItem('qalb_theme');if(t==='dark'){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){document.documentElement.classList.remove('dark')}})();`;
+// v0.5.2: DEFAULT DARK = "Midnight Maroon" (brand look — deep red + gold, app
+// icon/banner images jaisa). User 'light' save kare to "Ivory Maroon".
+const themeBoot = `(function(){try{var t=localStorage.getItem('qalb_theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})();`;
 
 export default function RootLayout({
   children,

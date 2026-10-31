@@ -36,10 +36,10 @@ export interface QalbFolder {
 }
 
 export const FOLDER_GRADIENTS = {
-  emerald: 'linear-gradient(140deg, #0e7a52, #064e3b 70%)',
+  emerald: 'linear-gradient(140deg, #9c3143, #5a1a26 70%)',
   gold: 'linear-gradient(140deg, #9a7b1e, #4c3a08 70%)',
   purple: 'linear-gradient(140deg, #7c3aed, #3b1076 70%)',
-  teal: 'linear-gradient(140deg, #0d9488, #134e4a 70%)',
+  teal: 'linear-gradient(140deg, #a63a4a, #4a1520 70%)',
   rose: 'linear-gradient(140deg, #be185d, #831843 70%)',
   blue: 'linear-gradient(140deg, #1d4ed8, #1e3a8a 70%)',
   amber: 'linear-gradient(140deg, #b45309, #78350f 70%)',
