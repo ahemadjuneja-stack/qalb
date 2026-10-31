@@ -282,21 +282,26 @@ function loadScript(src: string, timeoutMs = 12_000): Promise<void> {
 }
 
 /** Firebase project config se site key + invisible widget se token */
+let recaptchaSiteKeyCache: string | null = null
+
 async function getRecaptchaToken(apiKey: string): Promise<string> {
-  // 1. site key — identitytoolkit GetProjectConfig (web SDK ka pattern)
-  let siteKey: string | null = null
-  try {
-    const url = `https://identitytoolkit.googleapis.com/v1/projects/${QALB.firebaseProjectId}/config?key=${apiKey}`
-    const res = await withNetTimeout(fetch(url, { cache: 'no-store' }), 10_000)
-    if (res.ok) {
-      const j = (await res.json()) as {
-        recaptchaV2Key?: string
-        recaptchaEnterpriseKey?: string
+  // 1. site key — identitytoolkit GetRecaptchaParam (Firebase JS SDK ka
+  //    standard endpoint). NOTE: pehle projects/{id}/config try kiya tha
+  //    lekin wo public API key se 404 deta hai — sirf recaptchaParams
+  //    endpoint hi apiKey se site key deta hai.
+  let siteKey: string | null = recaptchaSiteKeyCache
+  if (!siteKey) {
+    try {
+      const url = `https://identitytoolkit.googleapis.com/v1/recaptchaParams?key=${apiKey}`
+      const res = await withNetTimeout(fetch(url, { cache: 'no-store' }), 10_000)
+      if (res.ok) {
+        const j = (await res.json()) as { recaptchaSiteKey?: string }
+        siteKey = j.recaptchaSiteKey ?? null
+        if (siteKey) recaptchaSiteKeyCache = siteKey
       }
-      siteKey = j.recaptchaV2Key ?? j.recaptchaEnterpriseKey ?? null
+    } catch {
+      /* fallthrough */
     }
-  } catch {
-    /* fallthrough */
   }
   if (!siteKey) throw new Error('phone-setup')
 
@@ -352,6 +357,11 @@ function errKind(raw: string | undefined): string {
   if (raw.includes('INVALID_CODE') || raw.includes('INVALID_SESSION'))
     return 'otp-invalid'
   if (raw.includes('TOO_MANY_ATTEMPTS') || raw.includes('EXCEEDED')) return 'rate-limit'
+  // SMS region policy — Firebase naye projects me default-deny hota hai:
+  // "SMS unable to be sent until this region enabled by the app developer"
+  // (ye OPERATION_NOT_ALLOWED se pehle check karna zaroori hai)
+  if (raw.includes('SMS unable') || raw.includes('region enabled'))
+    return 'sms-region'
   // Phone provider Firebase console me enabled nahi (ya project config
   // adhoori) — user ka masla nahi, setup ka hai
   if (
@@ -604,6 +614,11 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
       return {
         title: 'Phone login abhi khula nahi hai',
         desc: 'Firebase console me Phone sign-in enable karna baaki hai — thodi der me theek ho jayega. Tab tak Google ya Musafir mode use karein.',
+      }
+    case 'sms-region':
+      return {
+        title: 'SMS is region ke liye abhi band hai',
+        desc: 'Firebase Console → Authentication → Settings → SMS Region Policy me India (+91) allow karein — ye console se ek dafa karna hota hai.',
       }
     case 'google-setup':
       return {
