@@ -549,6 +549,113 @@ public class QalbNativePlugin extends Plugin {
     }
 
     /**
+     * JS: URL Custom Tabs me kholna (v0.4.7) — backup Google login APP KE
+     * ANDAR overlay me chalta hai, Chrome app foreground nahi hota.
+     * Custom Tabs provider na mile to reject — JS system-browser fallback
+     * use karega (koi dead-end nahi).
+     */
+    @PluginMethod
+    public void openExternalInApp(PluginCall call) {
+        try {
+            String url = call.getString("url", "");
+            if (url == null || !url.startsWith("https://")) {
+                call.reject("openExternalInApp: sirf https urls allowed");
+                return;
+            }
+            Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("openExternalInApp: activity nahi");
+                return;
+            }
+            String provider = androidx.browser.customtabs.CustomTabsClient
+                    .getPackageName(activity, java.util.Collections.<String>emptyList());
+            if (provider == null) {
+                call.reject("no-customtabs");
+                return;
+            }
+            androidx.browser.customtabs.CustomTabsIntent.Builder tb =
+                    new androidx.browser.customtabs.CustomTabsIntent.Builder();
+            tb.setShowTitle(true);
+            androidx.browser.customtabs.CustomTabsIntent ct = tb.build();
+            ct.intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            ct.launchUrl(activity, android.net.Uri.parse(url));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("custom tabs fail: " + safeMsg(e));
+        }
+    }
+
+    /**
+     * JS: app ki apni pehchaan (v0.4.7) — installed APK ka signing SHA-1 +
+     * package + version + Play Services version. Google sheet (api-10)
+     * ke registration check ke EXACT yahi inputs hain — error screen par
+     * dikh kar GCP console (Credentials → Android client) se turant
+     * compare ho jata hai. Ek digit ka farak bhi sheet fail karta hai.
+     */
+    @PluginMethod
+    public void appIdentity(PluginCall call) {
+        try {
+            android.content.Context ctx = getContext();
+            String pkg = ctx.getPackageName();
+            String ver = "";
+            try {
+                ver = ctx.getPackageManager().getPackageInfo(pkg, 0).versionName;
+            } catch (Exception ignored) {
+            }
+            String gmsVer = "";
+            try {
+                gmsVer = ctx.getPackageManager()
+                        .getPackageInfo("com.google.android.gms", 0).versionName;
+            } catch (Exception ignored) {
+            }
+            // signing cert SHA-1 — API 28+ SigningInfo, warna legacy GET_SIGNATURES
+            String sha1 = "";
+            try {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    android.content.pm.SigningInfo si = ctx.getPackageManager()
+                            .getPackageInfo(pkg,
+                                    android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                            .signingInfo;
+                    android.content.pm.Signature[] sigs = si.hasMultipleSigners()
+                            ? si.getApkContentsSigners()
+                            : si.getSigningCertificateHistory();
+                    if (sigs != null && sigs.length > 0) sha1 = sha1Hex(sigs[0].toByteArray());
+                } else {
+                    @SuppressWarnings("deprecation")
+                    android.content.pm.Signature[] sigs = ctx.getPackageManager()
+                            .getPackageInfo(pkg,
+                                    android.content.pm.PackageManager.GET_SIGNATURES).signatures;
+                    if (sigs != null && sigs.length > 0) sha1 = sha1Hex(sigs[0].toByteArray());
+                }
+            } catch (Exception ignored) {
+            }
+            JSObject res = new JSObject();
+            res.put("packageName", pkg);
+            res.put("versionName", ver == null ? "" : ver);
+            res.put("gmsVersion", gmsVer);
+            res.put("sha1", sha1);
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("appIdentity fail: " + safeMsg(e));
+        }
+    }
+
+    /** DER cert bytes → SHA-1 fingerprint (XX:XX:... colon-hex) */
+    private static String sha1Hex(byte[] der) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-1").digest(der);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < d.length; i++) {
+                if (i > 0) sb.append(':');
+                sb.append(String.format("%02X", d[i]));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
      * JS: loopback OAuth server start (Google ka official installed-app
      * flow — console custom scheme nahi deta). Chrome me consent ke baad
      * Google http://127.0.0.1:PORT/oauth2redirect par redirect karta hai;

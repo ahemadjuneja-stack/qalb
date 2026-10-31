@@ -245,7 +245,7 @@ export function LoginSheet() {
                     className="flex w-full items-center justify-center gap-2 py-1.5 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
                   >
                     <Globe className="h-3.5 w-3.5" />
-                    Browser se login try karein (backup)
+                    App ke andar login (backup)
                   </button>
                 )}
               </>

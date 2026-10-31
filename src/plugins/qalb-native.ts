@@ -77,6 +77,14 @@ export interface QalbNativePluginInterface {
     status: number
     body: string
   }>
+  // ── App identity + Custom Tabs (v0.4.7) ──
+  appIdentity(): Promise<{
+    packageName: string
+    versionName: string
+    gmsVersion: string
+    sha1: string
+  }>
+  openExternalInApp(options: { url: string }): Promise<void>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -419,5 +427,53 @@ export async function nativeHttpPostForm(
     return null
   } catch {
     return null
+  }
+}
+
+// ── App identity + Custom Tabs (v0.4.7) ──────────────────────────────
+
+export interface AppIdentity {
+  packageName: string
+  versionName: string
+  gmsVersion: string
+  sha1: string
+}
+
+/**
+ * Device par installed app ki asli pehchaan (signing SHA-1 + package).
+ * Google sheet api-10 ke registration check ke EXACT inputs — error
+ * screen par dikh kar GCP console se turant compare hota hai.
+ * null = web / purana APK / fail.
+ */
+export async function nativeAppIdentity(): Promise<AppIdentity | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.appIdentity()
+    if (r?.sha1 && r?.packageName) {
+      return {
+        packageName: r.packageName,
+        versionName: r.versionName ?? '',
+        gmsVersion: r.gmsVersion ?? '',
+        sha1: r.sha1,
+      }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * URL Custom Tabs me kholo — APP KE ANDAR overlay (Chrome app nahi
+ * khulta). true = khul gaya; false = provider nahi / purana APK / web
+ * — caller system-browser fallback use kare.
+ */
+export async function nativeOpenExternalInApp(url: string): Promise<boolean> {
+  if (!isNativeApp()) return false
+  try {
+    await QalbNative.openExternalInApp({ url })
+    return true
+  } catch {
+    return false
   }
 }

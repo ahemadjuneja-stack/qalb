@@ -60,6 +60,8 @@ dependencies {
     implementation "androidx.media:media:1.7.0"
     // Google account-picker sheet (in-app Google login, v0.4.5) — Chrome nahi khulta
     implementation "com.google.android.gms:play-services-auth:21.2.0"
+    // Custom Tabs (v0.4.7) — backup login APP KE ANDAR overlay, Chrome app nahi khulta
+    implementation "androidx.browser:browser:1.8.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

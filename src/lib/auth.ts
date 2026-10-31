@@ -920,15 +920,21 @@ export async function googleSignIn(): Promise<QalbUser> {
   const r = await nativeGoogleIdToken(sheetClient)
   if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
 
-  // Sheet fail hui — asli wajah save (diag) + saaf error. KOI AUTO-CHROME.
+  // Sheet fail hui — saaf error + device ki asli identity error me hi
+  // dikh jaye (SHA-1 + package) — GCP console se turant compare hoga.
+  // KOI AUTO-CHROME. (localStorage diag NAHI set karte — detail string
+  // me sab pehle se hai, UI me double [api-10] [sheet: api-10] na ho.)
   if (r && 'cancelled' in r) throw new Error('sheet-cancelled')
   const reason = r && 'failed' in r ? r.failed : 'unknown'
+  let diag = reason
   try {
-    window.localStorage.setItem(SHEET_FAIL_KEY, reason)
+    const { nativeAppIdentity } = await import('@/plugins/qalb-native')
+    const id = await nativeAppIdentity()
+    if (id) diag = `${reason} | sha1=${id.sha1} | pkg=${id.packageName} | gms=${id.gmsVersion}`
   } catch {
-    /* ignore */
+    /* identity optional */
   }
-  throw new Error('sheet-fail ' + reason)
+  throw new Error('sheet-fail ' + diag)
 }
 
 /**
@@ -973,7 +979,11 @@ export async function googleSignInBrowser(): Promise<QalbUser> {
     /* ignore */
   }
   const url = buildAuthorizeUrl(googleClientId, redirectUri, state, challenge)
-  const opened = await openInSystemBrowser(url)
+  // CUSTOM TABS pehle (v0.4.7) — login APP KE ANDAR overlay me, Chrome
+  // app bilkul nahi khulta. Custom Tabs engine na mile to system browser
+  // (last resort — behtar dead-end se).
+  const { nativeOpenExternalInApp } = await import('@/plugins/qalb-native')
+  const opened = (await nativeOpenExternalInApp(url)) || (await openInSystemBrowser(url))
   if (!opened) {
     void nativeStopOauthServer()
     throw new Error('google-no-browser')
@@ -1137,14 +1147,13 @@ function baseAuthMessage(kind: string, detail = ''): { title: string; desc: stri
         desc: 'Google button dobara daba kar try karein — ya mobile number se login karein.',
       }
     case 'sheet-fail': {
-      // detail me asli wajah hai: api-10 = Play Services ka purana
-      // registration cache (uninstall/reinstall se theek), gms-N = Play
-      // Services missing/old, baaki generic. Chrome AUTO nahi khulega —
-      // login screen par "Browser se login" backup button hai.
+      // detail me asli wajah + device identity (sha1/pkg/gms) hai:
+      // api-10 = registration check fail (GCP Android client ka SHA-1/
+      // package match nahi, ya propagation pending) — GCP se compare ho.
       if (detail.includes('api-10') || detail.includes('api-12500')) {
         return {
           title: 'App ke andar Google sheet nahi khul payi',
-          desc: 'Google Play Services purani install ko yaad rakhta hai — QALB app ko UNINSTALL kar ke wahi naya APK dobara install karein, phir Google se login karein. Ye sirf ek dafa karna hota hai; iske baad sheet seedha app me khulegi, Chrome ki zaroorat nahi.',
+          desc: 'Neeche [ ] me app ka SHA-1 aur package dikh raha hoga — Cloud Console → APIs & Services → Credentials → "Qalb Android" client me EXACTLY yahi hone chahiye (ek digit ka farak bhi fail karta hai, sahi karne par bhi 24 ghante lag sakte hain). Tab tak neeche "App ke andar login (backup)" se login karein — Chrome app nahi khulega.',
         }
       }
       if (detail.startsWith('gms-')) {
