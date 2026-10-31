@@ -174,7 +174,7 @@ export function LoginSheet() {
       onClick={close}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl border-t border-emerald-400/20 bg-[#0B1F17] px-5 pb-9 pt-3 shadow-2xl"
+        className="w-full max-w-md rounded-t-3xl border-t border-emerald-400/20 bg-[#2E0914] px-5 pb-9 pt-3 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-emerald-200/20" />

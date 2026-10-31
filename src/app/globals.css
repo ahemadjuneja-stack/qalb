@@ -155,67 +155,68 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB DARK THEME — "MIDNIGHT MAROON" (v0.5.2 brand — DEFAULT)
-  Gehra maroon raat (app icon jaisa), chamakta gold, warm white text.
+  QALB DARK THEME — "ROYAL MAROON" (v0.5.3 brand — DEFAULT)
+  Banner jaisa ASLI gehra wine-maroon (coffee/brown nahi!) + chamakta
+  gold + pearl-white text. Har surface me maroon ki richness.
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #170a0d;
-  --foreground: #f6eae2;
-  --card: #1f0f13;
-  --card-foreground: #f6eae2;
-  --popover: #230f14;
-  --popover-foreground: #f6eae2;
-  --primary: #dfaa4e;
-  --primary-foreground: #241005;
-  --secondary: #2a1418;
-  --secondary-foreground: #ecd5c9;
-  --muted: #2a1418;
-  --muted-foreground: #c7a49b;
-  --accent: #33161c;
+  --background: #2a0710;
+  --foreground: #f8ece6;
+  --card: #380b18;
+  --card-foreground: #f8ece6;
+  --popover: #3b0c1a;
+  --popover-foreground: #f8ece6;
+  --primary: #e9c46a;
+  --primary-foreground: #2a0710;
+  --secondary: #40101e;
+  --secondary-foreground: #f0d8cf;
+  --muted: #40101e;
+  --muted-foreground: #d0a49b;
+  --accent: #4a1222;
   --accent-foreground: #f0c987;
   --destructive: #ff6b6b;
-  --border: rgba(223, 170, 78, 0.14);
-  --input: rgba(223, 170, 78, 0.18);
-  --ring: #dfaa4e;
+  --border: rgba(233, 196, 106, 0.16);
+  --input: rgba(233, 196, 106, 0.2);
+  --ring: #e9c46a;
   --gold: #e9c46a;
-  --chart-1: #dfaa4e;
-  --chart-2: #e9c46a;
-  --chart-3: #f0c987;
-  --chart-4: #f6eae2;
-  --chart-5: #a63a4a;
-  --sidebar: #1f0f13;
-  --sidebar-foreground: #f6eae2;
-  --sidebar-primary: #dfaa4e;
-  --sidebar-primary-foreground: #241005;
-  --sidebar-accent: #33161c;
+  --chart-1: #e9c46a;
+  --chart-2: #f0c987;
+  --chart-3: #d9a54e;
+  --chart-4: #f8ece6;
+  --chart-5: #c22740;
+  --sidebar: #380b18;
+  --sidebar-foreground: #f8ece6;
+  --sidebar-primary: #e9c46a;
+  --sidebar-primary-foreground: #2a0710;
+  --sidebar-accent: #4a1222;
   --sidebar-accent-foreground: #f0c987;
-  --sidebar-border: rgba(223, 170, 78, 0.14);
-  --sidebar-ring: #dfaa4e;
+  --sidebar-border: rgba(233, 196, 106, 0.16);
+  --sidebar-ring: #e9c46a;
 
-  /* emerald ramp — DARK me bright accent ke roop me */
-  --q-em-50: #f6eae2;
-  --q-em-100: #ecd5c9;
-  --q-em-200: #c7a49b;
+  /* emerald ramp — DARK: page maroon-950 → gold-400 accents */
+  --q-em-50: #f8ece6;
+  --q-em-100: #f0d8cf;
+  --q-em-200: #d8aca4;
   --q-em-300: #f0c987;
   --q-em-400: #e6b566;
   --q-em-500: #d9a54e;
   --q-em-600: #c08a3e;
-  --q-em-700: #a63a4a;
-  --q-em-800: #6e2430;
-  --q-em-900: #3a131b;
-  --q-em-950: #170a0d;
+  --q-em-700: #8e1c30;
+  --q-em-800: #5c1224;
+  --q-em-900: #420d1c;
+  --q-em-950: #2a0710;
 
   /* app-level theme tokens */
-  --glow: rgba(230, 181, 102, 0.4);
-  --shadow-float: rgba(0, 0, 0, 0.7);
+  --glow: rgba(230, 181, 102, 0.45);
+  --shadow-float: rgba(10, 0, 3, 0.75);
   --text-glow-color: rgba(240, 201, 135, 0.35);
-  --glass-bg: rgba(24, 11, 14, 0.91);
-  --card-surface-bg: linear-gradient(165deg, rgba(48, 20, 26, 0.92), rgba(24, 10, 14, 0.96));
-  --card-surface-border: rgba(223, 170, 78, 0.13);
-  --player-bg: linear-gradient(180deg, #1c0d11, #12070a);
-  --popup-bg: rgba(30, 14, 18, 0.97);
-  --scroll-thumb: rgba(230, 181, 102, 0.25);
+  --glass-bg: rgba(42, 7, 16, 0.92);
+  --card-surface-bg: linear-gradient(165deg, rgba(69, 15, 31, 0.94), rgba(36, 6, 14, 0.97));
+  --card-surface-border: rgba(233, 196, 106, 0.15);
+  --player-bg: linear-gradient(180deg, #430e1e, #2a0711);
+  --popup-bg: rgba(50, 11, 23, 0.97);
+  --scroll-thumb: rgba(230, 181, 102, 0.28);
   --grad-emerald-1: #f1d9a0;
   --grad-emerald-2: #dfaa4e;
   --grad-emerald-3: #b07d2f;
@@ -251,9 +252,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   .dark body {
+    /* banner jaisa depth — maroon center glow + gold corner halka */
     background-image:
-      radial-gradient(1100px 520px at 85% -12%, rgba(217, 165, 78, 0.06), transparent 60%),
-      radial-gradient(900px 460px at -15% 14%, rgba(166, 58, 74, 0.12), transparent 55%);
+      radial-gradient(1100px 560px at 85% -12%, rgba(233, 196, 106, 0.07), transparent 60%),
+      radial-gradient(900px 500px at -15% 16%, rgba(194, 39, 64, 0.2), transparent 55%),
+      radial-gradient(1200px 800px at 50% 120%, rgba(140, 22, 44, 0.22), transparent 60%);
   }
 }
 
@@ -357,17 +360,23 @@
   gehra red/gold, dark theme me bright.
 */
 :root {
-  --qalb-red-a: #b31226;
-  --qalb-red-b: #e63946;
-  --qalb-red-c: #ff5a5a;
-  --qalb-ekg: #a4761c;
-  --qalb-ekg-pulse: #d9a44e;
+  --qalb-gold-a: #8c6b1f;
+  --qalb-gold-b: #d4af37;
+  --qalb-gold-c: #f5d97a;
+  --qalb-pearl-a: #cfc7b6;
+  --qalb-pearl-b: #efeadf;
+  --qalb-pearl-c: #ffffff;
+  --qalb-ekg: #b98a24;
+  --qalb-ekg-pulse: #e9c46a;
 }
 .dark {
-  --qalb-red-a: #a10f22;
-  --qalb-red-b: #ef3b4e;
-  --qalb-red-c: #ff6b6b;
-  --qalb-ekg: #e9c46a;
+  --qalb-gold-a: #a87d22;
+  --qalb-gold-b: #e0b84a;
+  --qalb-gold-c: #f7dd8a;
+  --qalb-pearl-a: #d8d2c4;
+  --qalb-pearl-b: #f2ede3;
+  --qalb-pearl-c: #ffffff;
+  --qalb-ekg: #d4af37;
   --qalb-ekg-pulse: #f6e3ae;
 }
 

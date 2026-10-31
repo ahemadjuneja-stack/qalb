@@ -14,12 +14,13 @@
 // ka koi risk nahi, fullscreen/quality sab built-in.
 // Back button (Android) aur back-arrow dono screen band karte hain.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Loader2, Share2, ThumbsUp } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useViewBackHandler } from '@/lib/back-stack'
 import { viewsLabel } from '@/lib/innertube-x'
 import { recordPlay } from '@/lib/recommend'
+import { recordItubeWatch, rankRelated } from '@/lib/itube-brain'
 import { trackPub } from '@/lib/itube'
 import type { QalbTrack } from '@/lib/types'
 
@@ -45,6 +46,12 @@ function setLiked(videoId: string, liked: boolean) {
   } catch {
     /* private mode */
   }
+}
+
+/** like status read — likeTick compiler ko cache-na-karne ke liye (localStorage read) */
+function isLiked(videoId: string, tick: number): boolean {
+  void tick
+  return getLikes().has(videoId)
 }
 
 export function ItubeWatch({
@@ -80,12 +87,18 @@ export function ItubeWatch({
   }, [])
 
   // video open/switch — taste profile update + scroll top (external DOM)
+  // recordItubeWatch = iTube algorithm ka fuel (kya dekha, kis category me)
   useEffect(() => {
+    recordItubeWatch(track)
     recordPlay(track)
     scrollerRef.current?.scrollTo({ top: 0 })
   }, [track.videoId])
 
-  const liked = useMemo(() => getLikes().has(track.videoId), [track.videoId, likeTick])
+  // "Aage dekhein" — YouTube-jaisa ranked related: same category pehle,
+  // user ki taste, quality — jitter per-video stable (re-render par list nahi hilti)
+  const relatedRanked = rankRelated(track, related)
+
+  const liked = isLiked(track.videoId, likeTick)
 
   const share = async () => {
     const url = `https://youtu.be/${track.videoId}`
@@ -191,8 +204,8 @@ export function ItubeWatch({
         {/* ── related ── */}
         <div className="mt-4 border-t border-emerald-400/10 px-2 pt-3">
           <p className="px-2 pb-2 text-[13px] font-bold text-emerald-50">Aage dekhein</p>
-          {related.length ? (
-            related.map((r) => {
+          {relatedRanked.length ? (
+            relatedRanked.map((r) => {
               const rv = viewsLabel(r.playCount)
               return (
                 <button

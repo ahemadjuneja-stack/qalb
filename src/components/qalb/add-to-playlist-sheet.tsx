@@ -74,7 +74,7 @@ export function AddToPlaylistSheet() {
       onClick={closePicker}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl border-t border-emerald-400/20 bg-[#0B1F17] px-4 pb-8 pt-3 shadow-2xl"
+        className="w-full max-w-md rounded-t-3xl border-t border-emerald-400/20 bg-[#2E0914] px-4 pb-8 pt-3 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* handle */}

@@ -3,7 +3,7 @@
 // Qalb — LOGIN GATE (v0.4.1) — "app download hote hi sab se pehle"
 // ─────────────────────────────────────────────────────────────────
 // Full-screen pehli launch screen (pehli baar — na user, na guest-skip):
-//   • Background SIMPLE (user request): deep-emerald gradient + halki
+//   • Background SIMPLE (user request): deep-MAROON gradient + halki
 //     glow + faint moon watermark — koi images nahi, clean look.
 //   • Header me Qalb ka brand logo (app ke andar wala hi).
 //   • Login: Google (GIS one-tap) ya Mobile OTP (+91) — lib/auth.ts ke
@@ -164,7 +164,7 @@ export function LoginGate() {
     // Light theme user ke liye bhi emerald-* utilities dark values use
     // karein (theme ramp .dark scope pe flip hota hai).
     <div
-      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#07160F]"
+      className="dark fixed inset-0 z-[90] overflow-hidden bg-[#200510]"
       role="dialog"
       aria-modal="true"
       aria-label="Qalb — login"
@@ -197,7 +197,7 @@ export function LoginGate() {
         </p>
 
         {/* bottom card — headline + login steps */}
-        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-emerald-400/15 bg-[#0B1F17]/90 px-5 pb-6 pt-5">
+        <div className="mx-4 mb-[calc(env(safe-area-inset-bottom)+1.6rem)] rounded-3xl border border-emerald-400/15 bg-[#2E0914]/90 px-5 pb-6 pt-5">
           {step === 'entry' && (
             <>
               <h1 className="text-center text-[22px] font-extrabold leading-tight text-emerald-50">

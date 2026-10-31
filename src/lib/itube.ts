@@ -27,7 +27,6 @@ import {
 } from '@/lib/result-filter'
 import { QALB } from '@/lib/qalb'
 import { isNativeApp } from '@/plugins/qalb-native'
-import { getTasteProfile } from '@/lib/recommend'
 
 // ── Chips (YouTube category-bar style) ──────────────────────────
 
@@ -54,7 +53,7 @@ export const ITUBE_CHIPS: ITubeChip[] = [
 
 // ── InnerTube fetch (native direct / web hosted — searchX pattern) ──
 
-async function itubeSearchX(
+export async function itubeSearchX(
   q: string,
   params: string,
   continuation: string | null
@@ -97,27 +96,6 @@ export function islamicOnly(tracks: QalbTrack[]): QalbTrack[] {
     if (['NAAT', 'HAMD', 'QAWWALI', 'NASHEED'].includes(t.category)) return true
     return hasIslamicMarker(text)
   })
-}
-
-// ── Personalization (in-app taste — guest bhi, user bhi) ────────
-
-/** "Aap ke liye" query — user ki in-app pasand se banti hai */
-export function itubePersonalQuery(): string | null {
-  try {
-    const taste = getTasteProfile(null)
-    if (!taste.topArtist && !taste.topCategory) return null
-    const cat =
-      taste.topCategory === 'QAWWALI'
-        ? 'qawwali'
-        : taste.topCategory === 'NASHEED'
-          ? 'nasheed'
-          : taste.topCategory === 'HAMD'
-            ? 'hamd'
-            : 'naat'
-    return taste.topArtist ? `${taste.topArtist} ${cat}` : `best ${cat}`
-  } catch {
-    return null
-  }
 }
 
 // ── Main fetch — chip/search dono isi se ────────────────────────
