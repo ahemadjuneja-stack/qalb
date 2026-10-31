@@ -10,6 +10,7 @@ import { ListPlus, Pause, Play } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
 import { usePlaylistPicker } from '@/lib/user-playlists'
 import { QalbThumb } from '@/components/qalb/thumb-square'
+import { viewsLabel } from '@/lib/live-catalog'
 import type { QalbTrack } from '@/lib/types'
 
 export function EqualizerBars() {
@@ -28,11 +29,14 @@ export const TrackRow = memo(function TrackRow({
   index,
   queue,
   showIndex = true,
+  showViews = false,
 }: {
   track: QalbTrack
   index: number
   queue: QalbTrack[]
   showIndex?: boolean
+  /** YouTube views label dikhaye (live folders/trending me) */
+  showViews?: boolean
 }) {
   const currentIndex = usePlayerStore((s) => s.currentIndex)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
@@ -100,6 +104,7 @@ export const TrackRow = memo(function TrackRow({
           <span className="block truncate text-[11.5px] text-emerald-200/50">
             {track.artist}
             {track.category && track.category !== 'SEARCH' ? ` • ${track.category}` : ''}
+            {showViews && track.playCount ? ` • ${viewsLabel(track.playCount)}` : ''}
             {isFailed ? ' • embed unavailable' : ''}
           </span>
         </span>

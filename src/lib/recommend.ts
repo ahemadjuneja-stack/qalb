@@ -25,6 +25,8 @@ import type { QalbPlaylist, QalbTrack } from '@/lib/types'
 import { QALB_ARTISTS } from '@/lib/artists'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
 import { buildDailyTrending, mulberry32, daySeed, seededShuffle } from '@/lib/daily-trending'
+import type { LiveFeedData } from '@/lib/live-catalog'
+import { QALB_FOLDERS, foldersByGroup } from '@/lib/folders'
 
 // ── Play events (raw history) ──────────────────────────────────
 
@@ -171,6 +173,7 @@ export interface StationCard {
   accent: string
   listenersLabel: string
   personal?: boolean // user ki top pasand — "Aap ki Pasand" badge
+  folderId: string | null // artist folder — tap par 100+ wala folder khulta hai
 }
 
 export interface MoodCard {
@@ -180,6 +183,8 @@ export interface MoodCard {
   emoji: string
   gradient: string
   count: number
+  folderId: string | null // mood folder — tap par folder detail khulta hai
+  sub?: string
 }
 
 export interface MixCard {
@@ -240,6 +245,8 @@ function artistMatch(trackArtist: string, name: string): boolean {
 
 export interface FeedData {
   trending: QalbTrack[]
+  /** trending LIVE YouTube se aaya (is hafte ke top views) — home me LIVE badge */
+  trendingLive: boolean
   personalArtist: { name: string; tracks: QalbTrack[] } | null
   stations: StationCard[]
   mixes: MixCard[]
@@ -248,11 +255,13 @@ export interface FeedData {
   suggestChips: string[] // "Aur Suniye" interstitial queries
   taste: TasteProfile
   tasteEmpty: boolean
+  liveReady: boolean
 }
 
 export function buildFeed(
   remoteTracks: QalbTrack[],
-  uid: string | null | undefined
+  uid: string | null | undefined,
+  live?: LiveFeedData | null
 ): FeedData {
   const now = new Date()
 
@@ -272,22 +281,35 @@ export function buildFeed(
 
   const taste = getTasteProfile(uid)
   const tasteEmpty = taste.plays < 3
+  const liveReady = Boolean(live?.ready)
 
-  // ── 1. Trending (existing daily rotation) ──
-  const trending = buildDailyTrending(remoteTracks, 10).tracks
+  // ── 1. Trending — LIVE YouTube (is hafte ke top views) ya daily rotation ──
+  const liveTrending = live?.trending?.length ? live.trending : null
+  const trending = liveTrending ?? buildDailyTrending(remoteTracks, 10).tracks
+  const trendingLive = Boolean(liveTrending && live?.trendingLive)
 
-  // ── 2. Personal artist section ("Sonu Nigam" jaisa) ──
+  // ── 2. Personal artist section ("Sonu Nigam" jaisa) — LIVE artist set pehle ──
   let personalArtist: { name: string; tracks: QalbTrack[] } | null = null
   if (!tasteEmpty && taste.topArtist) {
-    const hits = pool.filter((t) => artistMatch(t.artist, taste.topArtist as string))
-    const heardHits = hits.filter((t) => taste.heard.has(t.videoId))
-    const picked = (heardHits.length >= 3 ? heardHits : hits).slice(0, 12)
-    if (picked.length >= 3) {
-      personalArtist = { name: taste.topArtist, tracks: picked }
+    const liveSet = live?.artistSet?.tracks?.length ? live.artistSet : null
+    if (liveSet && artistMatch(liveSet.name, taste.topArtist as string)) {
+      personalArtist = { name: taste.topArtist, tracks: liveSet.tracks.slice(0, 20) }
+    } else {
+      const hits = pool.filter((t) => artistMatch(t.artist, taste.topArtist as string))
+      const heardHits = hits.filter((t) => taste.heard.has(t.videoId))
+      const picked = (heardHits.length >= 3 ? heardHits : hits).slice(0, 12)
+      if (picked.length >= 3) {
+        personalArtist = { name: taste.topArtist, tracks: picked }
+      }
     }
   }
 
   // ── 3. Artist stations (listeners = pool views aggregate, affinity boost) ──
+  const artistFolder = (name: string): string | null =>
+    QALB_FOLDERS.find(
+      (f) => f.group === 'artist' && f.label.toLowerCase() === name.toLowerCase()
+    )?.id ?? null
+
   const stations: StationCard[] = QALB_ARTISTS.map((a) => {
     const own = pool.filter((t) => artistMatch(t.artist, a.name))
     const views = own.reduce((s, t) => s + (t.playCount ?? 0), 0)
@@ -301,6 +323,7 @@ export function buildFeed(
       accent: a.accent,
       listenersLabel: `${formatCount(Math.max(views, 1_000_000))} listeners`,
       personal: affinity > 0,
+      folderId: artistFolder(a.name),
     }
   }).sort((x, y) => {
     if (x.personal !== y.personal) return x.personal ? -1 : 1
@@ -312,7 +335,7 @@ export function buildFeed(
   const mixFrom = (tracks: QalbTrack[]): (string | null)[] =>
     tracks.slice(0, 4).map((t) => t.thumbnailUrl)
 
-  // Mix A — user's top artist + top category blend
+  // Mix A — user's top artist + top category blend (LIVE sets pehle)
   {
     const topCat = (taste.topCategory as string) ?? 'NAAT'
     const fav = taste.topArtist
@@ -321,10 +344,20 @@ export function buildFeed(
     const catHits = pool.filter(
       (t) => String(t.category) === topCat && !fav.some((f) => f.videoId === t.videoId)
     )
-    const blend = seededShuffle(
-      [...fav, ...catHits],
-      mulberry32(daySeed(now) ^ 0xfeed)
-    )
+    // LIVE YouTube sets — top artist + top category ke fresh 100+ wale sets
+    const liveFav =
+      live?.artistSet && taste.topArtist && artistMatch(live.artistSet.name, taste.topArtist as string)
+        ? live.artistSet.tracks
+        : []
+    const liveCat = live?.categorySets?.[topCat as keyof typeof live.categorySets] ?? []
+    const blendRaw = [...liveFav, ...liveCat, ...fav, ...catHits]
+    const seenBlend = new Set<string>()
+    const blendUnique = blendRaw.filter((t) => {
+      if (seenBlend.has(t.videoId)) return false
+      seenBlend.add(t.videoId)
+      return true
+    })
+    const blend = seededShuffle(blendUnique, mulberry32(daySeed(now) ^ 0xfeed))
     if (blend.length >= 4) {
       mixes.push({
         id: 'daily-mix',
@@ -334,38 +367,50 @@ export function buildFeed(
           : 'Roz ka naya mix — aap ke liye',
         emoji: '🎧',
         gradient: CATEGORY_META[topCat]?.gradient ?? CATEGORY_META.NAAT.gradient,
-        tracks: blend.slice(0, 14),
+        tracks: blend.slice(0, 20),
         thumbs: mixFrom(blend),
       })
     }
   }
 
-  // Mix B — Naya Suno (unheard exploration — algorithm exploration side)
+  // Mix B — Naya Suno (LIVE fresh uploads pehle — exploration side)
   {
+    const liveFresh = (live?.fresh ?? []).filter((t) => !taste.heard.has(t.videoId))
     const unheard = pool.filter((t) => !taste.heard.has(t.videoId))
-    const shuffled = seededShuffle(unheard, mulberry32(daySeed(now) ^ 0xf105))
+    const seenB = new Set<string>()
+    const mixed = [...liveFresh, ...unheard].filter((t) => {
+      if (seenB.has(t.videoId)) return false
+      seenB.add(t.videoId)
+      return true
+    })
+    const shuffled = seededShuffle(mixed, mulberry32(daySeed(now) ^ 0xf105))
     if (shuffled.length >= 4) {
       mixes.push({
         id: 'fresh-mix',
         title: 'Naya Suno',
-        subtitle: 'Aap ne abhi tak nahi suna',
+        subtitle: 'YouTube ke bilkul naye uploads',
         emoji: '🌱',
         gradient: 'linear-gradient(140deg, #b45309, #78350f 70%)',
-        tracks: shuffled.slice(0, 14),
+        tracks: shuffled.slice(0, 20),
         thumbs: mixFrom(shuffled),
       })
     }
   }
 
-  // Mix C — Roz ka genre focus (har roz alag genre highlight)
+  // Mix C — Roz ka genre focus (har roz alag genre highlight — LIVE set)
   {
     const dayIdx = Math.floor(Date.now() / 86_400_000)
     const catKey = ROTATION_ORDER[dayIdx % ROTATION_ORDER.length]
     const meta = CATEGORY_META[catKey]
-    const catTracks = seededShuffle(
-      pool.filter((t) => String(t.category) === catKey),
-      mulberry32(daySeed(now) ^ 0xca7)
-    )
+    const liveCat = live?.categorySets?.[catKey as keyof typeof live.categorySets] ?? []
+    const poolCat = pool.filter((t) => String(t.category) === catKey)
+    const seenC = new Set<string>()
+    const catTracksAll = [...liveCat, ...poolCat].filter((t) => {
+      if (seenC.has(t.videoId)) return false
+      seenC.add(t.videoId)
+      return true
+    })
+    const catTracks = seededShuffle(catTracksAll, mulberry32(daySeed(now) ^ 0xca7))
     if (catTracks.length >= 4) {
       mixes.push({
         id: `roz-${catKey.toLowerCase()}`,
@@ -373,26 +418,35 @@ export function buildFeed(
         subtitle: `Aaj ${meta.emoji} ${meta.label} ka din hai`,
         emoji: meta.emoji,
         gradient: meta.gradient,
-        tracks: catTracks.slice(0, 14),
+        tracks: catTracks.slice(0, 20),
         thumbs: mixFrom(catTracks),
       })
     }
   }
 
-  // ── 5. Moods & Genres (category cards, counts pool se) ──
-  const moods: MoodCard[] = Object.entries(CATEGORY_META).map(([key, meta]) => ({
-    key,
-    label: meta.label,
-    query: meta.query,
-    emoji: meta.emoji,
-    gradient: meta.gradient,
-    count: pool.filter((t) => String(t.category) === key).length,
+  // ── 5. Moods & Genres — AB folders (tap par 100+ kalaam wala folder) ──
+  const moodFolders = foldersByGroup('mood')
+  const moods: MoodCard[] = moodFolders.map((f) => ({
+    key: f.id,
+    label: f.label,
+    query: f.query,
+    emoji: f.emoji,
+    gradient: f.gradient,
+    count: 0, // live folders — home "LIVE" dikhata hai
+    folderId: f.id,
+    sub: f.sub,
   }))
 
-  // ── 6. Aaj ke Naye Kalaam — trending ko chhod ke daily fresh slice ──
+  // ── 6. Aaj ke Naye Kalaam — LIVE fresh uploads (YouTube date-sort) ──
   const trendingIds = new Set(trending.map((t) => t.videoId))
-  const freshPool = pool.filter((t) => !trendingIds.has(t.videoId))
-  const fresh = seededShuffle(freshPool, mulberry32(daySeed(now) ^ 0x9e77)).slice(0, 12)
+  const liveFresh = (live?.fresh ?? []).filter((t) => !trendingIds.has(t.videoId))
+  let fresh: QalbTrack[]
+  if (liveFresh.length >= 5) {
+    fresh = liveFresh.slice(0, 15)
+  } else {
+    const freshPool = pool.filter((t) => !trendingIds.has(t.videoId))
+    fresh = seededShuffle(freshPool, mulberry32(daySeed(now) ^ 0x9e77)).slice(0, 12)
+  }
 
   // ── 7. "Aur Suniye" chips — daily rotation, taste-aware ──
   const chipPool = QALB_ARTISTS.map((a) => a.query)
@@ -401,6 +455,7 @@ export function buildFeed(
 
   return {
     trending,
+    trendingLive,
     personalArtist,
     stations,
     mixes,
@@ -409,6 +464,7 @@ export function buildFeed(
     suggestChips,
     taste,
     tasteEmpty,
+    liveReady,
   }
 }
 

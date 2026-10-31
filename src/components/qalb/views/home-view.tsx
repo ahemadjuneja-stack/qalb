@@ -45,11 +45,19 @@ import { todayLabel } from '@/lib/daily-trending'
 import {
   buildFeed,
   collectRemoteTracks,
+  getTasteProfile,
   useTasteStore,
   type MixCard,
   type MoodCard,
   type StationCard,
 } from '@/lib/recommend'
+import { getLiveFeed, viewsLabel, type LiveFeedData } from '@/lib/live-catalog'
+import { getFolder, type QalbFolder } from '@/lib/folders'
+import {
+  FolderGrid,
+  FolderDetail,
+  PlaylistDetail,
+} from '@/components/qalb/views/browse-view'
 import { useQalbAuth } from '@/lib/auth'
 import {
   listUserPlaylists,
@@ -84,6 +92,42 @@ const CATEGORY_CHIPS = [
   { label: 'Nasheed', query: 'islamic nasheed' },
 ]
 
+// ── browse drill-in stack (folders grid → folder → playlist detail) ──
+type BrowseItem =
+  | { kind: 'grid' }
+  | { kind: 'folder'; folder: QalbFolder }
+  | { kind: 'playlist'; playlist: QalbPlaylist; folder: QalbFolder }
+
+/** playlist ki majority category — live expansion isi folder se hogi */
+function playlistCategory(p: QalbPlaylist): string {
+  const counts = new Map<string, number>()
+  for (const t of p.tracks) {
+    const c = String(t.category ?? 'NAAT').toUpperCase()
+    counts.set(c, (counts.get(c) ?? 0) + 1)
+  }
+  let best = 'NAAT'
+  let bestN = 0
+  for (const [c, n] of counts) {
+    if (n > bestN) {
+      best = c
+      bestN = n
+    }
+  }
+  return best
+}
+
+function liveFolderForPlaylist(p: QalbPlaylist): QalbFolder | null {
+  const cat = playlistCategory(p)
+  const id =
+    cat === 'QAWWALI' ? 'g-qawwali'
+    : cat === 'NASHEED' ? 'g-nasheed'
+    : cat === 'HAMD' ? 'g-hamd'
+    : 'g-naat'
+  const base = getFolder(id)
+  // apna cache id — har playlist ki apni live expansion history
+  return base ? { ...base, id: `pl-${p.id}` } : null
+}
+
 export function HomeView() {
   const [query, setQuery] = useState('')
   const [phase, setPhase] = useState<Phase>('idle')
@@ -108,8 +152,26 @@ export function HomeView() {
   const uid = user?.uid ?? null
   const tasteV = useTasteStore((s) => s.v) // play hone par feed refresh
 
+  // ── LIVE feed state — YouTube se trending/fresh/mixes ──
+  const [live, setLive] = useState<LiveFeedData | null>(null)
+  const [browse, setBrowse] = useState<BrowseItem[]>([])
+
+  const openBrowseGrid = () => setBrowse([{ kind: 'grid' }])
+  const openFolder = (folder: QalbFolder) => setBrowse((s) => [...s, { kind: 'folder', folder }])
+  const openPlaylistDetail = (playlist: QalbPlaylist) => {
+    const folder = liveFolderForPlaylist(playlist)
+    if (!folder || playlist.tracks.length === 0) return
+    setBrowse((s) => [...s, { kind: 'playlist', playlist, folder }])
+  }
+  const popBrowse = () => setBrowse((s) => s.slice(0, -1))
+
   // Back gesture (v0.3.1): search results / Kalaamkar station / guardian
   // screen khuli ho to wapas home feed par — "har screen par back chale"
+  useViewBackHandler('home-browse', 'home', () => {
+    if (browse.length === 0) return false
+    popBrowse()
+    return true
+  })
   useViewBackHandler('home-search', 'home', () => {
     if (phase === 'idle') return false
     searchIdRef.current++ // chalu search generation cancel
@@ -140,7 +202,18 @@ export function HomeView() {
       .catch(() => setPlaylists([]))
     setTheme(getTheme())
     const t = setTimeout(() => setUserPlaylists(listUserPlaylists()), 0)
-    return () => clearTimeout(t)
+    // LIVE YouTube feed — trending top 10 + fresh uploads + mix sets
+    // (2h cache — pehli call ke baad instant; fail par static pool chalta hai)
+    const topArtist = getTasteProfile(uid).topArtist
+    let alive = true
+    void getLiveFeed(topArtist ? String(topArtist) : null).then((d) => {
+      if (alive) setLive(d)
+    })
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+     
   }, [])
 
   const switchTheme = () => {
@@ -225,12 +298,13 @@ export function HomeView() {
     }
   }
 
-  // ── ALGORITHM FEED — play history + daily seeds (recommend.ts) ──
+  // ── ALGORITHM FEED — play history + daily seeds + LIVE YouTube (recommend.ts) ──
   const remotePoolTracks = useMemo(() => collectRemoteTracks(playlists), [playlists])
   const feed = useMemo(
-    () => buildFeed(remotePoolTracks, uid),
+    () => buildFeed(remotePoolTracks, uid, live),
     // tasteV: har play ke baad personalized sections dobara compute
-    [remotePoolTracks, uid, tasteV]
+    // live: YouTube trending/fresh aane par feed live sections me upgrade hota hai
+    [remotePoolTracks, uid, tasteV, live]
   )
 
   const playNow = (tracks: QalbTrack[], i: number, label?: string) => {
@@ -417,20 +491,65 @@ export function HomeView() {
       )}
 
       {/* ══════════ FULL FEED (idle) — JioSaavn top-to-bottom ══════════ */}
-      {phase !== 'results' && (
+      {phase !== 'results' && browse.length > 0 && (
+        <section aria-label="Browse folders">
+          {browse[browse.length - 1].kind === 'grid' && (
+            <>
+              <BackBar
+                title="Moods • Genres • Kalaamkar"
+                sub="Har folder me 100+ paak kalaam — YouTube LIVE"
+                onBack={popBrowse}
+              />
+              <FolderGrid onOpen={openFolder} />
+            </>
+          )}
+          {browse[browse.length - 1].kind === 'folder' && (
+            <FolderDetail
+              folder={(browse[browse.length - 1] as { kind: 'folder'; folder: QalbFolder }).folder}
+              onBack={popBrowse}
+            />
+          )}
+          {browse[browse.length - 1].kind === 'playlist' && (
+            <PlaylistDetail
+              playlist={
+                (browse[browse.length - 1] as { kind: 'playlist'; playlist: QalbPlaylist; folder: QalbFolder })
+                  .playlist
+              }
+              liveFolder={
+                (browse[browse.length - 1] as { kind: 'playlist'; playlist: QalbPlaylist; folder: QalbFolder })
+                  .folder
+              }
+              onBack={popBrowse}
+            />
+          )}
+        </section>
+      )}
+
+      {phase !== 'results' && browse.length === 0 && (
         <>
-          {/* 🔥 1. AAJ KA TRENDING — roz badalta hai */}
+          {/* 🔥 1. AAJ KA TRENDING — LIVE YouTube (is hafte ke top views) */}
           {feed.trending.length > 0 && (
             <section aria-label="Aaj ka Trending">
               <SectionHead
                 icon={<Flame className="h-4 w-4 text-orange-400" />}
-                title="Aaj ka Trending"
-                sub={`${todayLabel()} — roz naye kalaam`}
+                title={feed.trendingLive ? 'YouTube Trending — Top 10' : 'Aaj ka Trending'}
+                sub={
+                  feed.trendingLive
+                    ? '🔴 LIVE • YouTube ke is hafte ke sab se suniye gaye kalaam'
+                    : `${todayLabel()} — roz naye kalaam`
+                }
                 onPlay={() => playNow(feed.trending, 0, 'Aaj ka trending')}
               />
               <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
                 {feed.trending.map((t, i) => (
-                  <RankCard key={t.videoId} track={t} rank={i + 1} queue={feed.trending} onPlay={playNow} />
+                  <RankCard
+                    key={t.videoId}
+                    track={t}
+                    rank={i + 1}
+                    queue={feed.trending}
+                    onPlay={playNow}
+                    showViews={feed.trendingLive}
+                  />
                 ))}
               </div>
             </section>
@@ -468,7 +587,12 @@ export function HomeView() {
             </div>
             <div className="no-scrollbar -mx-4 flex gap-4 overflow-x-auto px-4 pb-2">
               {feed.stations.map((st) => (
-                <StationButton key={st.name} station={st} onSearch={runSearch} />
+                <StationButton
+                  key={st.name}
+                  station={st}
+                  onSearch={runSearch}
+                  onOpenFolder={openFolder}
+                />
               ))}
             </div>
           </section>
@@ -494,28 +618,48 @@ export function HomeView() {
             </section>
           )}
 
-          {/* 🎭 5. MOODS & GENRES — JioSaavn "Top Genres & Moods" */}
+          {/* 🎭 5. MOODS & GENRES — folders (tap par 100+ kalaam khulta hai) */}
           <section aria-label="Moods and genres">
-            <div className="mb-2.5">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
-                🎭 Moods &amp; Genres
-              </h2>
-              <p className="text-[10px] text-emerald-200/40">Aaj kis mood me hain?</p>
+            <div className="mb-2.5 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+                  🎭 Moods &amp; Genres
+                </h2>
+                <p className="text-[10px] text-emerald-200/40">
+                  Aaj kis mood me hain? — har folder me 100+ kalaam
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openBrowseGrid}
+                className="shrink-0 rounded-full border border-emerald-400/25 bg-emerald-400/5 px-3 py-1.5 text-[11px] font-bold text-emerald-300 transition hover:bg-emerald-400/15"
+              >
+                Sab dekhein ›
+              </button>
             </div>
             <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
               {feed.moods.map((m) => (
-                <MoodButton key={m.key} mood={m} onSearch={runSearch} />
+                <MoodButton
+                  key={m.key}
+                  mood={m}
+                  onOpenFolder={openFolder}
+                  onSearch={runSearch}
+                />
               ))}
             </div>
           </section>
 
-          {/* 🆕 6. AAJ KE NAYE KALAAM — har roz naya fresh slice */}
+          {/* 🆕 6. AAJ KE NAYE KALAAM — LIVE fresh uploads (YouTube date-sort) */}
           {feed.fresh.length > 0 && (
             <section aria-label="Aaj ke naye kalaam">
               <SectionHead
                 icon={<Sparkles className="h-4 w-4 text-emerald-400" />}
                 title="Aaj ke Naye Kalaam"
-                sub="Jo aap ne abhi tak nahi chuna — roz badalta hai"
+                sub={
+                  live?.fresh?.length
+                    ? '🔴 LIVE • YouTube par bilkul naye uploads — roz badalta hai'
+                    : 'Jo aap ne abhi tak nahi chuna — roz badalta hai'
+                }
                 onPlay={() => playNow(feed.fresh, 0, 'Naye kalaam')}
               />
               <div className="card-surface rounded-2xl p-2">
@@ -604,8 +748,9 @@ export function HomeView() {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => playNow(p.tracks, 0)}
+                    onClick={() => openPlaylistDetail(p)}
                     className="card-surface overflow-hidden rounded-2xl text-left transition hover:border-emerald-400/30 active:scale-[0.98]"
+                    aria-label={`${p.name} playlist kholein`}
                   >
                     <div className="relative">
                       <QalbThumb
@@ -662,6 +807,26 @@ export function HomeView() {
 
 // ── shared UI pieces ────────────────────────────────────────────
 
+/** browse drill-in screens ka back header */
+function BackBar({ title, sub, onBack }: { title: string; sub: string; onBack: () => void }) {
+  return (
+    <div className="mb-4 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onBack}
+        aria-label="Wapas jayein"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-400/15 bg-emerald-400/5 text-emerald-300 transition active:scale-95"
+      >
+        <ChevronDown className="h-5 w-5 rotate-90" />
+      </button>
+      <div className="min-w-0">
+        <h1 className="truncate text-[15px] font-bold text-emerald-50">{title}</h1>
+        <p className="truncate text-[10.5px] text-emerald-200/50">{sub}</p>
+      </div>
+    </div>
+  )
+}
+
 function SectionHead({
   icon,
   title,
@@ -700,12 +865,14 @@ function RankCard({
   queue,
   onPlay,
   gold = false,
+  showViews = false,
 }: {
   track: QalbTrack
   rank: number
   queue: QalbTrack[]
   onPlay: (tracks: QalbTrack[], i: number) => void
   gold?: boolean
+  showViews?: boolean
 }) {
   const openPicker = usePlaylistPicker((s) => s.openPicker)
   const idx = queue.findIndex((t) => t.videoId === track.videoId)
@@ -741,7 +908,12 @@ function RankCard({
           <p className="truncate text-[12.5px] font-bold leading-tight text-emerald-50">
             {track.title}
           </p>
-          <p className="mt-0.5 truncate text-[10.5px] text-emerald-200/50">{track.artist}</p>
+          <p className="mt-0.5 truncate text-[10.5px] text-emerald-200/50">
+            {track.artist}
+            {showViews && track.playCount ? (
+              <span className="text-gold/80"> • {viewsLabel(track.playCount)}</span>
+            ) : null}
+          </p>
         </div>
         <AddBtn title={track.title} onAdd={() => openPicker(track)} />
       </div>
@@ -765,16 +937,19 @@ function AddBtn({ title, onAdd }: { title: string; onAdd: () => void }) {
 function StationButton({
   station,
   onSearch,
+  onOpenFolder,
 }: {
   station: StationCard
   onSearch: (q: string) => void
+  onOpenFolder: (folder: QalbFolder) => void
 }) {
+  const folder = station.folderId ? getFolder(station.folderId) : null
   return (
     <button
       type="button"
-      onClick={() => onSearch(station.query)}
+      onClick={() => (folder ? onOpenFolder(folder) : onSearch(station.query))}
       className="group flex w-[76px] shrink-0 flex-col items-center gap-1.5"
-      aria-label={`${station.name} station chalayein`}
+      aria-label={`${station.name} station kholein`}
     >
       <span className="relative">
         <span
@@ -879,27 +1054,30 @@ function MixMosaicCard({
 function MoodButton({
   mood,
   onSearch,
+  onOpenFolder,
 }: {
   mood: MoodCard
   onSearch: (q: string) => void
+  onOpenFolder: (folder: QalbFolder) => void
 }) {
+  const folder = mood.folderId ? getFolder(mood.folderId) : null
   return (
     <button
       type="button"
-      onClick={() => onSearch(mood.query)}
+      onClick={() => (folder ? onOpenFolder(folder) : onSearch(mood.query))}
       className="relative h-24 w-40 shrink-0 overflow-hidden rounded-2xl border border-white/5 p-3 text-left transition active:scale-[0.97]"
       style={{ background: mood.gradient }}
-      aria-label={`${mood.label} search karein`}
+      aria-label={`${mood.label} folder kholein`}
     >
       <span className="absolute -bottom-3 -right-2 text-5xl opacity-25" aria-hidden="true">
         {mood.emoji}
       </span>
       <span className="block text-[15px] font-extrabold text-white">{mood.label}</span>
-      <span className="mt-0.5 block text-[10px] font-medium text-white/70">
-        {mood.count > 0 ? `${mood.count} kalaam` : 'Live search'}
+      <span className="mt-0.5 block truncate text-[10px] font-medium text-white/70">
+        {folder ? mood.sub ?? 'LIVE • 100+ kalaam' : mood.count > 0 ? `${mood.count} kalaam` : 'Live search'}
       </span>
       <span className="absolute bottom-2.5 left-3 flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold text-white backdrop-blur">
-        <Play className="h-2.5 w-2.5 fill-current" /> Suno
+        <Play className="h-2.5 w-2.5 fill-current" /> {folder ? 'Kholein' : 'Suno'}
       </span>
     </button>
   )
