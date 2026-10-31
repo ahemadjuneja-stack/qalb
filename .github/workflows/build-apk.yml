@@ -260,6 +260,7 @@ jobs:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ steps.authcfg.outputs.apiKey }}
           GCID_VAR: ${{ vars.GOOGLE_CLIENT_ID }}
           GCSECRET_VAR: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GWID_VAR: ${{ vars.GOOGLE_WEB_CLIENT_ID }}
         run: |
           # Mobile build me server API routes nahi hote — APK Firestore REST
           # + hosted API (NEXT_PUBLIC_API_BASE) use karta hai. Isliye api/
@@ -281,8 +282,15 @@ jobs:
           if [ -z "$GCSECRET" ] && [ -f .firebase/google-secret.txt ]; then
             GCSECRET=$(head -1 .firebase/google-secret.txt | tr -d '[:space:]')
           fi
-          echo "google login: clientIdLen=${#GCID} secretLen=${#GCSECRET}"
-          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" NEXT_PUBLIC_GOOGLE_CLIENT_ID="$GCID" NEXT_PUBLIC_GOOGLE_CLIENT_SECRET="$GCSECRET" npx next build
+          # Web client id (v0.4.5 native Google sheet ka serverClientId) —
+          # GitHub variable, warna committed file. Chrome-loopback fallback
+          # wala Desktop client (GCID) alag hai.
+          GWID="$GWID_VAR"
+          if [ -z "$GWID" ] && [ -f .firebase/google-webclientid.txt ]; then
+            GWID=$(head -1 .firebase/google-webclientid.txt | tr -d '[:space:]')
+          fi
+          echo "google login: clientIdLen=${#GCID} secretLen=${#GCSECRET} webIdLen=${#GWID}"
+          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" NEXT_PUBLIC_GOOGLE_CLIENT_ID="$GCID" NEXT_PUBLIC_GOOGLE_CLIENT_SECRET="$GCSECRET" NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID="$GWID" npx next build
           # sanity: DISCOVERED key really bake hui? (bundle me InnerTube ke
           # AIzaSy keys pehle se hote hain — isliye full discovered key hi
           # grep karte hain, warna false-positive milta tha — run 56)

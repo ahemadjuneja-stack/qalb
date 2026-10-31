@@ -625,8 +625,10 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
     let done = false
     let poll: ReturnType<typeof setInterval> | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
+    let onVis: (() => void) | null = null
     const cleanup = () => {
       window.removeEventListener('qalbOauthRedirect', handler as EventListener)
+      if (onVis) document.removeEventListener('visibilitychange', onVis)
       if (poll) clearInterval(poll)
       if (timer) clearTimeout(timer)
     }
@@ -649,6 +651,18 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
       if (d && typeof d.url === 'string' && d.url) ok(d.url)
     }
     window.addEventListener('qalbOauthRedirect', handler as EventListener)
+    // SPINNER-FIX (v0.4.5): user Chrome se bina login ke wapas aa gaya to
+    // app khud cancel kare — 3s grace (redirect event/pending pehle aa
+    // sakta hai), phir bhi kuch nahi to google-cancel (5 min spinner nahi)
+    onVis = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
+      setTimeout(() => {
+        void consumePendingOauth().then((u) => {
+          if (!u) bad(new Error('google-cancel'))
+        })
+      }, 3000)
+    }
+    document.addEventListener('visibilitychange', onVis)
     poll = setInterval(() => {
       void consumePendingOauth().then((u) => {
         if (u) ok(u)
@@ -818,6 +832,28 @@ export async function googleSignIn(): Promise<QalbUser> {
     const u = await finishGoogleAuth(pending, googleClientId, apiKey)
     if (u) return u
     // stale (state mismatch) — fresh flow se continue
+  }
+
+  // 1.5) NATIVE SHEET (v0.4.5) — Google ka account-picker APP KE ANDAR
+  //      khulta hai, Chrome bilkul nahi khulta. Sheet fail ho (play
+  //      services / Android client missing) to neeche loopback Chrome
+  //      flow chalega. Cancel kiya to seedha google-cancel.
+  {
+    const { isNativeApp: isNative, nativeGoogleIdToken } = await import(
+      '@/plugins/qalb-native'
+    )
+    if (isNative()) {
+      // serverClientId = Web client id (Google sheet usi ka id_token
+      // deti hai); Web client na ho to Desktop client se try — same
+      // project hai to Firebase accept kar leta hai
+      const sheetClient =
+        (process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID as string | undefined) ??
+        googleClientId
+      const r = await nativeGoogleIdToken(sheetClient)
+      if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
+      if (r && 'cancelled' in r) throw new Error('google-cancel')
+      // null → sheet nahi khula — fallback loopback (neeche)
+    }
   }
 
   // 2) loopback server start (native) — Google ka official installed-app

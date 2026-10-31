@@ -2,12 +2,14 @@ package com.qalb.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Window;
 
+import androidx.activity.result.ActivityResult;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
@@ -18,6 +20,13 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.tasks.Task;
 
 /**
  * Qalb — Native bridge plugin
@@ -575,6 +584,89 @@ public class QalbNativePlugin extends Plugin {
     public void stopOauthServer(PluginCall call) {
         try {
             QalbOauth.stop();
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    /**
+     * JS: Google ka ACCOUNT-PICKER SHEET app ke andar khulta hai (v0.4.5)
+     * — Chrome bilkul nahi khulta. serverClientId = Web client id (Google
+     * sheet us project ka id_token deti hai jiska Web client yahan pass
+     * hota hai; app khud package+SHA-1 (Android client) se verify hoti hai).
+     * Result @ActivityCallback googleIdTokenResult me aata hai.
+     */
+    @PluginMethod
+    public void googleIdToken(PluginCall call) {
+        try {
+            String serverClientId = call.getString("serverClientId");
+            if (serverClientId == null || serverClientId.trim().isEmpty()) {
+                call.reject("no server client id");
+                return;
+            }
+            Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("no activity");
+                return;
+            }
+            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(
+                    GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestIdToken(serverClientId.trim())
+                    .requestEmail()
+                    .build();
+            GoogleSignInClient client = GoogleSignIn.getClient(activity, gso);
+            // purana device-session saaf — sheet hamesha fresh account-picker
+            try {
+                client.signOut();
+            } catch (Exception ignored) {
+            }
+            startActivityForResult(call, client.getSignInIntent(), "googleIdTokenResult");
+        } catch (Exception e) {
+            call.reject("google sheet fail: " + safeMsg(e));
+        }
+    }
+
+    /** googleIdToken sheet ka result — idToken ya cancel/fail reason */
+    @ActivityCallback
+    private void googleIdTokenResult(PluginCall call, ActivityResult result) {
+        if (call == null) return; // activity recreate — call mar gaya
+        try {
+            if (result.getResultCode() != Activity.RESULT_OK) {
+                call.reject("cancelled");
+                return;
+            }
+            Task<GoogleSignInAccount> task =
+                    GoogleSignIn.getSignedInAccountFromIntent(result.getData());
+            GoogleSignInAccount acc = task.getResult(ApiException.class);
+            String idToken = acc.getIdToken();
+            if (idToken == null || idToken.isEmpty()) {
+                // sheet chala par token nahi mila — serverClientId ka client
+                // sahi project me nahi hai, ya Web client missing
+                call.reject("no-id-token");
+                return;
+            }
+            JSObject res = new JSObject();
+            res.put("idToken", idToken);
+            res.put("email", acc.getEmail() == null ? "" : acc.getEmail());
+            call.resolve(res);
+        } catch (ApiException e) {
+            // 13 = user cancel, 12500 = play-services/client config masla,
+            // 10 = developer error (package/SHA-1 kisi Android client se match nahi)
+            call.reject("api-" + e.getStatusCode());
+        } catch (Exception e) {
+            call.reject("google result fail: " + safeMsg(e));
+        }
+    }
+
+    /** JS: device ka Google session saaf karo (fresh picker ke liye) */
+    @PluginMethod
+    public void googleSignOut(PluginCall call) {
+        try {
+            Activity activity = getActivity();
+            if (activity != null) {
+                GoogleSignIn.getClient(activity, GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .signOut();
+            }
         } catch (Exception ignored) {
         }
         call.resolve();

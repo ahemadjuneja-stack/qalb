@@ -160,7 +160,7 @@ public final class QalbOauth {
         }
     }
 
-    /** Chrome me dikhne wala success page — button se wapas app me */
+    /** Chrome me dikhne wala success page — 1.2s baad AUTO wapas app me */
     private static String successHtml() {
         return "<!doctype html><html><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -171,10 +171,14 @@ public final class QalbOauth {
                 + "<div style='padding:32px'>"
                 + "<div style='font-size:44px'>&#9989;</div>"
                 + "<h1 style='font-size:20px;margin:12px 0 6px'>Login ho gaya!</h1>"
-                + "<p style='font-size:14px;color:#A7F3D0;margin:0 0 24px'>Ab Qalb app me wapas jao</p>"
-                + "<a href='intent://oauth2redirect#Intent;scheme=qalb;package=com.qalb.app;end'"
+                + "<p style='font-size:14px;color:#A7F3D0;margin:0 0 24px'>Qalb khul raha hai...</p>"
+                + "<a id='qb' href='intent://oauth2redirect#Intent;scheme=qalb;package=com.qalb.app;end'"
                 + " style='display:inline-block;background:#10B981;color:#064E3B;font-weight:700;"
                 + "padding:14px 28px;border-radius:14px;text-decoration:none;font-size:15px'>Qalb kholo</a>"
+                // AUTO-return: 1.2s baad intent fire — tap ki zaroorat hi nahi.
+                // (auto block ho jaye to button fallback hai)
+                + "<script>setTimeout(function(){try{document.getElementById('qb').click()}"
+                + "catch(e){}},1200)</script>"
                 + "</div></body></html>";
     }
 }

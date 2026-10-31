@@ -58,6 +58,8 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     // MediaSessionCompat + MediaStyle notification (lock screen controls)
     implementation "androidx.media:media:1.7.0"
+    // Google account-picker sheet (in-app Google login, v0.4.5) — Chrome nahi khulta
+    implementation "com.google.android.gms:play-services-auth:21.2.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

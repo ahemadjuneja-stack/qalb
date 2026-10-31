@@ -66,6 +66,12 @@ export interface QalbNativePluginInterface {
   consumeOauthRedirect(): Promise<{ url: string | null }>
   startOauthServer(options?: { port?: number }): Promise<{ port: number }>
   stopOauthServer(): Promise<void>
+  // ── Google in-app sheet (v0.4.5) — Chrome nahi khulta ──
+  googleIdToken(options: { serverClientId: string }): Promise<{
+    idToken: string
+    email?: string
+  }>
+  googleSignOut(): Promise<void>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -344,6 +350,47 @@ export async function nativeStopOauthServer(): Promise<void> {
   if (!isNativeApp()) return
   try {
     await QalbNative.stopOauthServer()
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Google ka ACCOUNT-PICKER SHEET app ke andar (v0.4.5) — Chrome bilkul
+ * nahi khulta. Result:
+ *   { idToken, email }  → sheet se token mil gaya
+ *   { cancelled: true } → user ne sheet band kar di / back maara
+ *   null                → sheet khula hi nahi (play services missing,
+ *                         Android client/SHA-1 missing, sheet exception)
+ */
+export type NativeGoogleResult =
+  | { idToken: string; email: string | null }
+  | { cancelled: true }
+  | null
+
+export async function nativeGoogleIdToken(
+  serverClientId: string
+): Promise<NativeGoogleResult> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.googleIdToken({ serverClientId })
+    if (r?.idToken) return { idToken: r.idToken, email: r.email ?? null }
+    return null
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e ?? '')
+    // user ne sheet cancel ki (back / swipe) — cancel hai, fail nahi
+    if (msg.includes('cancelled') || msg.includes('api-13')) {
+      return { cancelled: true }
+    }
+    return null
+  }
+}
+
+/** Device ka Google session saaf (logout ke saath chalao) */
+export async function nativeGoogleSignOut(): Promise<void> {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.googleSignOut()
   } catch {
     /* ignore */
   }
