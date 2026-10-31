@@ -35,6 +35,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { QalbThumb } from '@/components/qalb/thumb-square'
+import { BannerEcg } from '@/components/qalb/banner-ecg'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { personalizePlaylists } from '@/lib/personalized-playlists'
@@ -325,12 +326,16 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* BRAND BANNER — user ka asli image, har theme me saaf dikhta hai */}
-      <img
-        src="/brand/qalb-banner.jpg"
-        alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
-        className="w-full rounded-2xl shadow-[0_10px_30px_-12px_rgba(69,2,19,0.6)] ring-1 ring-gold/30"
-      />
+      {/* BRAND BANNER — user ka asli image (PNG) + zinda dhadkan ECG line */}
+      <div className="relative overflow-hidden rounded-2xl shadow-[0_10px_30px_-12px_rgba(69,2,19,0.6)] ring-1 ring-gold/30">
+        <img
+          src="/brand/qalb-banner.png"
+          alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
+          className="w-full"
+        />
+        {/* ECG animation — banner ki dhadkan (user ki demand) */}
+        <BannerEcg className="opacity-90" />
+      </div>
 
       {/* greeting + actions — global QalbHeader (banner + section) shell me hai */}
       <div className="flex items-center justify-between gap-3">

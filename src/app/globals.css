@@ -156,30 +156,32 @@
 
 /*
   ═══════════════════════════════════════════════════════════════
-  QALB DARK THEME — "ROYAL CRIMSON MAROON" (v0.5.4 — DEFAULT)
-  User ke banner ke EXACT sampled colors: crimson #930125 center,
-  #74041d mid, #450213 edge. Pehle se gehra-tha (#2a0710) — ab
-  asli RED maroon ki richness har surface me + chamakta gold.
+  QALB DARK THEME — "MIDNIGHT MAROON" (v0.5.5 — 70% DARK)
+  User ka hukum: "Theme ko 70% dark kro" — pichhla maroon (#380a17)
+  ab 70% gehra: deep maroon-black (#1a0510 family) — banner ki asli
+  #440112–#6f051b family ke bilkul neeche. Banner apni crimson
+  brightness se ab card jaisa UBHRA hua dikhta hai (perfect match).
+  Gold #e9c46a same rakha — dark par full contrast.
   ═══════════════════════════════════════════════════════════════
 */
 .dark {
-  --background: #380a17;
+  --background: #1a0510;
   --foreground: #f8ece6;
-  --card: #470d1f;
+  --card: #250a17;
   --card-foreground: #f8ece6;
-  --popover: #4b0e21;
+  --popover: #280b19;
   --popover-foreground: #f8ece6;
   --primary: #e9c46a;
-  --primary-foreground: #380a17;
-  --secondary: #521024;
+  --primary-foreground: #1a0510;
+  --secondary: #2e0d1b;
   --secondary-foreground: #f0d8cf;
-  --muted: #521024;
+  --muted: #2e0d1b;
   --muted-foreground: #d8a9a2;
-  --accent: #5c1226;
+  --accent: #351022;
   --accent-foreground: #f0c987;
   --destructive: #ff6b6b;
-  --border: rgba(233, 196, 106, 0.17);
-  --input: rgba(233, 196, 106, 0.2);
+  --border: rgba(233, 196, 106, 0.15);
+  --input: rgba(233, 196, 106, 0.18);
   --ring: #e9c46a;
   --gold: #e9c46a;
   --chart-1: #e9c46a;
@@ -187,16 +189,16 @@
   --chart-3: #d9a54e;
   --chart-4: #f8ece6;
   --chart-5: #d31f3f;
-  --sidebar: #470d1f;
+  --sidebar: #250a17;
   --sidebar-foreground: #f8ece6;
   --sidebar-primary: #e9c46a;
-  --sidebar-primary-foreground: #380a17;
-  --sidebar-accent: #5c1226;
+  --sidebar-primary-foreground: #1a0510;
+  --sidebar-accent: #351022;
   --sidebar-accent-foreground: #f0c987;
-  --sidebar-border: rgba(233, 196, 106, 0.17);
+  --sidebar-border: rgba(233, 196, 106, 0.15);
   --sidebar-ring: #e9c46a;
 
-  /* emerald ramp — DARK: page crimson-maroon → gold-400 accents */
+  /* emerald ramp — DARK (70% dark): gold accents + deep maroon-black ramp */
   --q-em-50: #f8ece6;
   --q-em-100: #f0d8cf;
   --q-em-200: #d8aca4;
@@ -204,20 +206,20 @@
   --q-em-400: #e6b566;
   --q-em-500: #d9a54e;
   --q-em-600: #c08a3e;
-  --q-em-700: #7c152e;
-  --q-em-800: #571125;
-  --q-em-900: #470d1f;
-  --q-em-950: #380a17;
+  --q-em-700: #6e1129;
+  --q-em-800: #2f0c1c;
+  --q-em-900: #250a17;
+  --q-em-950: #1a0510;
 
   /* app-level theme tokens */
   --glow: rgba(230, 181, 102, 0.45);
-  --shadow-float: rgba(20, 0, 6, 0.75);
+  --shadow-float: rgba(8, 0, 4, 0.8);
   --text-glow-color: rgba(240, 201, 135, 0.35);
-  --glass-bg: rgba(56, 10, 23, 0.92);
-  --card-surface-bg: linear-gradient(165deg, rgba(87, 17, 37, 0.95), rgba(48, 8, 21, 0.97));
-  --card-surface-border: rgba(233, 196, 106, 0.16);
-  --player-bg: linear-gradient(180deg, #5c1128, #380a17);
-  --popup-bg: rgba(64, 12, 28, 0.97);
+  --glass-bg: rgba(26, 5, 16, 0.93);
+  --card-surface-bg: linear-gradient(165deg, rgba(47, 12, 28, 0.95), rgba(22, 4, 13, 0.97));
+  --card-surface-border: rgba(233, 196, 106, 0.14);
+  --player-bg: linear-gradient(180deg, #351022, #1a0510);
+  --popup-bg: rgba(32, 8, 20, 0.97);
   --scroll-thumb: rgba(230, 181, 102, 0.28);
   --grad-emerald-1: #f1d9a0;
   --grad-emerald-2: #dfaa4e;
@@ -254,11 +256,11 @@
     -webkit-tap-highlight-color: transparent;
   }
   .dark body {
-    /* banner jaisa depth — crimson center glow + gold corner halka */
+    /* 70% dark — banner ki gehrai, sirf halka crimson depth glow */
     background-image:
-      radial-gradient(1100px 560px at 85% -12%, rgba(233, 196, 106, 0.07), transparent 60%),
-      radial-gradient(900px 500px at -15% 16%, rgba(147, 1, 37, 0.3), transparent 55%),
-      radial-gradient(1200px 800px at 50% 120%, rgba(116, 4, 29, 0.4), transparent 60%);
+      radial-gradient(1100px 560px at 85% -12%, rgba(233, 196, 106, 0.06), transparent 60%),
+      radial-gradient(900px 500px at -15% 16%, rgba(147, 1, 37, 0.22), transparent 55%),
+      radial-gradient(1200px 800px at 50% 120%, rgba(116, 4, 29, 0.26), transparent 60%);
   }
 }
 
@@ -431,6 +433,17 @@
   animation: qalb-twinkle 2.8s ease-in-out infinite;
 }
 
+/* Banner ECG travelling pulse — dash left→right dil ki dhadkan jaisa */
+@keyframes qalb-ecg-banner {
+  0% { stroke-dashoffset: 0; opacity: 0; }
+  5% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { stroke-dashoffset: -530; opacity: 0; }
+}
+.qalb-ecg-pulse {
+  animation: qalb-ecg-banner 3.4s linear infinite;
+}
+
 /* Header ke neeche shimmering gold-red divider */
 @keyframes qalb-shimmer {
   0% { background-position: 200% 0; }
@@ -555,6 +568,7 @@
   .qalb-beat,
   .qalb-glow-pulse,
   .qalb-ekg-pulse,
+  .qalb-ecg-pulse,
   .qalb-spark,
   .qalb-divider,
   .qalb-ph-dot,

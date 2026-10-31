@@ -20,6 +20,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Globe, Info, Loader2, Moon, Smartphone } from 'lucide-react'
+import { BannerEcg } from '@/components/qalb/banner-ecg'
 import {
   authErrorMessage,
   takeSheetFailDiag,
@@ -188,15 +189,18 @@ export function LoginGate() {
         {/* header — user ka EXACT brand icon + banner (app ke andar wale hi) */}
         <div className="flex flex-col items-center pt-[calc(env(safe-area-inset-top)+4.2rem)]">
           <img
-            src="/brand/qalb-icon.jpg"
+            src="/brand/qalb-icon.png"
             alt="Qalb"
             className="h-24 w-24 rounded-[1.4rem] shadow-[0_10px_34px_-10px_rgba(0,0,0,0.7)] ring-1 ring-gold/40"
           />
-          <img
-            src="/brand/qalb-banner.jpg"
-            alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
-            className="mt-4 w-64 rounded-xl shadow-[0_6px_22px_-8px_rgba(0,0,0,0.65)] ring-1 ring-gold/30"
-          />
+          <div className="relative mt-4 w-64 overflow-hidden rounded-xl shadow-[0_6px_22px_-8px_rgba(0,0,0,0.65)] ring-1 ring-gold/30">
+            <img
+              src="/brand/qalb-banner.png"
+              alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed"
+              className="w-full"
+            />
+            <BannerEcg className="opacity-80" />
+          </div>
         </div>
 
         {/* content hint — simple text line (user ko pata chale app me kya hai) */}
