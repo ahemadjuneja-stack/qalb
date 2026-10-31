@@ -365,12 +365,13 @@ export async function nativeStopOauthServer(): Promise<void> {
  * nahi khulta. Result:
  *   { idToken, email }  → sheet se token mil gaya
  *   { cancelled: true } → user ne sheet band kar di / back maara
- *   null                → sheet khula hi nahi (play services missing,
- *                         Android client/SHA-1 missing, sheet exception)
+ *   { failed: '...' }   → sheet fail (api-10/api-12500/sheet-fail-fast/...)
+ *   null                → web / purana APK — sheet available hi nahi
  */
 export type NativeGoogleResult =
   | { idToken: string; email: string | null }
   | { cancelled: true }
+  | { failed: string }
   | null
 
 export async function nativeGoogleIdToken(
@@ -380,16 +381,16 @@ export async function nativeGoogleIdToken(
   try {
     const r = await QalbNative.googleIdToken({ serverClientId })
     if (r?.idToken) return { idToken: r.idToken, email: r.email ?? null }
-    return null
+    return { failed: 'no-token' }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e ?? '')
     // user ne sheet khud band ki (sheet 600ms+ chali) — cancel hai, fail nahi.
-    // Baaki sab (api-10/api-13/sheet-fail-fast/play-services fail) → null,
-    // auth.ts Chrome loopback fallback chalayega — login kabhi atka nahi.
+    // Baaki sab (api-10/api-13/sheet-fail-fast/play-services fail) → failed
+    // reason ke saath — auth.ts Chrome fallback chalata hai + diag save karta hai.
     if (msg.includes('cancelled')) {
       return { cancelled: true }
     }
-    return null
+    return { failed: msg || 'unknown' }
   }
 }
 

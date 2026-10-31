@@ -538,6 +538,9 @@ const OAUTH_VERIFIER_KEY = 'qalb_oauth_verifier_v1'
 // authorize me jo redirect_uri gaya (loopback port dynamic hai) — token
 // exchange me WOHI wapas bhejni hoti hai, warna Google redirect_uri_mismatch
 const OAUTH_REDIRECT_KEY = 'qalb_oauth_redirect_v1'
+// Native sheet fail hone ki asli wajah (diagnostics) — login toast/error
+// me dikhti hai, screenshot se sheet ka exact fail code pata chalta hai
+const SHEET_FAIL_KEY = 'qalb_sheet_fail'
 
 /** base64url random string (state / nonce / PKCE verifier) */
 function oauthRandom(numBytes: number): string {
@@ -619,6 +622,23 @@ async function consumePendingOauth(): Promise<string | null> {
   return null
 }
 
+/**
+ * consumePendingOauth + 4 sec race — Capacitor ka native promise app
+ * background/Chrome se wapas aane par kabhi-kabhi KABHI settle nahi hota
+ * (isi liye withNetTimeout bana tha). Hang = null treat karo, warna
+ * spinner hamesha ke liye ghoomta rahega (na login, na fail).
+ */
+async function consumePendingOauthSafe(): Promise<string | null> {
+  try {
+    return await Promise.race([
+      consumePendingOauth(),
+      new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+    ])
+  } catch {
+    return null
+  }
+}
+
 /** Chrome se wapas aane ka wait — native event + poll (dono channels) */
 function waitForOauthRedirect(timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -657,14 +677,14 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
     onVis = () => {
       if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
       setTimeout(() => {
-        void consumePendingOauth().then((u) => {
+        void consumePendingOauthSafe().then((u) => {
           if (!u) bad(new Error('google-cancel bina-login-wapas'))
         })
       }, 3000)
     }
     document.addEventListener('visibilitychange', onVis)
     poll = setInterval(() => {
-      void consumePendingOauth().then((u) => {
+      void consumePendingOauthSafe().then((u) => {
         if (u) ok(u)
       })
     }, 700)
@@ -867,7 +887,7 @@ export async function googleSignIn(): Promise<QalbUser> {
 
   // 1) pending redirect? (Chrome se wapas aane par event pehle aa chuka
   //    ho, ya app process wapas khulte hi flow adhoora mila ho)
-  const pending = await consumePendingOauth()
+  const pending = await consumePendingOauthSafe()
   if (pending) {
     const u = await finishGoogleAuth(pending, googleClientId, apiKey)
     if (u) return u
@@ -890,9 +910,16 @@ export async function googleSignIn(): Promise<QalbUser> {
         googleClientId
       const r = await nativeGoogleIdToken(sheetClient)
       if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
-      // sheet cancel ho YA fail ho (api-10/sheet-fail-fast/null) — DONO par
-      // neeche Chrome loopback fallback chalega. Dead-end KABHI nahi:
-      // login har haal me hoga, chahe Google config me kuch bhi ho.
+      // sheet cancel ho YA fail ho — DONO par neeche Chrome loopback
+      // fallback chalega (dead-end kabhi nahi). Fail ki asli wajah save
+      // karo — login ke baad toast / error me dikhegi (diagnostics).
+      if (r && 'failed' in r) {
+        try {
+          window.localStorage.setItem(SHEET_FAIL_KEY, r.failed)
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
@@ -997,6 +1024,18 @@ export async function syncUserDoc(user?: QalbUser | null): Promise<void> {
 }
 
 // ── Error messages (UI ke liye) ─────────────────────────────────
+
+/** Native sheet ki fail wajah (agar pichli try me fail hua ho) — ek baar
+ *  lena, auto clear. Toast/error me [sheet: ...] ke roop me dikhati hai. */
+export function takeSheetFailDiag(): string {
+  try {
+    const v = window.localStorage.getItem(SHEET_FAIL_KEY) ?? ''
+    if (v) window.localStorage.removeItem(SHEET_FAIL_KEY)
+    return v
+  } catch {
+    return ''
+  }
+}
 
 export function authErrorMessage(e: unknown): { title: string; desc: string } {
   const raw = e instanceof Error ? e.message : 'auth-fail'

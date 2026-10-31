@@ -23,6 +23,7 @@ import { ArrowLeft, Info, Loader2, Moon, Smartphone } from 'lucide-react'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
 import {
   authErrorMessage,
+  takeSheetFailDiag,
   clearPhoneSession,
   getAuthConfig,
   googleSignIn,
@@ -76,7 +77,12 @@ export function LoginGate() {
   // NOTE: ye return hooks ke BAAD nahi — upar saare hooks ho chuke
   if (user || guest) return null
 
-  const showErr = (e: unknown) => setErr(authErrorMessage(e))
+  // error + sheet diag — native sheet fail hui ho to uski asli wajah bhi
+  const showErr = (e: unknown) => {
+    const m = authErrorMessage(e)
+    const d = takeSheetFailDiag()
+    setErr(d ? { ...m, desc: `${m.desc} [sheet: ${d}]` } : m)
+  }
 
   const handleGoogle = async () => {
     setErr(null)

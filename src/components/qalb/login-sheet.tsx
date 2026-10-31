@@ -17,6 +17,7 @@ import {
   googleSignIn,
   hasPhoneSession,
   sendPhoneOtp,
+  takeSheetFailDiag,
   verifyPhoneOtp,
   useQalbAuth,
   type AuthConfig,
@@ -75,7 +76,9 @@ export function LoginSheet() {
   }
 
   const showErr = (e: unknown) => {
-    setErr(authErrorMessage(e))
+    const m = authErrorMessage(e)
+    const d = takeSheetFailDiag()
+    setErr(d ? { ...m, desc: `${m.desc} [sheet: ${d}]` } : m)
   }
 
   const handleGoogle = async () => {
@@ -83,7 +86,12 @@ export function LoginSheet() {
     setBusy('google')
     try {
       await googleSignIn()
-      toast({ title: 'Assalam-o-Alaikum! Google se login ho gaya 🎉' })
+      const d = takeSheetFailDiag()
+      toast({
+        title:
+          'Assalam-o-Alaikum! Google se login ho gaya 🎉' +
+          (d ? ` [sheet: ${d}]` : ''),
+      })
       close()
     } catch (e) {
       showErr(e)
