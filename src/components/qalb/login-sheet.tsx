@@ -8,13 +8,14 @@
 // orchestrate karta hai.
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, Smartphone, X } from 'lucide-react'
+import { ArrowLeft, Globe, Loader2, Smartphone, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   authErrorMessage,
   clearPhoneSession,
   getAuthConfig,
   googleSignIn,
+  googleSignInBrowser,
   hasPhoneSession,
   sendPhoneOtp,
   takeSheetFailDiag,
@@ -35,6 +36,8 @@ export function LoginSheet() {
   const [resendIn, setResendIn] = useState(0)
   const { toast } = useToast()
   const otpRef = useRef<HTMLInputElement>(null)
+  // flow generation — "Radd karein" ke baad late promise IGNORE (v0.4.6)
+  const flowGen = useRef(0)
 
   // v0.4.1: Google button sirf jab OAuth client id available ho
   const [cfg, setCfg] = useState<AuthConfig | null>(null)
@@ -81,11 +84,14 @@ export function LoginSheet() {
     setErr(d ? { ...m, desc: `${m.desc} [sheet: ${d}]` } : m)
   }
 
-  const handleGoogle = async () => {
+  const handleGoogle = async (browser = false) => {
+    const gen = ++flowGen.current
     setErr(null)
     setBusy('google')
     try {
-      await googleSignIn()
+      if (browser) await googleSignInBrowser()
+      else await googleSignIn()
+      if (gen !== flowGen.current) return // cancel ho chuka — ignore
       const d = takeSheetFailDiag()
       toast({
         title:
@@ -94,10 +100,21 @@ export function LoginSheet() {
       })
       close()
     } catch (e) {
+      if (gen !== flowGen.current) return
       showErr(e)
     } finally {
-      setBusy(null)
+      if (gen === flowGen.current) setBusy(null)
     }
+  }
+
+  /** Radd karein — spinner foran band, late promise ka result ignore */
+  const cancelGoogle = () => {
+    flowGen.current++
+    setBusy(null)
+    setErr({
+      title: 'Google login radd kar diya',
+      desc: 'Google button dobara daba kar try karein — ya mobile number se login karein.',
+    })
   }
 
   const handleSendOtp = async () => {
@@ -195,21 +212,43 @@ export function LoginSheet() {
         {/* ── STEP: entry ── */}
         {step === 'entry' && (
           <div className="space-y-3">
-            {/* Google — sirf jab OAuth client id bake ho (dead-end na ho) */}
+            {/* Google — native sheet (app ke andar), Chrome AUTO nahi (v0.4.6) */}
             {cfg?.googleClientId && (
-              <button
-                type="button"
-                onClick={() => void handleGoogle()}
-                disabled={busy !== null}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-400/20 bg-white py-3.5 text-[14px] font-bold text-slate-800 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
-              >
-                {busy === 'google' ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <GoogleG />
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleGoogle(false)}
+                  disabled={busy !== null}
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-emerald-400/20 bg-white py-3.5 text-[14px] font-bold text-slate-800 transition hover:bg-slate-50 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {busy === 'google' ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <GoogleG />
+                  )}
+                  Google se login karein
+                </button>
+                {busy === 'google' && (
+                  <button
+                    type="button"
+                    onClick={cancelGoogle}
+                    className="w-full py-1 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
+                  >
+                    Radd karein
+                  </button>
                 )}
-                Google se login karein
-              </button>
+                {err && busy === null && (
+                  <button
+                    type="button"
+                    onClick={() => void handleGoogle(true)}
+                    disabled={busy !== null}
+                    className="flex w-full items-center justify-center gap-2 py-1.5 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
+                  >
+                    <Globe className="h-3.5 w-3.5" />
+                    Browser se login try karein (backup)
+                  </button>
+                )}
+              </>
             )}
 
             {/* Mobile */}

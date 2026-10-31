@@ -33,6 +33,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 
@@ -615,6 +617,15 @@ public class QalbNativePlugin extends Plugin {
             Activity activity = getActivity();
             if (activity == null) {
                 call.reject("no activity");
+                return;
+            }
+            // Play Services availability — missing/purani version par sheet
+            // blind-fail hoti hai (api-10 jaisa confusing code). Pehle check:
+            // saaf gms-N code milega — JS uska alag guidance dikhata hai.
+            int gms = GoogleApiAvailability.getInstance()
+                    .isGooglePlayServicesAvailable(activity);
+            if (gms != ConnectionResult.SUCCESS) {
+                call.reject("gms-" + gms);
                 return;
             }
             GoogleSignInOptions gso = new GoogleSignInOptions.Builder(

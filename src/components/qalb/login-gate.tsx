@@ -19,7 +19,7 @@
 // nahi hota. Refresh token auto-renew lib/auth.ts ensureIdToken me.
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Info, Loader2, Moon, Smartphone } from 'lucide-react'
+import { ArrowLeft, Globe, Info, Loader2, Moon, Smartphone } from 'lucide-react'
 import { QalbLogo } from '@/components/qalb/qalb-logo'
 import {
   authErrorMessage,
@@ -27,6 +27,7 @@ import {
   clearPhoneSession,
   getAuthConfig,
   googleSignIn,
+  googleSignInBrowser,
   hasPhoneSession,
   sendPhoneOtp,
   useQalbAuth,
@@ -49,6 +50,9 @@ export function LoginGate() {
   const [err, setErr] = useState<{ title: string; desc: string } | null>(null)
   const [resendIn, setResendIn] = useState(0)
   const otpRef = useRef<HTMLInputElement>(null)
+  // flow generation — user "Radd karein" daba de to purana (late) promise
+  // ka result IGNORE ho — spinner kabhi zinda nahi re-sakta (v0.4.6)
+  const flowGen = useRef(0)
 
   // login config (v0.4.1 fix): apiKey/clientId available hai? Google button
   // sirf tab render hota hai jab clientId ho — warna dead-end error nahi.
@@ -84,16 +88,30 @@ export function LoginGate() {
     setErr(d ? { ...m, desc: `${m.desc} [sheet: ${d}]` } : m)
   }
 
-  const handleGoogle = async () => {
+  const handleGoogle = async (browser = false) => {
+    const gen = ++flowGen.current
     setErr(null)
     setBusy('google')
     try {
-      await googleSignIn() // completeLogin → user set → gate auto-hide
+      if (browser) await googleSignInBrowser() // backup — user ne button daba ke maanga
+      else await googleSignIn() // native sheet — Chrome kabhi nahi khulta
+      // login ho gaya → gate khud hide (user store set ho chuka)
     } catch (e) {
+      if (gen !== flowGen.current) return // user ne cancel kiya — late result ignore
       showErr(e)
     } finally {
-      setBusy(null)
+      if (gen === flowGen.current) setBusy(null)
     }
+  }
+
+  /** Radd karein — spinner foran band, late promise ka result ignore */
+  const cancelGoogle = () => {
+    flowGen.current++
+    setBusy(null)
+    setErr({
+      title: 'Google login radd kar diya',
+      desc: 'Google button dobara daba kar try karein — ya mobile number se login karein.',
+    })
   }
 
   const handleSendOtp = async () => {
@@ -229,21 +247,44 @@ export function LoginGate() {
                 </div>
               )}
 
-              {/* Google — sirf jab OAuth client id bake ho */}
+              {/* Google — sirf jab OAuth client id bake ho. Native sheet
+                  (app ke andar) — Chrome AUTO kabhi nahi khulta (v0.4.6) */}
               {cfg?.apiKey && cfg.googleClientId && (
-                <button
-                  type="button"
-                  onClick={() => void handleGoogle()}
-                  disabled={busy !== null}
-                  className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[14px] font-bold text-slate-800 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
-                >
-                  {busy === 'google' ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <GoogleG />
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleGoogle(false)}
+                    disabled={busy !== null}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[14px] font-bold text-slate-800 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {busy === 'google' ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <GoogleG />
+                    )}
+                    Google se login karein
+                  </button>
+                  {busy === 'google' && (
+                    <button
+                      type="button"
+                      onClick={cancelGoogle}
+                      className="w-full py-1 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
+                    >
+                      Radd karein
+                    </button>
                   )}
-                  Google se login karein
-                </button>
+                  {err && busy === null && (
+                    <button
+                      type="button"
+                      onClick={() => void handleGoogle(true)}
+                      disabled={busy !== null}
+                      className="flex w-full items-center justify-center gap-2 py-1.5 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      Browser se login try karein (backup)
+                    </button>
+                  )}
+                </>
               )}
 
               {/* Phone — hamesha primary (sirf apiKey ke sath kaam karta hai,

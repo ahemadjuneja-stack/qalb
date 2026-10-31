@@ -880,47 +880,72 @@ async function finishGoogleAuth(
   return googleIdpLogin(idToken, apiKey)
 }
 
+/**
+ * GOOGLE SIGN-IN — v0.4.6: CHROME KABHI AUTO NAHI KHULEGA.
+ * Native sheet (app ke andar account-picker) hi primary aur default hai.
+ *   • Sheet phone ke GMS accounts dikhata hai — Chrome me account ho ya
+ *     na ho, koi farak nahi (user ki asal request).
+ *   • Sheet fail ya cancel ho to ERROR + guidance — Chrome khud nahi
+ *     khulega. Browser wala flow user ki marzi se hoga:
+ *     googleSignInBrowser() (login screen ka "backup" button).
+ */
 export async function googleSignIn(): Promise<QalbUser> {
   const { apiKey, googleClientId } = await getAuthConfig()
   if (!apiKey) throw new Error('auth-setup')
   if (!googleClientId) throw new Error('google-setup')
 
-  // 1) pending redirect? (Chrome se wapas aane par event pehle aa chuka
-  //    ho, ya app process wapas khulte hi flow adhoora mila ho)
+  // 1) pending redirect? (pehle koi browser-flow adhoora reh gaya ho —
+  //    app restart ke baad usko complete karna zaroori hai, warna token
+  //    zaya ho jayega). Stale (state mismatch) → fresh flow.
   const pending = await consumePendingOauthSafe()
   if (pending) {
     const u = await finishGoogleAuth(pending, googleClientId, apiKey)
     if (u) return u
-    // stale (state mismatch) — fresh flow se continue
   }
 
-  // 1.5) NATIVE SHEET (v0.4.5) — Google ka account-picker APP KE ANDAR
-  //      khulta hai, Chrome bilkul nahi khulta. Sheet fail YA cancel ho
-  //      to neeche loopback Chrome flow chalega — dead-end kabhi nahi.
-  {
-    const { isNativeApp: isNative, nativeGoogleIdToken } = await import(
-      '@/plugins/qalb-native'
-    )
-    if (isNative()) {
-      // serverClientId = Web client id (Google sheet usi ka id_token
-      // deti hai); Web client na ho to Desktop client se try — same
-      // project hai to Firebase accept kar leta hai
-      const sheetClient =
-        (process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID as string | undefined) ??
-        googleClientId
-      const r = await nativeGoogleIdToken(sheetClient)
-      if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
-      // sheet cancel ho YA fail ho — DONO par neeche Chrome loopback
-      // fallback chalega (dead-end kabhi nahi). Fail ki asli wajah save
-      // karo — login ke baad toast / error me dikhegi (diagnostics).
-      if (r && 'failed' in r) {
-        try {
-          window.localStorage.setItem(SHEET_FAIL_KEY, r.failed)
-        } catch {
-          /* ignore */
-        }
-      }
-    }
+  // 2) NATIVE SHEET — Google ka account-picker APP KE ANDAR. Fail/cancel
+  //    par Chrome bilkul NAHI khulega — saaf error + guidance milegi.
+  const { isNativeApp: isNative, nativeGoogleIdToken } = await import(
+    '@/plugins/qalb-native'
+  )
+  // Web dev (browser) me sheet hoti hi nahi — wahan browser flow wahi
+  // sahi jagah hai. Native app me hamesha sheet.
+  if (!isNative()) return googleSignInBrowser()
+
+  // serverClientId = Web client id (sheet usi ka id_token deti hai);
+  // app khud package+SHA-1 (Android client) se verify hoti hai
+  const sheetClient =
+    (process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID as string | undefined) ??
+    googleClientId
+  const r = await nativeGoogleIdToken(sheetClient)
+  if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
+
+  // Sheet fail hui — asli wajah save (diag) + saaf error. KOI AUTO-CHROME.
+  if (r && 'cancelled' in r) throw new Error('sheet-cancelled')
+  const reason = r && 'failed' in r ? r.failed : 'unknown'
+  try {
+    window.localStorage.setItem(SHEET_FAIL_KEY, reason)
+  } catch {
+    /* ignore */
+  }
+  throw new Error('sheet-fail ' + reason)
+}
+
+/**
+ * BROWSER BACKUP (user ki marzi se) — Chrome loopback OAuth flow. Ye
+ * function sirf login screen ke "Browser se login" button se chalta hai,
+ * kabhi automatic nahi. Wait 2 min — infinite spinner kabhi nahi.
+ */
+export async function googleSignInBrowser(): Promise<QalbUser> {
+  const { apiKey, googleClientId } = await getAuthConfig()
+  if (!apiKey) throw new Error('auth-setup')
+  if (!googleClientId) throw new Error('google-setup')
+
+  // 1) pending redirect? (browser flow adhoora reh gaya ho)
+  const pending = await consumePendingOauthSafe()
+  if (pending) {
+    const u = await finishGoogleAuth(pending, googleClientId, apiKey)
+    if (u) return u
   }
 
   // 2) loopback server start (native) — Google ka official installed-app
@@ -954,10 +979,11 @@ export async function googleSignIn(): Promise<QalbUser> {
     throw new Error('google-no-browser')
   }
 
-  // 4) redirect ka wait (server event + poll) — phir server band
+  // 4) redirect ka wait (server event + poll + visibilitychange cancel)
+  //    — 2 min hard limit, phir saaf error (infinite spinner nahi)
   let redirect: string
   try {
-    redirect = await waitForOauthRedirect(5 * 60_000)
+    redirect = await waitForOauthRedirect(2 * 60_000)
   } finally {
     void nativeStopOauthServer()
   }
@@ -1041,12 +1067,12 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
   const raw = e instanceof Error ? e.message : 'auth-fail'
   const kind = raw.split(' ')[0]
   const detail = raw.slice(kind.length).trim()
-  const msg = baseAuthMessage(kind)
+  const msg = baseAuthMessage(kind, detail)
   // tech detail screen pe — screenshot se asli wajah foran pata chalegi
   return detail ? { ...msg, desc: `${msg.desc} [${detail}]` } : msg
 }
 
-function baseAuthMessage(kind: string): { title: string; desc: string } {
+function baseAuthMessage(kind: string, detail = ''): { title: string; desc: string } {
   switch (kind) {
     case 'auth-setup':
       return {
@@ -1105,6 +1131,39 @@ function baseAuthMessage(kind: string): { title: string; desc: string } {
       }
     case 'google-cancel':
       return { title: 'Google login cancel ho gaya', desc: 'Dobara try karein.' }
+    case 'sheet-cancelled':
+      return {
+        title: 'Aap ne Google sheet band kar di',
+        desc: 'Google button dobara daba kar try karein — ya mobile number se login karein.',
+      }
+    case 'sheet-fail': {
+      // detail me asli wajah hai: api-10 = Play Services ka purana
+      // registration cache (uninstall/reinstall se theek), gms-N = Play
+      // Services missing/old, baaki generic. Chrome AUTO nahi khulega —
+      // login screen par "Browser se login" backup button hai.
+      if (detail.includes('api-10') || detail.includes('api-12500')) {
+        return {
+          title: 'App ke andar Google sheet nahi khul payi',
+          desc: 'Google Play Services purani install ko yaad rakhta hai — QALB app ko UNINSTALL kar ke wahi naya APK dobara install karein, phir Google se login karein. Ye sirf ek dafa karna hota hai; iske baad sheet seedha app me khulegi, Chrome ki zaroorat nahi.',
+        }
+      }
+      if (detail.startsWith('gms-')) {
+        return {
+          title: 'Google Play Services masla',
+          desc: 'Play Store khol kar "Google Play services" update karein ya phone restart kar ke dobara try karein. Filhaal neeche "Browser se login" backup bhi use kar sakte hain.',
+        }
+      }
+      if (detail.includes('sheet-fail-fast')) {
+        return {
+          title: 'Google sheet khulti hi band ho gayi',
+          desc: 'Dobara try karein — agar baar-baar ho to app uninstall kar ke dobara install karein, ya "Browser se login" backup use karein.',
+        }
+      }
+      return {
+        title: 'App ke andar Google login nahi chala',
+        desc: 'Dobara try karein — ya "Browser se login" backup use karein.',
+      }
+    }
     case 'phone-invalid':
       return {
         title: 'Number galat hai',
