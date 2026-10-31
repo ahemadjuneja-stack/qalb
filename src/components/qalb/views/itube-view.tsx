@@ -8,7 +8,8 @@
 //   • Video list — 16:9 thumbnail + duration badge, title, channel,
 //     views • published
 //   • Infinite scroll (continuation)
-//   • Tap → global player (MiniPlayer + FullPlayerModal) — qalb native
+//   • Tap → YouTube-jaisa WATCH SCREEN (itube-watch.tsx) — video
+//     player khulta hai, audio player pause ho jata hai (v0.5.1)
 //
 // SAB content strict Islamic filter se guzarta hai (lib/itube.ts) —
 // non-islamic video kabhi list me nahi aata.
@@ -16,7 +17,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Play, Search, TriangleAlert, X } from 'lucide-react'
 import { usePlayerStore } from '@/lib/player-store'
-import { useToast } from '@/hooks/use-toast'
 import { viewsLabel } from '@/lib/innertube-x'
 import {
   ITUBE_CHIPS,
@@ -27,12 +27,13 @@ import {
   fmtDur,
   type ITubeChip,
 } from '@/lib/itube'
+import { ItubeWatch } from '@/components/qalb/itube-watch'
 import type { QalbTrack } from '@/lib/types'
 
 type Mode = { kind: 'chip'; chip: ITubeChip } | { kind: 'search'; query: string }
 
 export function ITubeView({ visible }: { visible: boolean }) {
-  const { toast } = useToast()
+  const [watch, setWatch] = useState<QalbTrack | null>(null)
   const [personalQuery, setPersonalQuery] = useState<string | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'chip', chip: ITUBE_CHIPS[0] })
   const [tracks, setTracks] = useState<QalbTrack[]>([])
@@ -104,10 +105,10 @@ export function ITubeView({ visible }: { visible: boolean }) {
     return () => window.removeEventListener('scroll', onScroll)
   }, [visible, cont, loading, loadingMore, mode, load])
 
+  // tap → video watch screen (YouTube jaisa) — audio player pehle pause
   const play = (t: QalbTrack) => {
-    // isi list ko queue bana do — next/prev kaam karega
-    usePlayerStore.getState().playQueue(tracks.length ? tracks : [t], Math.max(0, tracks.indexOf(t)))
-    toast({ title: `▶ ${t.title}` })
+    usePlayerStore.getState().pause()
+    setWatch(t)
   }
 
   const submitSearch = (e?: React.FormEvent) => {
@@ -268,6 +269,16 @@ export function ITubeView({ visible }: { visible: boolean }) {
           </p>
         )}
       </div>
+
+      {/* ── watch screen (YouTube watch-page jaisa overlay) ── */}
+      {watch ? (
+        <ItubeWatch
+          track={watch}
+          related={tracks.filter((t) => t.videoId !== watch.videoId)}
+          onPick={(t) => setWatch(t)}
+          onClose={() => setWatch(null)}
+        />
+      ) : null}
     </div>
   )
 }
