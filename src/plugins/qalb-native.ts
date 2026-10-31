@@ -64,6 +64,8 @@ export interface QalbNativePluginInterface {
   // ── Google OAuth deep-link (v0.4.4) ──
   openExternal(options: { url: string }): Promise<void>
   consumeOauthRedirect(): Promise<{ url: string | null }>
+  startOauthServer(options?: { port?: number }): Promise<{ port: number }>
+  stopOauthServer(): Promise<void>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -295,10 +297,11 @@ export async function nativeSetBgPauseMedia(pause: boolean) {
 
 // ── Google OAuth deep-link (v0.4.4) ────────────────────────────────
 // Google login ab system Chrome me hota hai (WebView GIS popup block
-// hota hai). openExternal Chrome me Google account picker kholta hai;
-// consent ke baad Google qalb://oauth2redirect par redirect karta hai
-// — MainActivity wo intent pakad kar JS ko deta hai (event + pending
-// static, dono channels — cold-start-proof).
+// hota hai + console custom scheme accept nahi karta). Loopback flow:
+// app 127.0.0.1:PORT par chhota HTTP server chalati hai — Chrome me
+// consent ke baad Google isi par redirect karta hai, server query ko
+// qalb:// fake deep-link me wrap karke JS tak pahunchata hai (event +
+// pending static, dono channels — cold-start-proof).
 
 /** URL system browser (Chrome) me kholo — khula? true/false */
 export async function nativeOpenExternal(url: string): Promise<boolean> {
@@ -319,5 +322,29 @@ export async function nativeConsumeOauthRedirect(): Promise<string | null> {
     return r?.url ?? null
   } catch {
     return null
+  }
+}
+
+/**
+ * Loopback OAuth server start — bind hua port (native), ya null
+ * (web dev / bind fail). Server sirf 127.0.0.1 par sunta hai.
+ */
+export async function nativeStartOauthServer(preferredPort = 7849): Promise<number | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.startOauthServer({ port: preferredPort })
+    return typeof r?.port === 'number' ? r.port : null
+  } catch {
+    return null
+  }
+}
+
+/** Loopback OAuth server band (flow ke baad/timeout par) */
+export async function nativeStopOauthServer(): Promise<void> {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.stopOauthServer()
+  } catch {
+    /* ignore */
   }
 }

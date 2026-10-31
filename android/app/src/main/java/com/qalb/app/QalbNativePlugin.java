@@ -528,4 +528,55 @@ public class QalbNativePlugin extends Plugin {
             call.reject("browser nahi khula: " + safeMsg(e));
         }
     }
+
+    /**
+     * JS: loopback OAuth server start (Google ka official installed-app
+     * flow — console custom scheme nahi deta). Chrome me consent ke baad
+     * Google http://127.0.0.1:PORT/oauth2redirect par redirect karta hai;
+     * QalbOauth query ko qalb:// fake deep-link me wrap karke yahan
+     * pahunchata hai → pending static + WebView event (dono channels).
+     */
+    @PluginMethod
+    public void startOauthServer(PluginCall call) {
+        try {
+            Integer pref = call.getInt("port");
+            final int preferred = pref != null ? pref : 7849;
+            final com.getcapacitor.Bridge b = getBridge();
+            final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+            int port = QalbOauth.start(preferred, url -> {
+                setPendingOauthUrl(url);
+                main.post(() -> {
+                    try {
+                        if (b != null && b.getWebView() != null) {
+                            String json = org.json.JSONObject.quote(url);
+                            b.getWebView().evaluateJavascript(
+                                "try{window.dispatchEvent(new CustomEvent('qalbOauthRedirect',"
+                                    + "{detail:{url:" + json + "}}))}catch(e){}",
+                                null);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                });
+            });
+            if (port < 0) {
+                call.reject("oauth server bind fail (ports busy)");
+                return;
+            }
+            JSObject res = new JSObject();
+            res.put("port", port);
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("oauth server fail: " + safeMsg(e));
+        }
+    }
+
+    /** JS: loopback OAuth server band (flow ke baad/timeout par) */
+    @PluginMethod
+    public void stopOauthServer(PluginCall call) {
+        try {
+            QalbOauth.stop();
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
 }

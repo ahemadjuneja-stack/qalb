@@ -517,21 +517,23 @@ export async function verifyPhoneOtp(code: string): Promise<QalbUser> {
   return user
 }
 
-// ── GOOGLE flow (v0.4.4 — system Chrome deep-link OAuth) ────────
-// GIS one-tap Capacitor WebView me block hota hai (popup + origin dono).
-// Naya flow — Google ka official browser-based OAuth:
-//   1. QalbNative.openExternal → system Chrome me Google account picker
-//   2. Consent ke baad Google redirect karta hai qalb://oauth2redirect
-//   3. MainActivity intent pakadta hai → JS ko event + native static
-//      (dono channels — warm start par event, cold start par static)
-//   4. JS id_token (implicit) ya code→exchange (PKCE fallback) nikaal
-//      kar Firebase accounts:signInWithIdp call karta hai
-// CSRF protection: state param localStorage me save hota hai aur
-// redirect par match hota hai — mismatch = redirect discard.
+// ── GOOGLE flow (v0.4.4 — system Chrome + loopback OAuth) ───────
+// GIS one-tap Capacitor WebView me block hota hai (popup + origin dono),
+// aur Google Console custom-scheme redirect URI bhi accept nahi karta
+// ("must use http or https"). Hal: Google ka OFFICIAL installed-app
+// flow — LOOPBACK IP:
+//   1. QalbNative.startOauthServer → app 127.0.0.1:PORT par HTTP server
+//   2. openExternal → Chrome me Google account picker
+//      (redirect_uri=http://127.0.0.1:PORT/oauth2redirect, code + PKCE)
+//   3. Consent ke baad Google Chrome ko isi loopback par redirect karta hai
+//   4. QalbOauth query ko qalb://oauth2redirect?... fake deep-link me
+//      wrap karke JS tak pahunchata hai (event + pending static)
+//   5. JS state check → code→id_token exchange (PKCE) → signInWithIdp
+// CSRF: state param localStorage me save, redirect par match.
+// PKCE: verifier localStorage me, challenge S256 authorize me jaata hai.
 
-const OAUTH_REDIRECT_URI = 'qalb://oauth2redirect'
+const OAUTH_REDIRECT_URI = 'qalb://oauth2redirect' // dev-web fallback
 const OAUTH_STATE_KEY = 'qalb_oauth_state_v1'
-const OAUTH_MODE_KEY = 'qalb_oauth_mode_v1'
 const OAUTH_VERIFIER_KEY = 'qalb_oauth_verifier_v1'
 
 /** base64url random string (state / nonce / PKCE verifier) */
@@ -653,25 +655,22 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
   })
 }
 
-/** Google authorize URL (implicit=primary / code+PKCE=fallback) */
+/** Google authorize URL — code + PKCE (loopback redirect) */
 function buildAuthorizeUrl(
   clientId: string,
-  mode: 'implicit' | 'code',
+  redirectUri: string,
   state: string,
-  extras: { nonce?: string; challenge?: string }
+  challenge: string
 ): string {
   const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
   u.searchParams.set('client_id', clientId)
-  u.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI)
-  u.searchParams.set('response_type', mode === 'implicit' ? 'id_token' : 'code')
+  u.searchParams.set('redirect_uri', redirectUri)
+  u.searchParams.set('response_type', 'code')
   u.searchParams.set('scope', 'openid email profile')
   u.searchParams.set('state', state)
   u.searchParams.set('prompt', 'select_account')
-  if (extras.nonce) u.searchParams.set('nonce', extras.nonce)
-  if (extras.challenge) {
-    u.searchParams.set('code_challenge', extras.challenge)
-    u.searchParams.set('code_challenge_method', 'S256')
-  }
+  u.searchParams.set('code_challenge', challenge)
+  u.searchParams.set('code_challenge_method', 'S256')
   return u.toString()
 }
 
@@ -802,7 +801,7 @@ export async function googleSignIn(): Promise<QalbUser> {
   if (!googleClientId) throw new Error('google-setup')
 
   // 1) pending redirect? (Chrome se wapas aane par event pehle aa chuka
-  //    ho, ya app process deep-link se hi start hua ho)
+  //    ho, ya app process wapas khulte hi flow adhoora mila ho)
   const pending = await consumePendingOauth()
   if (pending) {
     const u = await finishGoogleAuth(pending, googleClientId, apiKey)
@@ -810,57 +809,42 @@ export async function googleSignIn(): Promise<QalbUser> {
     // stale (state mismatch) — fresh flow se continue
   }
 
-  // 2) implicit mode — id_token seedha redirect fragment me (sabse kam
-  //    moving parts: koi exchange, koi secret nahi)
+  // 2) loopback server start (native) — Google ka official installed-app
+  //    redirect. Web-dev fallback: qalb:// custom scheme (console me
+  //    register nahi hota, sirf local testing).
+  const { isNativeApp, nativeStartOauthServer, nativeStopOauthServer } = await import(
+    '@/plugins/qalb-native'
+  )
+  const port = await nativeStartOauthServer(7849)
+  if (isNativeApp() && port === null) {
+    throw new Error('google-server-fail')
+  }
+  const redirectUri =
+    port !== null ? `http://127.0.0.1:${port}/oauth2redirect` : OAUTH_REDIRECT_URI
+
+  // 3) state + PKCE verifier save, Chrome me authorize kholo
   const state = oauthRandom(16)
+  const verifier = oauthRandom(32)
+  const challenge = await pkceChallenge(verifier)
   try {
     window.localStorage.setItem(OAUTH_STATE_KEY, state)
-    window.localStorage.setItem(OAUTH_MODE_KEY, 'implicit')
-    window.localStorage.removeItem(OAUTH_VERIFIER_KEY)
+    window.localStorage.setItem(OAUTH_VERIFIER_KEY, verifier)
   } catch {
     /* ignore */
   }
-  const url = buildAuthorizeUrl(googleClientId, 'implicit', state, {
-    nonce: oauthRandom(16),
-  })
+  const url = buildAuthorizeUrl(googleClientId, redirectUri, state, challenge)
   const opened = await openInSystemBrowser(url)
-  if (!opened) throw new Error('google-no-browser')
+  if (!opened) {
+    void nativeStopOauthServer()
+    throw new Error('google-no-browser')
+  }
 
+  // 4) redirect ka wait (server event + poll) — phir server band
   let redirect: string
   try {
     redirect = await waitForOauthRedirect(5 * 60_000)
-  } catch (e) {
-    throw e instanceof Error ? e : new Error('google-fail')
-  }
-
-  // 3) implicit reject hua? (error redirect) → EK dafa code+PKCE mode
-  const r = parseOauthRedirect(redirect)
-  if (r.error && !r.idToken && !r.code) {
-    let mode = ''
-    try {
-      mode = window.localStorage.getItem(OAUTH_MODE_KEY) ?? ''
-    } catch {
-      /* ignore */
-    }
-    if (mode === 'implicit' && /response_type|unsupported|invalid_request/i.test(r.error)) {
-      const verifier = oauthRandom(32)
-      const challenge = await pkceChallenge(verifier)
-      const state2 = oauthRandom(16)
-      try {
-        window.localStorage.setItem(OAUTH_STATE_KEY, state2)
-        window.localStorage.setItem(OAUTH_MODE_KEY, 'code')
-        window.localStorage.setItem(OAUTH_VERIFIER_KEY, verifier)
-      } catch {
-        /* ignore */
-      }
-      const url2 = buildAuthorizeUrl(googleClientId, 'code', state2, { challenge })
-      const opened2 = await openInSystemBrowser(url2)
-      if (!opened2) throw new Error('google-no-browser')
-      const redirect2 = await waitForOauthRedirect(5 * 60_000)
-      const u2 = await finishGoogleAuth(redirect2, googleClientId, apiKey)
-      if (u2) return u2
-      throw new Error('google-fail')
-    }
+  } finally {
+    void nativeStopOauthServer()
   }
 
   const user = await finishGoogleAuth(redirect, googleClientId, apiKey)
@@ -953,6 +937,11 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
       return {
         title: 'Chrome nahi khul saka',
         desc: 'Google login ke liye phone me Chrome (ya koi browser) chahiye — check kar ke dobara try karein.',
+      }
+    case 'google-server-fail':
+      return {
+        title: 'Login server start nahi hua',
+        desc: 'App ko poori tarah band kar ke dobara khol kar try karein — phone ki memory thodi busy lag rahi hai.',
       }
     case 'google-unavailable':
       return {
