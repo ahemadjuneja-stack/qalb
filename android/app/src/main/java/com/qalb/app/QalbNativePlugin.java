@@ -9,6 +9,13 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Window;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
 import androidx.activity.result.ActivityResult;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -681,6 +688,50 @@ public class QalbNativePlugin extends Plugin {
             call.reject("api-" + e.getStatusCode());
         } catch (Exception e) {
             call.reject("google result fail: " + safeMsg(e));
+        }
+    }
+
+    /**
+     * JS: native HTTP POST (form body) — WebView ke DNS/CORS maslon ka
+     * bypass (v0.4.5). Jaise Google token exchange: WebView me "Unable to
+     * resolve host oauth2.googleapis.com" aa sakta hai, Android ka apna
+     * stack (Chrome jaisa) resolve kar leta hai. Status + body wapas.
+     */
+    @PluginMethod
+    public void httpPostForm(PluginCall call) {
+        String url = call.getString("url");
+        String body = call.getString("body");
+        if (url == null || body == null || url.isEmpty()) {
+            call.reject("bad-args");
+            return;
+        }
+        try {
+            HttpURLConnection conn =
+                    (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setConnectTimeout(15_000);
+            conn.setReadTimeout(20_000);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+            OutputStream os = conn.getOutputStream();
+            os.write(body.getBytes(StandardCharsets.UTF_8));
+            os.flush();
+            os.close();
+            int status = conn.getResponseCode();
+            InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            if (in != null) {
+                while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                in.close();
+            }
+            JSObject res = new JSObject();
+            res.put("status", status);
+            res.put("body", bos.toString("UTF-8"));
+            call.resolve(res);
+        } catch (Exception e) {
+            call.reject("http-fail: " + e.getClass().getSimpleName());
         }
     }
 

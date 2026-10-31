@@ -700,7 +700,10 @@ async function pkceChallenge(verifier: string): Promise<string> {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-/** code → id_token (token endpoint — secret optional, PKCE pahle) */
+/** code → id_token (token endpoint — secret optional, PKCE pahle).
+ *  DNS/network ek second ke liye gir jaata hai ("Unable to resolve host
+ *  oauth2.googleapis.com") — isliye 3 tries + Android native HTTP
+ *  fallback. Login chhote network hiccup se kabhi nahi rukega. */
 async function exchangeGoogleCode(code: string, clientId: string): Promise<string> {
   let verifier = ''
   try {
@@ -709,7 +712,7 @@ async function exchangeGoogleCode(code: string, clientId: string): Promise<strin
   } catch {
     /* ignore */
   }
-  if (!verifier) throw new Error('google-fail')
+  if (!verifier) throw new Error('google-fail verifier-missing')
   // authorize wali redirect_uri (loopback port ke saath) wapas use karo
   let redirectUri = OAUTH_REDIRECT_URI
   try {
@@ -727,17 +730,46 @@ async function exchangeGoogleCode(code: string, clientId: string): Promise<strin
   })
   const secret = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET as string | undefined) ?? ''
   if (secret) body.set('client_secret', secret)
-  const res = await withNetTimeout(
-    fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }),
-    20_000
-  )
-  const j = (await res.json()) as { id_token?: string }
-  if (!res.ok || !j.id_token) throw new Error('google-fail')
-  return j.id_token
+  const bodyStr = body.toString()
+
+  // 1) WebView fetch — 3 tries, chhote DNS/network fail khud theek
+  let lastNetErr = ''
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await withNetTimeout(
+        fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: bodyStr,
+        }),
+        20_000
+      )
+      const j = (await res.json()) as { id_token?: string; error?: string }
+      if (res.ok && j.id_token) return j.id_token
+      // HTTP 400 (invalid_grant...) — retry bekaar, seedha wajah ke saath fail
+      throw new Error('google-fail ' + (j.error ?? `http-${res.status}`))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e ?? '')
+      if (msg.startsWith('google-fail')) throw e
+      lastNetErr = msg
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)))
+    }
+  }
+
+  // 2) NATIVE fallback — WebView ka DNS/CORS bypass (Android ka apna stack)
+  const { nativeHttpPostForm } = await import('@/plugins/qalb-native')
+  const r = await nativeHttpPostForm('https://oauth2.googleapis.com/token', bodyStr)
+  if (r) {
+    let j: { id_token?: string; error?: string } | null = null
+    try {
+      j = JSON.parse(r.body) as { id_token?: string; error?: string }
+    } catch {
+      /* parse fail — neeche generic */
+    }
+    if (j?.id_token && r.status >= 200 && r.status < 300) return j.id_token
+    throw new Error('google-fail native-' + (j?.error ?? `http-${r.status}`))
+  }
+  throw new Error('google-fail network ' + lastNetErr)
 }
 
 /** Google id_token → Firebase session (accounts:signInWithIdp) */

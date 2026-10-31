@@ -72,6 +72,11 @@ export interface QalbNativePluginInterface {
     email?: string
   }>
   googleSignOut(): Promise<void>
+  // ── Native HTTP (v0.4.5) — WebView DNS/CORS bypass fallback ──
+  httpPostForm(options: { url: string; body: string }): Promise<{
+    status: number
+    body: string
+  }>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -395,5 +400,23 @@ export async function nativeGoogleSignOut(): Promise<void> {
     await QalbNative.googleSignOut()
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Native HTTP POST (form) — WebView ke DNS/CORS maslon ka bypass
+ * (v0.4.5). Result null = method nahi mili / fail (purana APK ya web).
+ */
+export async function nativeHttpPostForm(
+  url: string,
+  body: string
+): Promise<{ status: number; body: string } | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.httpPostForm({ url, body })
+    if (typeof r?.status === 'number' && typeof r?.body === 'string') return r
+    return null
+  } catch {
+    return null
   }
 }
