@@ -34,7 +34,6 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
-import { QalbLogo } from '@/components/qalb/qalb-logo'
 import { QalbThumb } from '@/components/qalb/thumb-square'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
@@ -326,10 +325,17 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* header — logo + avatar (JioSaavn style) */}
+      {/* header — iPlayer wordmark + avatar (v0.5.0: Home ka naya naam) */}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <QalbLogo className="h-12 w-auto" />
+          <div className="flex items-center gap-2">
+            <span className="flex h-9 w-12 items-center justify-center rounded-lg bg-red-600 shadow-md" aria-hidden="true">
+              <Play className="h-4.5 w-4.5 fill-white text-white" />
+            </span>
+            <h1 className="text-[24px] font-extrabold leading-none tracking-tight text-emerald-50">
+              i<span className="text-emerald-400">Player</span>
+            </h1>
+          </div>
           <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-400/80">
             Assalam-o-Alaikum{user ? `, ${user.name}` : ''}
           </p>

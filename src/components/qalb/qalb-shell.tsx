@@ -21,8 +21,7 @@ import { BottomNav, type QalbTab } from '@/components/qalb/bottom-nav'
 import { MiniPlayer } from '@/components/qalb/mini-player'
 import { FullPlayerModal } from '@/components/qalb/full-player-modal'
 import { HomeView } from '@/components/qalb/views/home-view'
-import { PlayerView } from '@/components/qalb/views/player-view'
-import { ReelsView } from '@/components/qalb/views/reels-view'
+import { ITubeView } from '@/components/qalb/views/itube-view'
 import { CalendarView } from '@/components/qalb/views/calendar-view'
 import { ProfileView } from '@/components/qalb/views/profile-view'
 import { UpdatePopup } from '@/components/qalb/update-popup'
@@ -58,7 +57,8 @@ import { otaBoot, useOtaStore } from '@/lib/ota'
 import { APP_BUILD } from '@/lib/app-build'
 
 // Tab-level feature flags (remoteConfig.disabledFeatures se aate hain)
-const GATABLE_TABS: QalbTab[] = ['player', 'reels', 'calendar']
+// v0.5.0: 'player' tab REMOVE — reels key ab iTube hai (type compat)
+const GATABLE_TABS: QalbTab[] = ['reels', 'calendar']
 
 export function QalbShellCore() {
   // SSR + pehli client frame: inert splash (localStorage/bridge abhi nahi padhte)
@@ -90,7 +90,7 @@ export function QalbShellCore() {
         await nativeClearCrash()
       }
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   // 12 sec stable session → dono counters reset (L1 + L3)
@@ -141,7 +141,6 @@ function QalbShellInner({
   const backChainRef = useRef<(next: QalbTab) => void>(() => {})
 
   const hiddenTabs = GATABLE_TABS.filter((t) => gatableOff.includes(t))
-  const showPlayer = !hiddenTabs.includes('player')
   const showReels = !hiddenTabs.includes('reels')
   const showCalendar = !hiddenTabs.includes('calendar')
 
@@ -166,17 +165,6 @@ function QalbShellInner({
     tabRef.current = tab
     backChainRef.current = setTab
   }, [tab])
-
-  // Reels cache warm-up (v0.2.6) — boot ke 9s baad background me reels
-  // pool fetch → reels tab pehli baar khologe to bhi INSTANT (no loading)
-  useEffect(() => {
-    const t = setTimeout(() => {
-      void import('@/lib/reels')
-        .then((m) => m.getReels())
-        .catch(() => {})
-    }, 9_000)
-    return () => clearTimeout(t)
-  }, [])
 
   // OTA live update (v0.3.0): naya web bundle serve ho raha hai to boot
   // safe mark karo — warna agle start par QalbOta rollback kar dega.
@@ -243,13 +231,13 @@ function QalbShellInner({
       alive = false
       unlisten?.()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   // Remote se tab disable hua jo active tha → home par wapas
   useEffect(() => {
     if (tab !== 'home' && hiddenTabs.includes(tab)) setTabState('home')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [hiddenTabs.join(',')])
 
   return (
@@ -260,14 +248,9 @@ function QalbShellInner({
           <div style={{ display: tab === 'home' ? 'block' : 'none' }}>
             <HomeView />
           </div>
-          {showPlayer && (
-            <div style={{ display: tab === 'player' ? 'block' : 'none' }}>
-              <PlayerView />
-            </div>
-          )}
           {showReels && (
             <div style={{ display: tab === 'reels' ? 'block' : 'none' }}>
-              <ReelsView visible={tab === 'reels'} />
+              <ITubeView visible={tab === 'reels'} />
             </div>
           )}
           {showCalendar && (

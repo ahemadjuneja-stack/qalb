@@ -1,19 +1,23 @@
 'use client'
 
-// Qalb — 5-Tab Bottom Navigation (Spotify/YouTube Music style)
-// Tabs: Home, Player, Reels, Calendar, Profile
-// (v0.2.5: Reels tab — Islamic Shorts feed, Player ke bagal me)
-// NOTE: Store tab temporarily removed — wapas lana ho to
-// { key: 'store', label: 'Store', icon: ShoppingBag } add karo + shell me StoreView render
+// Qalb — Bottom Navigation (v0.5.0)
+// Tabs: iPlayer (Home), iTube (Reels ki jagah), Calendar, Profile
+// ─────────────────────────────────────────────────────────────────
+// v0.5.0 BADE BADLAV (user request):
+//   • "Player" tab REMOVE — kisi kaam ka nahi tha (MiniPlayer +
+//     FullPlayerModal global hain, playback tab ke bina bhi chalta hai)
+//   • "Reels" → "iTube" — YouTube-style Islamic video hub
+//   • "Home" → "iPlayer"
+// NOTE: QalbTab type me 'player' abhi bhi hai — back-stack.ts compat
+// (purana APK/purane refs toot na jayein). Nav me nahi dikhta.
 
-import { Home, Disc3, Clapperboard, CalendarDays, UserRound } from 'lucide-react'
+import { Home, Youtube, CalendarDays, UserRound } from 'lucide-react'
 
 export type QalbTab = 'home' | 'player' | 'reels' | 'calendar' | 'profile'
 
 const TABS: { key: QalbTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { key: 'home', label: 'Home', icon: Home },
-  { key: 'player', label: 'Player', icon: Disc3 },
-  { key: 'reels', label: 'Reels', icon: Clapperboard },
+  { key: 'home', label: 'iPlayer', icon: Home },
+  { key: 'reels', label: 'iTube', icon: Youtube },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'profile', label: 'Profile', icon: UserRound },
 ]

@@ -37,13 +37,17 @@ import {
 
 type Step = 'entry' | 'phone' | 'otp'
 
+// v0.5.0: PHONE LOGIN BAND (user request) — sirf Google login. Wapas
+// chalu karna ho to ye flag true karo — phone/OTP ka poora code safe pada hai.
+const PHONE_LOGIN_ENABLED = false
+
 export function LoginGate() {
   const user = useQalbAuth((s) => s.user)
   const guest = useQalbAuth((s) => s.guest)
   const continueAsGuest = useQalbAuth((s) => s.continueAsGuest)
 
   // login steps
-  const [step, setStep] = useState<Step>(hasPhoneSession() ? 'otp' : 'entry')
+  const [step, setStep] = useState<Step>(PHONE_LOGIN_ENABLED && hasPhoneSession() ? "otp" : "entry")
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
   const [busy, setBusy] = useState<'google' | 'send' | 'verify' | null>(null)
@@ -287,9 +291,8 @@ export function LoginGate() {
                 </>
               )}
 
-              {/* Phone — hamesha primary (sirf apiKey ke sath kaam karta hai,
-                  par tap karne par khud config resolve karta hai) */}
-              {(!cfg || cfg.apiKey) && (
+              {/* Phone — v0.5.0 se band (sirf Google login) */}
+              {PHONE_LOGIN_ENABLED && (!cfg || cfg.apiKey) && (
                 <button
                   type="button"
                   onClick={() => setStep('phone')}

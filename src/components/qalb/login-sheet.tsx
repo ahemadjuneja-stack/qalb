@@ -26,6 +26,9 @@ import {
 
 type Step = 'entry' | 'phone' | 'otp'
 
+// v0.5.0: PHONE LOGIN BAND (user request) — sirf Google login.
+const PHONE_LOGIN_ENABLED = false
+
 export function LoginSheet() {
   const { loginOpen, closeLogin, setSession } = useQalbAuth()
   const [step, setStep] = useState<Step>('entry')
@@ -57,7 +60,7 @@ export function LoginSheet() {
   // sheet reset har baar
   useEffect(() => {
     if (loginOpen) {
-      setStep(hasPhoneSession() ? 'otp' : 'entry')
+      setStep(PHONE_LOGIN_ENABLED && hasPhoneSession() ? "otp" : "entry")
       setErr(null)
       setOtp('')
     }
@@ -251,16 +254,18 @@ export function LoginSheet() {
               </>
             )}
 
-            {/* Mobile */}
-            <button
-              type="button"
-              onClick={() => setStep('phone')}
-              disabled={busy !== null}
-              className="emerald-gradient flex w-full items-center justify-center gap-3 rounded-2xl py-3.5 text-[14px] font-extrabold text-emerald-950 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
-            >
-              <Smartphone className="h-5 w-5" />
-              Mobile number se login
-            </button>
+            {/* Mobile — v0.5.0 se band (sirf Google login) */}
+            {PHONE_LOGIN_ENABLED && (
+              <button
+                type="button"
+                onClick={() => setStep('phone')}
+                disabled={busy !== null}
+                className="emerald-gradient flex w-full items-center justify-center gap-3 rounded-2xl py-3.5 text-[14px] font-extrabold text-emerald-950 transition hover:brightness-110 active:scale-[0.98] disabled:opacity-50"
+              >
+                <Smartphone className="h-5 w-5" />
+                Mobile number se login
+              </button>
+            )}
 
             {/* Guest */}
             <button
