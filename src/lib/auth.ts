@@ -517,51 +517,207 @@ export async function verifyPhoneOtp(code: string): Promise<QalbUser> {
   return user
 }
 
-// ── GOOGLE flow (GIS → signInWithIdp) ───────────────────────────
+// ── GOOGLE flow (v0.4.4 — system Chrome deep-link OAuth) ────────
+// GIS one-tap Capacitor WebView me block hota hai (popup + origin dono).
+// Naya flow — Google ka official browser-based OAuth:
+//   1. QalbNative.openExternal → system Chrome me Google account picker
+//   2. Consent ke baad Google redirect karta hai qalb://oauth2redirect
+//   3. MainActivity intent pakadta hai → JS ko event + native static
+//      (dono channels — warm start par event, cold start par static)
+//   4. JS id_token (implicit) ya code→exchange (PKCE fallback) nikaal
+//      kar Firebase accounts:signInWithIdp call karta hai
+// CSRF protection: state param localStorage me save hota hai aur
+// redirect par match hota hai — mismatch = redirect discard.
 
-export async function googleSignIn(): Promise<QalbUser> {
-  const { apiKey, googleClientId } = await getAuthConfig()
-  if (!apiKey) throw new Error('auth-setup')
-  if (!googleClientId) throw new Error('google-setup')
+const OAUTH_REDIRECT_URI = 'qalb://oauth2redirect'
+const OAUTH_STATE_KEY = 'qalb_oauth_state_v1'
+const OAUTH_MODE_KEY = 'qalb_oauth_mode_v1'
+const OAUTH_VERIFIER_KEY = 'qalb_oauth_verifier_v1'
 
-  await loadScript('https://accounts.google.com/gsi/client', 15_000)
-  const g = (window as unknown as {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (o: {
-            client_id: string
-            callback: (r: { credential?: string }) => void
-          }) => void
-          prompt: () => void
-        }
+/** base64url random string (state / nonce / PKCE verifier) */
+function oauthRandom(numBytes: number): string {
+  const b = new Uint8Array(numBytes)
+  crypto.getRandomValues(b)
+  let s = ''
+  for (const x of b) s += String.fromCharCode(x)
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+interface OauthRedirectParts {
+  idToken: string | null
+  code: string | null
+  state: string | null
+  error: string | null
+}
+
+/** qalb://oauth2redirect[#|?]... — fragment (implicit) + query (code) dono */
+function parseOauthRedirect(raw: string): OauthRedirectParts {
+  const out: OauthRedirectParts = { idToken: null, code: null, state: null, error: null }
+  try {
+    const url = new URL(raw)
+    const frag = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
+    const qp = new URLSearchParams(url.search || '')
+    const fp = new URLSearchParams(frag || '')
+    out.error = qp.get('error') ?? fp.get('error')
+    out.state = qp.get('state') ?? fp.get('state')
+    out.code = qp.get('code') ?? fp.get('code')
+    out.idToken = qp.get('id_token') ?? fp.get('id_token')
+  } catch {
+    // URL parser na chale to regex fallback (sirf id_token)
+    const m = raw.match(/id_token=([^&\s]+)/)
+    if (m) {
+      try {
+        out.idToken = decodeURIComponent(m[1])
+      } catch {
+        out.idToken = m[1]
       }
     }
-  }).google
-  if (!g) throw new Error('google-unavailable')
+  }
+  return out
+}
 
-  const jwt = await new Promise<string>((resolve, reject) => {
-    let done = false
-    const timer = setTimeout(() => {
-      if (!done) reject(new Error('google-timeout'))
-    }, 120_000)
-    g.accounts.id.initialize({
-      client_id: googleClientId as string,
-      callback: (r) => {
-        done = true
-        clearTimeout(timer)
-        if (r.credential) resolve(r.credential)
-        else reject(new Error('google-cancel'))
-      },
-    })
-    try {
-      g.accounts.id.prompt()
-    } catch {
-      clearTimeout(timer)
-      reject(new Error('google-unavailable'))
+/** Chrome me kholo — native bridge, warna dev-web fallback */
+async function openInSystemBrowser(url: string): Promise<boolean> {
+  const { nativeOpenExternal } = await import('@/plugins/qalb-native')
+  if (await nativeOpenExternal(url)) return true
+  try {
+    window.open(url, '_blank', 'noopener')
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Pending redirect lena (ek baar — auto clear).
+ * Native static MainActivity se aata hai — cold-start-proof (app ka
+ * process Chrome me hi mar gaya ho tab bhi URL milta hai).
+ */
+async function consumePendingOauth(): Promise<string | null> {
+  try {
+    const { nativeConsumeOauthRedirect } = await import('@/plugins/qalb-native')
+    const u = await nativeConsumeOauthRedirect()
+    if (u) return u
+  } catch {
+    /* native nahi hai — web fallback */
+  }
+  try {
+    const w = window as unknown as { __qalbOauthUrl?: string | null }
+    const u = w.__qalbOauthUrl
+    if (typeof u === 'string' && u) {
+      w.__qalbOauthUrl = null
+      return u
     }
-  })
+  } catch {
+    /* ignore */
+  }
+  return null
+}
 
+/** Chrome se wapas aane ka wait — native event + poll (dono channels) */
+function waitForOauthRedirect(timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let done = false
+    let poll: ReturnType<typeof setInterval> | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const cleanup = () => {
+      window.removeEventListener('qalbOauthRedirect', handler as EventListener)
+      if (poll) clearInterval(poll)
+      if (timer) clearTimeout(timer)
+    }
+    const ok = (url: string) => {
+      if (!done) {
+        done = true
+        cleanup()
+        resolve(url)
+      }
+    }
+    const bad = (e: Error) => {
+      if (!done) {
+        done = true
+        cleanup()
+        reject(e)
+      }
+    }
+    const handler = (ev: Event) => {
+      const d = (ev as CustomEvent<{ url?: string }>).detail
+      if (d && typeof d.url === 'string' && d.url) ok(d.url)
+    }
+    window.addEventListener('qalbOauthRedirect', handler as EventListener)
+    poll = setInterval(() => {
+      void consumePendingOauth().then((u) => {
+        if (u) ok(u)
+      })
+    }, 700)
+    timer = setTimeout(() => bad(new Error('google-timeout')), timeoutMs)
+  })
+}
+
+/** Google authorize URL (implicit=primary / code+PKCE=fallback) */
+function buildAuthorizeUrl(
+  clientId: string,
+  mode: 'implicit' | 'code',
+  state: string,
+  extras: { nonce?: string; challenge?: string }
+): string {
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  u.searchParams.set('client_id', clientId)
+  u.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI)
+  u.searchParams.set('response_type', mode === 'implicit' ? 'id_token' : 'code')
+  u.searchParams.set('scope', 'openid email profile')
+  u.searchParams.set('state', state)
+  u.searchParams.set('prompt', 'select_account')
+  if (extras.nonce) u.searchParams.set('nonce', extras.nonce)
+  if (extras.challenge) {
+    u.searchParams.set('code_challenge', extras.challenge)
+    u.searchParams.set('code_challenge_method', 'S256')
+  }
+  return u.toString()
+}
+
+/** PKCE S256 challenge (code fallback ke liye) */
+async function pkceChallenge(verifier: string): Promise<string> {
+  const data = new TextEncoder().encode(verifier)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  let s = ''
+  for (const x of new Uint8Array(digest)) s += String.fromCharCode(x)
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** code → id_token (token endpoint — secret optional, PKCE pahle) */
+async function exchangeGoogleCode(code: string, clientId: string): Promise<string> {
+  let verifier = ''
+  try {
+    verifier = window.localStorage.getItem(OAUTH_VERIFIER_KEY) ?? ''
+    window.localStorage.removeItem(OAUTH_VERIFIER_KEY)
+  } catch {
+    /* ignore */
+  }
+  if (!verifier) throw new Error('google-fail')
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    redirect_uri: OAUTH_REDIRECT_URI,
+    grant_type: 'authorization_code',
+    code_verifier: verifier,
+  })
+  const secret = (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET as string | undefined) ?? ''
+  if (secret) body.set('client_secret', secret)
+  const res = await withNetTimeout(
+    fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    }),
+    20_000
+  )
+  const j = (await res.json()) as { id_token?: string }
+  if (!res.ok || !j.id_token) throw new Error('google-fail')
+  return j.id_token
+}
+
+/** Google id_token → Firebase session (accounts:signInWithIdp) */
+async function googleIdpLogin(idToken: string, apiKey: string): Promise<QalbUser> {
   const res = await withNetTimeout(
     fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=${apiKey}`,
@@ -569,8 +725,9 @@ export async function googleSignIn(): Promise<QalbUser> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          postBody: `id_token=${encodeURIComponent(jwt)}&providerId=google.com`,
-          requestUri: typeof window !== 'undefined' ? window.location.origin : 'http://localhost',
+          postBody: `id_token=${encodeURIComponent(idToken)}&providerId=google.com`,
+          requestUri:
+            typeof window !== 'undefined' ? window.location.origin : 'http://localhost',
           returnIdpCredential: true,
         }),
       }
@@ -603,6 +760,111 @@ export async function googleSignIn(): Promise<QalbUser> {
     expiresAt: Date.now() + Number(j.expiresIn || 3600) * 1000,
   }
   completeLogin(user)
+  return user
+}
+
+/**
+ * Redirect URL se login complete. State match NAHI → stale/poisoned
+ * redirect — null (caller fresh flow chalata hai).
+ */
+async function finishGoogleAuth(
+  redirectUrl: string,
+  clientId: string,
+  apiKey: string
+): Promise<QalbUser | null> {
+  const r = parseOauthRedirect(redirectUrl)
+  let savedState = ''
+  try {
+    savedState = window.localStorage.getItem(OAUTH_STATE_KEY) ?? ''
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.localStorage.removeItem(OAUTH_STATE_KEY)
+  } catch {
+    /* ignore */
+  }
+  if (!r.state || !savedState || r.state !== savedState) return null
+  if (r.error) {
+    if (r.error === 'access_denied' || r.error === 'user_cancelled')
+      throw new Error('google-cancel')
+    throw new Error('google-fail')
+  }
+  let idToken = r.idToken
+  if (!idToken && r.code) idToken = await exchangeGoogleCode(r.code, clientId)
+  if (!idToken) throw new Error('google-fail')
+  return googleIdpLogin(idToken, apiKey)
+}
+
+export async function googleSignIn(): Promise<QalbUser> {
+  const { apiKey, googleClientId } = await getAuthConfig()
+  if (!apiKey) throw new Error('auth-setup')
+  if (!googleClientId) throw new Error('google-setup')
+
+  // 1) pending redirect? (Chrome se wapas aane par event pehle aa chuka
+  //    ho, ya app process deep-link se hi start hua ho)
+  const pending = await consumePendingOauth()
+  if (pending) {
+    const u = await finishGoogleAuth(pending, googleClientId, apiKey)
+    if (u) return u
+    // stale (state mismatch) — fresh flow se continue
+  }
+
+  // 2) implicit mode — id_token seedha redirect fragment me (sabse kam
+  //    moving parts: koi exchange, koi secret nahi)
+  const state = oauthRandom(16)
+  try {
+    window.localStorage.setItem(OAUTH_STATE_KEY, state)
+    window.localStorage.setItem(OAUTH_MODE_KEY, 'implicit')
+    window.localStorage.removeItem(OAUTH_VERIFIER_KEY)
+  } catch {
+    /* ignore */
+  }
+  const url = buildAuthorizeUrl(googleClientId, 'implicit', state, {
+    nonce: oauthRandom(16),
+  })
+  const opened = await openInSystemBrowser(url)
+  if (!opened) throw new Error('google-no-browser')
+
+  let redirect: string
+  try {
+    redirect = await waitForOauthRedirect(5 * 60_000)
+  } catch (e) {
+    throw e instanceof Error ? e : new Error('google-fail')
+  }
+
+  // 3) implicit reject hua? (error redirect) → EK dafa code+PKCE mode
+  const r = parseOauthRedirect(redirect)
+  if (r.error && !r.idToken && !r.code) {
+    let mode = ''
+    try {
+      mode = window.localStorage.getItem(OAUTH_MODE_KEY) ?? ''
+    } catch {
+      /* ignore */
+    }
+    if (mode === 'implicit' && /response_type|unsupported|invalid_request/i.test(r.error)) {
+      const verifier = oauthRandom(32)
+      const challenge = await pkceChallenge(verifier)
+      const state2 = oauthRandom(16)
+      try {
+        window.localStorage.setItem(OAUTH_STATE_KEY, state2)
+        window.localStorage.setItem(OAUTH_MODE_KEY, 'code')
+        window.localStorage.setItem(OAUTH_VERIFIER_KEY, verifier)
+      } catch {
+        /* ignore */
+      }
+      const url2 = buildAuthorizeUrl(googleClientId, 'code', state2, { challenge })
+      const opened2 = await openInSystemBrowser(url2)
+      if (!opened2) throw new Error('google-no-browser')
+      const redirect2 = await waitForOauthRedirect(5 * 60_000)
+      const u2 = await finishGoogleAuth(redirect2, googleClientId, apiKey)
+      if (u2) return u2
+      throw new Error('google-fail')
+    }
+  }
+
+  const user = await finishGoogleAuth(redirect, googleClientId, apiKey)
+  if (!user) throw new Error('google-fail')
   return user
 }
 
@@ -684,14 +946,28 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
       }
     case 'google-setup':
       return {
-        title: 'Google login abhi khula nahi hai',
-        desc: 'Mobile number se login try karein — wo abhi available hai.',
+        title: 'Google login abhi enable nahi hui',
+        desc: 'Setup me thoda waqt lag raha hai — filhaal mobile number se login try karein.',
+      }
+    case 'google-no-browser':
+      return {
+        title: 'Chrome nahi khul saka',
+        desc: 'Google login ke liye phone me Chrome (ya koi browser) chahiye — check kar ke dobara try karein.',
       }
     case 'google-unavailable':
-    case 'google-timeout':
       return {
         title: 'Google login is device par nahi khula',
-        desc: 'WebView ne Google popup block kiya — mobile number se login try karein.',
+        desc: 'Dobara try karein — ya mobile number se login karein.',
+      }
+    case 'google-timeout':
+      return {
+        title: 'Google login poora nahi hua',
+        desc: 'Chrome me account select kar ke Qalb me wapas aayein — ya button dobara daba kar try karein.',
+      }
+    case 'google-fail':
+      return {
+        title: 'Google login me masla hua',
+        desc: 'Dobara try karein — agar baar-baar aaye to mobile number se login karein.',
       }
     case 'google-cancel':
       return { title: 'Google login cancel ho gaya', desc: 'Dobara try karein.' }
@@ -708,7 +984,7 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
     case 'rate-limit':
       return {
         title: 'Bahut zyada tries',
-        desc: 'Thodi der baad try karein — security limit hai.',
+        desc: 'Is number par aaj bahut OTP requests ho gayin — 1-2 ghante baad try karein. Filhaal Google se login karein (button upar hai) — wo turant chalta hai.',
       }
     case 'otp-send-fail':
       return {

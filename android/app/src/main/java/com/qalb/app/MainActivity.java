@@ -1,5 +1,7 @@
 package com.qalb.app;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
@@ -51,6 +53,40 @@ public class MainActivity extends BridgeActivity {
             });
         } catch (Exception ignored) {
             // dispatcher na mile to default Android behaviour rehne do
+        }
+
+        // Cold-start via Google OAuth deep link (Chrome ne appko launch kiya)
+        handleOauthRedirect(getIntent());
+    }
+
+    // ── Google OAuth deep-link (v0.4.4) ─────────────────────────────
+    // Chrome consent ke baad Google qalb://oauth2redirect par redirect
+    // karta hai. singleTask launchMode → warm start par onNewIntent,
+    // cold start par onCreate ka launch intent. URL native static me
+    // stash (cold-start-proof) + WebView me JS event (warm path).
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        handleOauthRedirect(intent);
+    }
+
+    private void handleOauthRedirect(Intent intent) {
+        try {
+            if (intent == null) return;
+            Uri data = intent.getData();
+            if (data == null) return;
+            String url = data.toString();
+            if (url == null || !url.startsWith("qalb://oauth2redirect")) return;
+            QalbNativePlugin.setPendingOauthUrl(url);
+            if (bridge != null && bridge.getWebView() != null) {
+                String json = org.json.JSONObject.quote(url);
+                bridge.getWebView().evaluateJavascript(
+                    "try{window.__qalbOauthUrl=" + json
+                        + ";window.dispatchEvent(new CustomEvent('qalbOauthRedirect',{detail:{url:"
+                        + json + "}}))}catch(e){}",
+                    null);
+            }
+        } catch (Exception ignored) {
         }
     }
 

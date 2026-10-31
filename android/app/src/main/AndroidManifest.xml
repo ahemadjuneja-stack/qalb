@@ -23,6 +23,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Google OAuth: Chrome consent ke baad qalb://oauth2redirect
+                 par wapas app me (deep link) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="qalb" android:host="oauth2redirect" />
+            </intent-filter>
+
         </activity>
 
         <provider

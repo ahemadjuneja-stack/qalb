@@ -61,6 +61,9 @@ export interface QalbNativePluginInterface {
   ): Promise<PluginListenerHandle> & PluginListenerHandle
   // ── App background media pause (v0.3.3) ──
   setBgPauseMedia(options: { pause: boolean }): Promise<void>
+  // ── Google OAuth deep-link (v0.4.4) ──
+  openExternal(options: { url: string }): Promise<void>
+  consumeOauthRedirect(): Promise<{ url: string | null }>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -287,5 +290,34 @@ export async function nativeSetBgPauseMedia(pause: boolean) {
     await QalbNative.setBgPauseMedia({ pause })
   } catch {
     /* purana APK — method nahi hai */
+  }
+}
+
+// ── Google OAuth deep-link (v0.4.4) ────────────────────────────────
+// Google login ab system Chrome me hota hai (WebView GIS popup block
+// hota hai). openExternal Chrome me Google account picker kholta hai;
+// consent ke baad Google qalb://oauth2redirect par redirect karta hai
+// — MainActivity wo intent pakad kar JS ko deta hai (event + pending
+// static, dono channels — cold-start-proof).
+
+/** URL system browser (Chrome) me kholo — khula? true/false */
+export async function nativeOpenExternal(url: string): Promise<boolean> {
+  if (!isNativeApp()) return false
+  try {
+    await QalbNative.openExternal({ url })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Pending OAuth redirect URL (ek baar — auto clear). Nahi? null */
+export async function nativeConsumeOauthRedirect(): Promise<string | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.consumeOauthRedirect()
+    return r?.url ?? null
+  } catch {
+    return null
   }
 }

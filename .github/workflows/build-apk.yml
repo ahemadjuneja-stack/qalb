@@ -258,14 +258,24 @@ jobs:
       - name: Build Next.js static export
         env:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ steps.authcfg.outputs.apiKey }}
-          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GCID_VAR: ${{ vars.GOOGLE_CLIENT_ID }}
+          GCSECRET_VAR: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
           # Mobile build me server API routes nahi hote — APK Firestore REST
           # + hosted API (NEXT_PUBLIC_API_BASE) use karta hai. Isliye api/
           # folder temporarily hata ke export lete hain.
           # YT_API_KEY (GitHub secret, optional) → APK me direct YouTube search
           mv src/app/api .api-routes-backup
-          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" npx next build
+          # Google OAuth client id — GitHub variable, warna committed file
+          # (.firebase/google-clientid.txt — web-apikey.txt jaisa pattern).
+          # Client ID public identifier hai (OAuth login ke liye har app me
+          # hota hai) — repo me rakhna theek hai.
+          GCID="$GCID_VAR"
+          if [ -z "$GCID" ] && [ -f .firebase/google-clientid.txt ]; then
+            GCID=$(head -1 .firebase/google-clientid.txt | tr -d '[:space:]')
+          fi
+          echo "google login: clientIdLen=${#GCID} secretLen=${#GCSECRET_VAR}"
+          MOBILE_BUILD=1 NEXT_PUBLIC_FIREBASE_PROJECT_ID="$FPID" NEXT_PUBLIC_API_BASE="${{ vars.API_BASE_URL }}" NEXT_PUBLIC_YOUTUBE_API_KEY="${{ secrets.YT_API_KEY }}" NEXT_PUBLIC_GOOGLE_CLIENT_ID="$GCID" NEXT_PUBLIC_GOOGLE_CLIENT_SECRET="$GCSECRET_VAR" npx next build
           # sanity: DISCOVERED key really bake hui? (bundle me InnerTube ke
           # AIzaSy keys pehle se hote hain — isliye full discovered key hi
           # grep karte hain, warna false-positive milta tha — run 56)
@@ -274,6 +284,17 @@ jobs:
             echo "✅ Discovered Firebase Web API key bundle me baked hai"
           else
             echo "⚠️ Discovered key bundle me NAHI mili (keyLen=${#BKEY}) — login setup adhoora rahega"
+          fi
+          # Google client id bake hua? (nahi to app me Google button chhupa rahega)
+          if [ -n "$GCID" ] && grep -rqF "$GCID" out/_next/static --include='*.js' 2>/dev/null; then
+            echo "✅ Google Client ID bundle me baked hai — Google button dikhega"
+          else
+            if [ -n "$GCID" ]; then
+              echo "⚠️ Google Client ID bundle me NAHI mila — Google button chhupa rahega"
+            else
+              echo "ℹ️ Google Client ID diya hi nahi gaya — Google button chhupa rahega"
+              echo "   FIX: .firebase/google-clientid.txt commit karo YA GitHub Variables me GOOGLE_CLIENT_ID daalo"
+            fi
           fi
 
       # ── 5. Capacitor Android project ──────────────────────────────

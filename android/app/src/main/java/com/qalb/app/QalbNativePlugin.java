@@ -474,4 +474,58 @@ public class QalbNativePlugin extends Plugin {
     public static boolean shouldPauseMediaOnBg() {
         return bgPauseArmed;
     }
+
+    // ── Google OAuth deep-link (v0.4.4) ─────────────────────────────
+    // Chrome me consent ke baad Google qalb://oauth2redirect par redirect
+    // karta hai. MainActivity wo URL yahan stash karta hai (cold-start
+    // proof — app ka process Chrome me mar gaya ho tab bhi) AUR WebView
+    // me 'qalbOauthRedirect' event dispatch karta hai (warm path). JS
+    // consumeOauthRedirect() se pending URL le kar login complete karta hai.
+    private static volatile String pendingOauthUrl;
+
+    /** MainActivity se — naya redirect URL aaya */
+    public static void setPendingOauthUrl(String url) {
+        pendingOauthUrl = url;
+    }
+
+    /** JS: pending redirect URL lena (ek baar — read+clear) */
+    @PluginMethod
+    public void consumeOauthRedirect(PluginCall call) {
+        JSObject res = new JSObject();
+        try {
+            String u = pendingOauthUrl;
+            pendingOauthUrl = null;
+            res.put("url", u);
+        } catch (Exception e) {
+            res.put("url", null);
+        }
+        call.resolve(res);
+    }
+
+    /**
+     * JS: URL system browser (Chrome) me kholna — Google OAuth ka main
+     * path. Sirf https:// (custom scheme / intent:// abuse se bachao).
+     */
+    @PluginMethod
+    public void openExternal(PluginCall call) {
+        try {
+            String url = call.getString("url", "");
+            if (url == null || !url.startsWith("https://")) {
+                call.reject("openExternal: sirf https urls allowed");
+                return;
+            }
+            Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("openExternal: activity nahi");
+                return;
+            }
+            android.content.Intent i = new android.content.Intent(
+                    android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url));
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            activity.startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("browser nahi khula: " + safeMsg(e));
+        }
+    }
 }
