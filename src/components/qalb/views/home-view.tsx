@@ -38,6 +38,7 @@ import { QalbLogo } from '@/components/qalb/qalb-logo'
 import { QalbThumb } from '@/components/qalb/thumb-square'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
+import { personalizePlaylists } from '@/lib/personalized-playlists'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
@@ -297,6 +298,16 @@ export function HomeView() {
       setLoadingMore(false)
     }
   }
+
+  // ── PERSONALIZED CURATED PLAYLISTS — user ke algorithm se re-rank +
+  // re-order + personal mixes (personalized-playlists.ts). Raw playlists
+  // state me rehti hain; shown version taste/live/tasteV badalne par naye
+  // sar se banta hai (same user + same din = same order, deterministic).
+  const shownPlaylists = useMemo(
+    () => personalizePlaylists(playlists, uid, live),
+    [playlists, uid, live, tasteV]
+  )
+  const playlistsPersonalized = shownPlaylists.some((p) => p.personal)
 
   // ── ALGORITHM FEED — play history + daily seeds + LIVE YouTube (recommend.ts) ──
   const remotePoolTracks = useMemo(() => collectRemoteTracks(playlists), [playlists])
@@ -734,22 +745,30 @@ export function HomeView() {
             </section>
           )}
 
-          {/* 🎧 8. CURATED PLAYLISTS — page poora bharte hain */}
-          {playlists.length > 0 && (
+          {/* 🎧 8. CURATED PLAYLISTS — ab HAR USER ka apna algorithm:
+              personal mixes sab se upar, phir taste-ranked curated sets */}
+          {shownPlaylists.length > 0 && (
             <section aria-label="Playlists">
               <div className="mb-2.5 flex items-center justify-between">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-emerald-300/80">
                   🎧 Curated Playlists
                 </h2>
-                <span className="text-[10px] text-emerald-200/40">{playlists.length} collections</span>
+                <span className="text-[10px] text-emerald-200/40">
+                  {playlistsPersonalized ? '✨ aap ke liye • ' : ''}
+                  {shownPlaylists.length} collections
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {playlists.map((p) => (
+                {shownPlaylists.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => openPlaylistDetail(p)}
-                    className="card-surface overflow-hidden rounded-2xl text-left transition hover:border-emerald-400/30 active:scale-[0.98]"
+                    className={`card-surface overflow-hidden rounded-2xl text-left transition active:scale-[0.98] ${
+                      p.personal
+                        ? 'border border-gold/40 hover:border-gold/60'
+                        : 'hover:border-emerald-400/30'
+                    }`}
                     aria-label={`${p.name} playlist kholein`}
                   >
                     <div className="relative">
@@ -762,6 +781,11 @@ export function HomeView() {
                       <span className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl bg-black/55 text-lg backdrop-blur">
                         {p.coverEmoji}
                       </span>
+                      {p.personal && (
+                        <span className="absolute left-2 top-11 rounded-full bg-gold/90 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-emerald-950 shadow">
+                          ✨ Aap ke liye
+                        </span>
+                      )}
                       <span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-semibold text-emerald-100 backdrop-blur">
                         <Play className="h-2.5 w-2.5 fill-current" /> {p.tracks.length}
                       </span>

@@ -379,6 +379,11 @@ export function PlaylistDetail({
           <p className="mt-0.5 line-clamp-2 text-[11px] text-white/70">
             {playlist.description ?? 'Paak kalaam collection'}
           </p>
+          {playlist.personal && (
+            <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gold/90 px-2.5 py-1 text-[9.5px] font-extrabold uppercase tracking-wide text-emerald-950 shadow">
+              ✨ Aap ke algorithm se bani
+            </span>
+          )}
           <div className="mt-3 flex items-center gap-2">
             <button
               type="button"

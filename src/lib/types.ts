@@ -21,6 +21,8 @@ export interface QalbPlaylist {
   coverEmoji: string
   accentColor: string
   tracks: QalbTrack[]
+  /** true = sirf isi user ke algorithm se bani personal mix (personalized-playlists.ts) */
+  personal?: boolean
 }
 
 export interface QalbProduct {
