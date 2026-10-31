@@ -658,7 +658,7 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
       if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
       setTimeout(() => {
         void consumePendingOauth().then((u) => {
-          if (!u) bad(new Error('google-cancel'))
+          if (!u) bad(new Error('google-cancel bina-login-wapas'))
         })
       }, 3000)
     }
@@ -769,7 +769,15 @@ async function googleIdpLogin(idToken: string, apiKey: string): Promise<QalbUser
     error?: { message?: string }
   }
   if (!res.ok || !j.idToken || !j.localId) {
-    throw new Error(errKind(j.error?.message))
+    const rawMsg = j.error?.message ?? ''
+    // Google provider Firebase Auth me disabled/under-review ho
+    if (
+      rawMsg.includes('OPERATION_NOT_ALLOWED') ||
+      rawMsg.includes('ADMIN_ONLY_OPERATION')
+    ) {
+      throw new Error('google-disabled ' + rawMsg)
+    }
+    throw new Error('google-fail ' + (rawMsg || 'idp-empty'))
   }
 
   const user: QalbUser = {
@@ -811,12 +819,12 @@ async function finishGoogleAuth(
   if (!r.state || !savedState || r.state !== savedState) return null
   if (r.error) {
     if (r.error === 'access_denied' || r.error === 'user_cancelled')
-      throw new Error('google-cancel')
-    throw new Error('google-fail')
+      throw new Error('google-denied ' + r.error)
+    throw new Error('google-fail ' + r.error)
   }
   let idToken = r.idToken
   if (!idToken && r.code) idToken = await exchangeGoogleCode(r.code, clientId)
-  if (!idToken) throw new Error('google-fail')
+  if (!idToken) throw new Error('google-fail exchange-empty')
   return googleIdpLogin(idToken, apiKey)
 }
 
@@ -835,9 +843,8 @@ export async function googleSignIn(): Promise<QalbUser> {
   }
 
   // 1.5) NATIVE SHEET (v0.4.5) — Google ka account-picker APP KE ANDAR
-  //      khulta hai, Chrome bilkul nahi khulta. Sheet fail ho (play
-  //      services / Android client missing) to neeche loopback Chrome
-  //      flow chalega. Cancel kiya to seedha google-cancel.
+  //      khulta hai, Chrome bilkul nahi khulta. Sheet fail YA cancel ho
+  //      to neeche loopback Chrome flow chalega — dead-end kabhi nahi.
   {
     const { isNativeApp: isNative, nativeGoogleIdToken } = await import(
       '@/plugins/qalb-native'
@@ -851,8 +858,9 @@ export async function googleSignIn(): Promise<QalbUser> {
         googleClientId
       const r = await nativeGoogleIdToken(sheetClient)
       if (r && 'idToken' in r && r.idToken) return googleIdpLogin(r.idToken, apiKey)
-      if (r && 'cancelled' in r) throw new Error('google-cancel')
-      // null → sheet nahi khula — fallback loopback (neeche)
+      // sheet cancel ho YA fail ho (api-10/sheet-fail-fast/null) — DONO par
+      // neeche Chrome loopback fallback chalega. Dead-end KABHI nahi:
+      // login har haal me hoga, chahe Google config me kuch bhi ho.
     }
   }
 
@@ -896,7 +904,7 @@ export async function googleSignIn(): Promise<QalbUser> {
   }
 
   const user = await finishGoogleAuth(redirect, googleClientId, apiKey)
-  if (!user) throw new Error('google-fail')
+  if (!user) throw new Error('google-fail stale-state')
   return user
 }
 
@@ -959,7 +967,15 @@ export async function syncUserDoc(user?: QalbUser | null): Promise<void> {
 // ── Error messages (UI ke liye) ─────────────────────────────────
 
 export function authErrorMessage(e: unknown): { title: string; desc: string } {
-  const kind = e instanceof Error ? e.message : 'auth-fail'
+  const raw = e instanceof Error ? e.message : 'auth-fail'
+  const kind = raw.split(' ')[0]
+  const detail = raw.slice(kind.length).trim()
+  const msg = baseAuthMessage(kind)
+  // tech detail screen pe — screenshot se asli wajah foran pata chalegi
+  return detail ? { ...msg, desc: `${msg.desc} [${detail}]` } : msg
+}
+
+function baseAuthMessage(kind: string): { title: string; desc: string } {
   switch (kind) {
     case 'auth-setup':
       return {
@@ -1005,6 +1021,16 @@ export function authErrorMessage(e: unknown): { title: string; desc: string } {
       return {
         title: 'Google login me masla hua',
         desc: 'Dobara try karein — agar baar-baar aaye to mobile number se login karein.',
+      }
+    case 'google-denied':
+      return {
+        title: 'Google ne permission nahi di (access denied)',
+        desc: 'App test mode me hai — console.cloud.google.com → APIs & Services → OAuth consent screen → Audience → Test users me apna Gmail add karein, phir dobara try karein.',
+      }
+    case 'google-disabled':
+      return {
+        title: 'Google provider Firebase me band lag raha hai',
+        desc: 'Firebase Console → Authentication → Sign-in method → Google → Enable karein. Thodi der baad dobara try karein.',
       }
     case 'google-cancel':
       return { title: 'Google login cancel ho gaya', desc: 'Dobara try karein.' }

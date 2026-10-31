@@ -637,10 +637,26 @@ public class QalbNativePlugin extends Plugin {
         if (call == null) return; // activity recreate — call mar gaya
         try {
             if (result.getResultCode() != Activity.RESULT_OK) {
-                // sheet 600ms se bhi kam chali = wo khulti hi band ho gayi
-                // (play-services / Android client config fail) — ye user ka
-                // cancel NAHI hai, isliye alag message: JS is par Chrome
-                // loopback fallback chalata hai. Asli cancel = "cancelled".
+                // Asli wajah nikaalo — Play Services RESULT_CANCELED intent me
+                // bhi ApiException de sakta hai (10=DEVELOPER_ERROR: package/
+                // SHA-1 kisi Android client se match nahi). Wajah mili to wahi
+                // report hoti hai — JS us par Chrome fallback chalata hai.
+                // Wajah na mile to: <600ms = sheet khulti hi band (config
+                // fail), warna sach me user cancel.
+                String apiCode = null;
+                try {
+                    Task<GoogleSignInAccount> t =
+                            GoogleSignIn.getSignedInAccountFromIntent(result.getData());
+                    Exception ex = t.getException();
+                    if (ex instanceof ApiException) {
+                        apiCode = "api-" + ((ApiException) ex).getStatusCode();
+                    }
+                } catch (Exception ignored) {
+                }
+                if (apiCode != null) {
+                    call.reject(apiCode);
+                    return;
+                }
                 long elapsed = android.os.SystemClock.elapsedRealtime() - googleSheetStartMs;
                 call.reject(elapsed < 600 ? "sheet-fail-fast" : "cancelled");
                 return;
