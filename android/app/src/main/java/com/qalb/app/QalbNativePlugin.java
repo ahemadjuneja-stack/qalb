@@ -870,11 +870,13 @@ public class QalbNativePlugin extends Plugin {
                     public void onResult(GetCredentialResponse response) {
                         try {
                             androidx.credentials.Credential cred = response.getCredential();
-                            if (cred instanceof CustomCredential
-                                    && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN
-                                            .equals(cred.getType())) {
-                                GoogleIdTokenCredential g = GoogleIdTokenCredential
-                                        .createFrom(cred.getData());
+                            // NOTE: TYPE_GOOGLE_ID_TOKEN constant googleid 1.1.1 me
+                            // Java se resolve nahi hota (Kotlin companion) — isliye
+                            // createFrom try/catch: Google-id credential ho to
+                            // id_token milta hai, warna IllegalArgumentException.
+                            if (cred instanceof CustomCredential && cred.getData() != null) {
+                                GoogleIdTokenCredential g =
+                                        GoogleIdTokenCredential.createFrom(cred.getData());
                                 String tok = g.getIdToken();
                                 if (tok != null && !tok.isEmpty()) {
                                     JSObject res = new JSObject();
@@ -884,6 +886,8 @@ public class QalbNativePlugin extends Plugin {
                                     return;
                                 }
                             }
+                            call.reject("no-id-token");
+                        } catch (IllegalArgumentException notGoogle) {
                             call.reject("no-id-token");
                         } catch (Exception e) {
                             call.reject("auto-result-fail: " + safeMsg(e));
