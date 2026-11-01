@@ -866,4 +866,46 @@ public class QalbNativePlugin extends Plugin {
         }
         call.resolve();
     }
+
+    // ── Native KV store (v0.5.21) — WebView-storage-proof mirror ─────
+    // Login session / subscriptions SharedPreferences me mirror hote
+    // hain. App UPDATE ke baad WebView ka localStorage kabhi-kabhi wipe
+    // ho jata hai (Chromium data-dir migration bug) — native prefs
+    // hamesha bache rehte hain. Boot par JS wahi se restore karta hai.
+
+    /** JS: key-value likho (value null/empty = delete) */
+    @PluginMethod
+    public void kvSet(PluginCall call) {
+        try {
+            String key = call.getString("key");
+            String value = call.getString("value");
+            if (key != null && !key.isEmpty()) {
+                getContext()
+                        .getSharedPreferences("qalb_kv", android.content.Context.MODE_PRIVATE)
+                        .edit()
+                        .putString(key, value == null ? "" : value)
+                        .apply();
+            }
+        } catch (Exception ignored) {
+        }
+        call.resolve();
+    }
+
+    /** JS: key padho — { value: string | null } */
+    @PluginMethod
+    public void kvGet(PluginCall call) {
+        String out = null;
+        try {
+            String key = call.getString("key");
+            if (key != null && !key.isEmpty()) {
+                out = getContext()
+                        .getSharedPreferences("qalb_kv", android.content.Context.MODE_PRIVATE)
+                        .getString(key, null);
+            }
+        } catch (Exception ignored) {
+        }
+        JSObject res = new JSObject();
+        res.put("value", out);
+        call.resolve(res);
+    }
 }

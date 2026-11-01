@@ -26,6 +26,7 @@ import { create } from 'zustand'
 import { QALB } from '@/lib/qalb'
 import { withNetTimeout } from '@/lib/remote-data'
 import { migrateEventsToUser, getTasteProfile } from '@/lib/recommend'
+import { nativeKvGet, nativeKvSet } from '@/plugins/qalb-native'
 
 // ── Auth store ──────────────────────────────────────────────────
 
@@ -56,6 +57,11 @@ interface AuthState {
 
 const AUTH_KEY = 'qalb_auth_v1'
 const GUEST_KEY = 'qalb_guest_v1'
+// Native KV mirror keys (SharedPreferences 'qalb_kv') — app UPDATE ke
+// baad WebView localStorage wipe ho jata hai (Chromium data-dir bug),
+// native prefs nahi. v0.5.21: session ab dono jagah rehti hai.
+const KV_AUTH = 'qalb_auth_v1'
+const KV_GUEST = 'qalb_guest_v1'
 
 function readGuest(): boolean {
   if (typeof window === 'undefined') return false
@@ -83,6 +89,31 @@ function persistUser(u: QalbUser | null) {
   } catch {
     /* quota — ignore */
   }
+  // Native mirror (v0.5.21) — update-proof. null = delete.
+  void nativeKvSet(KV_AUTH, u ? JSON.stringify(u) : '')
+}
+
+/** Guest/user flags bhi native me mirror — gate wapas na aaye */
+function mirrorGuestFlag(guest: boolean) {
+  try {
+    window.localStorage.setItem(GUEST_KEY, guest ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+  void nativeKvSet(KV_GUEST, guest ? '1' : '0')
+}
+
+/** Login ke baad ka boot kaam (init fast-path + native-restore dono se) */
+function bootLoggedIn(u: QalbUser) {
+  void ensureIdToken() // expiry nikaal rahi ho to chup-chaap refresh
+  // v0.4.0: login ka user playlist cloud sync (wahi playlist wapis)
+  // 3s delay — app boot pe network rush nahi karna
+  setTimeout(() => {
+    void import('@/lib/user-sync')
+      .then((m) => m.syncUserPlaylists())
+      .catch(() => {})
+  }, 3_000)
+  void u
 }
 
 export const useQalbAuth = create<AuthState>((set) => ({
@@ -92,43 +123,62 @@ export const useQalbAuth = create<AuthState>((set) => ({
   loginOpen: false,
   init: () => {
     const u = readUser()
-    set({ user: u, guest: u ? false : readGuest(), ready: true })
     if (u) {
-      void ensureIdToken() // expiry nikaal rahi ho to chup-chaap refresh
-      // v0.4.0: login ka user playlist cloud sync (wahi playlist wapis)
-      // 3s delay — app boot pe network rush nahi karna
-      setTimeout(() => {
-        void import('@/lib/user-sync')
-          .then((m) => m.syncUserPlaylists())
-          .catch(() => {})
-      }, 3_000)
+      // FAST PATH — localStorage zinda hai. Mirror ko bhi fresh rakho
+      // (purane APK se aaye user ka native backup yahin ban jayega).
+      void nativeKvSet(KV_AUTH, JSON.stringify(u))
+      set({ user: u, guest: false, ready: true })
+      bootLoggedIn(u)
+      return
     }
+    // WebView storage wipe ho chuka hai (update/clear/quota) — native
+    // mirror se RESTORE. ready abhi false rahega (login-gate flash na
+    // ho), 1.6s race-guard: native atka to normal flow khud aage badhega.
+    void (async () => {
+      let restored: QalbUser | null = null
+      let guestNative = false
+      try {
+        await Promise.race([
+          (async () => {
+            const raw = await nativeKvGet(KV_AUTH)
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw) as QalbUser
+                if (parsed?.uid && parsed?.refreshToken) restored = parsed
+              } catch {
+                /* corrupt mirror — ignore */
+              }
+            }
+            guestNative = (await nativeKvGet(KV_GUEST)) === '1'
+          })(),
+          new Promise<void>((resolve) => setTimeout(resolve, 1600)),
+        ])
+      } catch {
+        /* native nahi (web) / purana APK — local flow */
+      }
+      if (restored) {
+        // localStorage me wapas likho — poori app pehle jaisi chalegi
+        persistUser(restored)
+        set({ user: restored, guest: false, ready: true })
+        bootLoggedIn(restored)
+      } else {
+        set({ user: null, guest: readGuest() || guestNative, ready: true })
+      }
+    })()
   },
   setSession: (u) => {
     persistUser(u)
-    try {
-      window.localStorage.setItem(GUEST_KEY, '0') // ab asli user hai
-    } catch {
-      /* ignore */
-    }
+    mirrorGuestFlag(false) // ab asli user hai
     set({ user: u, guest: false })
   },
   continueAsGuest: () => {
-    try {
-      window.localStorage.setItem(GUEST_KEY, '1')
-    } catch {
-      /* ignore */
-    }
+    mirrorGuestFlag(true)
     set({ guest: true })
   },
   logout: () => {
     persistUser(null)
     // manual logout → Musafir mode (gate dobara NAHI aata — app chalti rahe)
-    try {
-      window.localStorage.setItem(GUEST_KEY, '1')
-    } catch {
-      /* ignore */
-    }
+    mirrorGuestFlag(true)
     set({ user: null, guest: true })
   },
   openLogin: () => set({ loginOpen: true }),

@@ -27,13 +27,14 @@
 // Back button (Android) aur back-arrow dono screen band karte hain.
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Loader2, Share2, ThumbsUp } from 'lucide-react'
+import { ChevronLeft, Loader2, Share2, ThumbsUp, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useViewBackHandler } from '@/lib/back-stack'
 import { viewsLabel } from '@/lib/innertube-x'
 import { recordPlay } from '@/lib/recommend'
 import { recordItubeWatch, updateLastWatchDuration, rankRelated } from '@/lib/itube-brain'
 import { trackPub } from '@/lib/itube'
+import { channelRefOf } from '@/lib/itube-channels'
 import { loadYouTubeIframeApi, type YTPlayer } from '@/lib/yt-api'
 import { usePlayerStore } from '@/lib/player-store'
 import {
@@ -79,11 +80,13 @@ export function ItubeWatch({
   related,
   onPick,
   onClose,
+  onOpenChannel,
 }: {
   track: QalbTrack
   related: QalbTrack[]
   onPick: (t: QalbTrack) => void
   onClose: () => void
+  onOpenChannel?: (ref: { id: string; name: string }) => void
 }) {
   const { toast } = useToast()
   // readyVid: kaunsi video ka player start ho chuka (splash ke liye)
@@ -490,6 +493,7 @@ export function ItubeWatch({
 
   const pub = trackPub(track)
   const views = viewsLabel(track.playCount)
+  const cref = onOpenChannel ? channelRefOf(track) : null
 
   return (
     <div
@@ -561,6 +565,16 @@ export function ItubeWatch({
             {views ? ` • ${views}` : ''}
             {pub ? ` • ${pub}` : ''}
           </p>
+          {cref ? (
+            <button
+              type="button"
+              onClick={() => cref && onOpenChannel?.(cref)}
+              className="mt-2.5 flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3.5 py-2 text-[11.5px] font-bold text-emerald-100/85 transition active:scale-95"
+            >
+              <Users className="h-3.5 w-3.5" />
+              {cref.name} — Channel dekhein
+            </button>
+          ) : null}
           <div className="mt-3 flex gap-2">
             <button
               type="button"

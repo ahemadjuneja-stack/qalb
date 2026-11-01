@@ -85,6 +85,9 @@ export interface QalbNativePluginInterface {
     sha1: string
   }>
   openExternalInApp(options: { url: string }): Promise<void>
+  // ── Native KV store (v0.5.21) — login/subs ka WebView-proof mirror ──
+  kvSet(options: { key: string; value: string }): Promise<void>
+  kvGet(options: { key: string }): Promise<{ value: string | null }>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -475,5 +478,32 @@ export async function nativeOpenExternalInApp(url: string): Promise<boolean> {
     return true
   } catch {
     return false
+  }
+}
+
+// ── Native KV store (v0.5.21) ─────────────────────────────────────
+// Login session + iTube subscriptions SharedPreferences me mirror hote
+// hain — app update par WebView localStorage wipe ho jaye to boot par
+// yahi se restore hota hai (auth.ts init). Fire-and-forget safe.
+
+/** Native prefs me key likho (value '' = delete). Web par no-op. */
+export async function nativeKvSet(key: string, value: string): Promise<void> {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.kvSet({ key, value })
+  } catch {
+    /* purana APK — method nahi */
+  }
+}
+
+/** Native prefs se key padho. null = nahi mila / web / purana APK. */
+export async function nativeKvGet(key: string): Promise<string | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.kvGet({ key })
+    const v = r?.value
+    return typeof v === 'string' && v.length ? v : null
+  } catch {
+    return null
   }
 }

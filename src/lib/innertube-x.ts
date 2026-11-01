@@ -16,11 +16,11 @@ import { innertubePostJson, ytHttpGetText, ytExtractInitialData } from '@/lib/yo
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
+export const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
 // v0.5.13: client version refresh (stale 2025 version se YouTube empty
 // response de sakta hai) — youtube-search-source.ts ke saath synced
-const CLIENT_VERSION = '2.20261001.01.00'
-const DESKTOP_UA =
+export const CLIENT_VERSION = '2.20261001.01.00'
+export const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
 export const INNERTUBE_CONTEXT = {
@@ -61,6 +61,7 @@ export interface RawVideoX {
   videoId: string
   title: string
   channel: string
+  channelId: string | null // UC… — video se channel page khulne ke liye (v0.5.21)
   views: number
   viewsText: string
   durationSec: number // 0 = live/unknown (skip hota hai)
@@ -102,6 +103,13 @@ export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], de
       vr.longBylineText?.runs?.[0]?.text ??
       vr.shortBylineText?.runs?.[0]?.text ??
       null
+    // v0.5.21 — channel id capture (byline navigation endpoint se):
+    // video card/watch screen par "channel me jao" isi se chalta hai
+    const channelId =
+      vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
+      vr.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
+      vr.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
+      null
     const badgeStyles = Array.isArray(vr.badges)
       ? vr.badges.map((b: any) => String(b?.metadataBadgeRenderer?.style ?? ''))
       : []
@@ -115,6 +123,7 @@ export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], de
         videoId,
         title,
         channel: channel || 'YouTube',
+        channelId: typeof channelId === 'string' ? channelId : null,
         views: parseViews(vr.viewCountText?.simpleText),
         viewsText: vr.shortViewCountText?.simpleText ?? vr.viewCountText?.simpleText ?? '',
         durationSec: dur,
@@ -132,6 +141,100 @@ export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], de
 export interface PageX {
   videos: RawVideoX[]
   continuation: string | null
+}
+
+// ── Channel collector (v0.5.21) — search results se channels nikalo ──
+
+export interface RawChannelX {
+  channelId: string
+  title: string
+  subsText: string
+  videoCount: string
+  avatar: string | null
+  desc: string
+}
+
+function thumbUrl(node: any): string | null {
+  const arr = node?.thumbnails
+  if (!Array.isArray(arr) || !arr.length) return null
+  const last = arr[arr.length - 1]
+  return typeof last?.url === 'string' && last.url ? last.url : null
+}
+
+/** Tree walk — channelRenderer (asli channel results) + videoRenderer
+ *  byline fallback (jab search sirf videos deta hai). Dedupe by channelId. */
+export function collectChannelsX(node: any, out: RawChannelX[], depth = 0): void {
+  if (!node || typeof node !== 'object' || depth > 80) return
+  if (Array.isArray(node)) {
+    for (const item of node) collectChannelsX(item, out, depth + 1)
+    return
+  }
+
+  const cr = node.channelRenderer
+  if (cr && typeof cr === 'object' && typeof cr.channelId === 'string') {
+    const title = cr.title?.simpleText ?? cr.title?.runs?.[0]?.text ?? null
+    if (title) {
+      const byId = out.findIndex((c) => c.channelId === cr.channelId)
+      const entry: RawChannelX = {
+        channelId: cr.channelId,
+        title,
+        subsText: cr.subscriberCountText?.simpleText ?? '',
+        videoCount: cr.videoCountText?.simpleText ?? '',
+        avatar: thumbUrl(cr.avatar),
+        desc: cr.descriptionSnippet?.runs?.[0]?.text ?? '',
+      }
+      if (byId === -1) out.push(entry)
+    }
+  }
+
+  // videoRenderer byline fallback — channel entry jo abhi list me nahi
+  const vr = node.videoRenderer
+  if (vr && typeof vr === 'object') {
+    const cid = vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId
+    const cname = vr.ownerText?.runs?.[0]?.text
+    if (typeof cid === 'string' && cid && cname && !out.some((c) => c.channelId === cid)) {
+      out.push({
+        channelId: cid,
+        title: cname,
+        subsText: '',
+        videoCount: '',
+        avatar: thumbUrl(vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint
+          ?.thumbnails ?? vr.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer
+          ?.thumbnail),
+        desc: '',
+      })
+    }
+  }
+
+  for (const key of Object.keys(node)) collectChannelsX(node[key], out, depth + 1)
+}
+
+/** Channel page (browse) ke response se header meta — title/avatar/subs */
+export function collectChannelMetaX(node: any, meta: Record<string, string>, depth = 0): void {
+  if (!node || typeof node !== 'object' || depth > 40) return
+  if (Array.isArray(node)) {
+    for (const item of node) collectChannelMetaX(item, meta, depth + 1)
+    return
+  }
+  const hdr = node.c4TabbedHeaderRenderer
+  if (hdr && typeof hdr === 'object') {
+    if (!meta.title) meta.title = hdr.title ?? ''
+    if (!meta.avatar) meta.avatar = thumbUrl(hdr.avatar) ?? ''
+    if (!meta.subs) meta.subs = hdr.subscriberCountText?.simpleText ?? ''
+  }
+  const mf = node.microformatDataRenderer
+  if (mf && typeof mf === 'object') {
+    if (!meta.title) meta.title = mf.title ?? ''
+    if (!meta.avatar) meta.avatar = thumbUrl(mf.thumbnail?.thumbnails ? mf.thumbnail : null) ?? ''
+  }
+  const ph = node.pageHeaderRenderer
+  if (ph && typeof ph === 'object' && !meta.title) {
+    const t =
+      ph.pageTitle ??
+      ph.content?.pageHeaderViewModel?.title?.dynamicTextViewModel?.text?.content ?? ''
+    if (t) meta.title = t
+  }
+  for (const key of Object.keys(node)) collectChannelMetaX(node[key], meta, depth + 1)
 }
 
 /** ENRICHED InnerTube search — query + filter params + continuation
@@ -217,7 +320,7 @@ export function videosToTracks(
       category: forceCat ?? inferCategory(`${v.title} ${v.channel}`),
       thumbnailUrl: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
       playCount: v.views || undefined,
-      tags: `dur:${v.durationSec}|pub:${v.published}`,
+      tags: `dur:${v.durationSec}|pub:${v.published}${v.channelId ? `|ch:${v.channelId}` : ''}`,
     })
   }
   return tracks
