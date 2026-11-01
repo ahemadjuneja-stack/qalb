@@ -35,9 +35,9 @@ import { ItubeWatch } from '@/components/qalb/itube-watch'
 import type { QalbTrack } from '@/lib/types'
 
 type Mode =
-  | { kind: 'foryou' }
-  | { kind: 'chip'; chip: ITubeChip }
-  | { kind: 'search'; query: string }
+  | { kind: 'foryou'; n?: number }
+  | { kind: 'chip'; chip: ITubeChip; n?: number }
+  | { kind: 'search'; query: string; n?: number }
 
 const PAGE = 14
 
@@ -141,7 +141,9 @@ export function ITubeView({ visible }: { visible: boolean }) {
     }
   }, [feed, shown])
 
-  // ── CHIP/SEARCH: direct InnerTube search ───────────────────────
+  // ── CHIP/SEARCH: direct InnerTube search ───────────────────────────
+  // v0.5.15: fresh load par salt++ (har click naya variant/order) +
+  // markShown — chips bhi repeat-kill ring me record hote hain
   const load = useCallback(async (m: Mode, contToken: string | null) => {
     if (m.kind === 'foryou') return
     const q = m.kind === 'chip' ? m.chip.query : m.query
@@ -151,11 +153,20 @@ export function ITubeView({ visible }: { visible: boolean }) {
     else setLoading(true)
     setFailed(false)
     try {
-      const page = await withTimeout(itubeFetch(q, contToken), ITUBE_WATCHDOG_MS)
+      const opts = contToken
+        ? undefined
+        : {
+            chipKey: m.kind === 'chip' ? m.chip.key : undefined,
+            salt: ++saltRef.current,
+          }
+      const page = await withTimeout(itubeFetch(q, contToken, opts), ITUBE_WATCHDOG_MS)
       if (my !== reqId.current) return
       setTracks((prev) => (contToken ? [...prev, ...page.tracks] : page.tracks))
       setCont(page.continuation)
-      if (!contToken && !page.tracks.length) setFailed(true)
+      if (!contToken) {
+        if (!page.tracks.length) setFailed(true)
+        else markShown(page.tracks.slice(0, PAGE).map((t) => t.videoId))
+      }
     } catch {
       if (my === reqId.current) {
         if (!contToken) {
@@ -183,8 +194,14 @@ export function ITubeView({ visible }: { visible: boolean }) {
     const visiting = visible && !wasVisible.current
     wasVisible.current = visible
     if (!visible) return
+    // v0.5.15: nonce (n) modeKey me — SAME chip/foryou repeat click par
+    // bhi fresh reload hota hai (naya variant + naya order)
     const modeKey =
-      mode.kind === 'chip' ? `chip:${mode.chip.key}` : mode.kind === 'search' ? `search:${mode.query}` : 'foryou'
+      mode.kind === 'chip'
+        ? `chip:${mode.chip.key}:${mode.n ?? 0}`
+        : mode.kind === 'search'
+          ? `search:${mode.query}`
+          : `foryou:${mode.n ?? 0}`
     // load ki zaroorat: tab pehli baar / dobara khula, YA mode badla
     if (!visiting && loadedKeyRef.current === modeKey) return
     loadedKeyRef.current = modeKey
@@ -195,7 +212,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
     } else {
       void load(mode, null)
     }
-  }, [mode.kind, mode.kind === 'chip' ? mode.chip.key : mode.kind === 'search' ? mode.query : 'fy', visible, load, loadForYou])
+  }, [mode, visible, load, loadForYou])
 
   // ── UI WATCHDOG (v0.5.13 — skeleton-forever KILLER, layer-3 safety):
   // request-level timeouts (15s) ke bawajood agar kisi bhi wajah se
@@ -295,7 +312,8 @@ export function ITubeView({ visible }: { visible: boolean }) {
             type="button"
             onClick={() => {
               setInput('')
-              setMode({ kind: 'foryou' })
+              // repeat click par bhi FRESH feed (naya variant + order)
+              setMode({ kind: 'foryou', n: Date.now() })
             }}
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition active:scale-95 ${
               activeKey === 'foryou'
@@ -311,9 +329,10 @@ export function ITubeView({ visible }: { visible: boolean }) {
               <button
                 key={c.key}
                 type="button"
-                onClick={() => {
+              onClick={() => {
                   setInput('')
-                  setMode({ kind: 'chip', chip: c })
+                  // repeat click par bhi FRESH mix (naye variants + order)
+                  setMode({ kind: 'chip', chip: c, n: Date.now() })
                 }}
                 className={`shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition active:scale-95 ${
                   isActive

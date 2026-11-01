@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast'
 import { useViewBackHandler } from '@/lib/back-stack'
 import { viewsLabel } from '@/lib/innertube-x'
 import { recordPlay } from '@/lib/recommend'
-import { recordItubeWatch, rankRelated } from '@/lib/itube-brain'
+import { recordItubeWatch, updateLastWatchDuration, rankRelated } from '@/lib/itube-brain'
 import { trackPub } from '@/lib/itube'
 import type { QalbTrack } from '@/lib/types'
 
@@ -71,6 +71,14 @@ export function ItubeWatch({
   const [readyVid, setReadyVid] = useState<string | null>(null)
   const [likeTick, setLikeTick] = useState(0)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  // v0.5.15 WATCH-TIME TRAINING — video kitne second dekha gaya (close/
+  // switch par flush). Jitna dekha utna strong algorithm signal.
+  const openedAtRef = useRef<number>(Date.now())
+  const curVidRef = useRef<string>(track.videoId)
+  const flushWatch = () => {
+    const secs = (Date.now() - openedAtRef.current) / 1000
+    if (secs >= 3) updateLastWatchDuration(Math.round(secs))
+  }
 
   // Android back — watch screen band (YouTube app jaisa)
   useViewBackHandler('itube-watch', 'reels', () => {
@@ -88,11 +96,33 @@ export function ItubeWatch({
 
   // video open/switch — taste profile update + scroll top (external DOM)
   // recordItubeWatch = iTube algorithm ka fuel (kya dekha, kis category me)
+  // switch par PURANI video ki watch duration pehle flush hoti hai
   useEffect(() => {
+    if (curVidRef.current !== track.videoId) {
+      flushWatch()
+      curVidRef.current = track.videoId
+      openedAtRef.current = Date.now()
+    }
     recordItubeWatch(track)
     recordPlay(track)
     scrollerRef.current?.scrollTo({ top: 0 })
   }, [track.videoId])
+
+  // screen close/unmount — chalu video ki watch duration flush
+  useEffect(() => {
+    const onHide = () => {
+      if (document.hidden) {
+        flushWatch()
+        // background ka time dobara na gine — timer reset
+        openedAtRef.current = Date.now()
+      }
+    }
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onHide)
+      flushWatch()
+    }
+  }, [])
 
   // "Aage dekhein" — YouTube-jaisa ranked related: same category pehle,
   // user ki taste, quality — jitter per-video stable (re-render par list nahi hilti)

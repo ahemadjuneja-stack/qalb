@@ -27,6 +27,8 @@ import {
 } from '@/lib/result-filter'
 import { QALB } from '@/lib/qalb'
 import { isNativeApp } from '@/plugins/qalb-native'
+import { ITUBE_CATS, splitSeen, markShown, hashStr, getItubeTaste } from '@/lib/itube-brain'
+import { mulberry32 } from '@/lib/daily-trending'
 
 // ── Chips (YouTube category-bar style) ──────────────────────────
 
@@ -105,31 +107,129 @@ export interface ITubePage {
   continuation: string | null
 }
 
+/** chip.key → brain category (query variants pool wahi se aata hai) */
+const CHIP_CAT: Record<string, string> = {
+  naat: 'NAAT',
+  qawwali: 'QAWWALI',
+  bayan: 'BAYAN',
+  hamd: 'HAMD',
+  nasheed: 'NASHEED',
+  tilawat: 'TILAWAT',
+  hadith: 'HADITH',
+  history: 'HISTORY',
+  kids: 'KIDS',
+  movies: 'MOVIES',
+  series: 'MOVIES',
+}
+
+/**
+ * v0.5.15 — HAR CLICK PAR NAYA MIX:
+ *   • chip fresh-load par query VARIANTS rotate (day-seed + salt) — same
+ *     query dobara nahi jaati
+ *   • DO queries parallel → bada pool → zyada naye videos
+ *   • seeded shuffle + unseen-channel boost — har baar alag order,
+ *     user ki dekhi channels halka neeche (discovery)
+ *   • seen-ring filter — jo dikh chuke wo peeche hat jate hain
+ */
+function chipOrder(tracks: QalbTrack[], salt: number): QalbTrack[] {
+  const taste = getItubeTaste()
+  const chanSeen = new Set(taste.chanScores.map(([a]) => a))
+  const scored = tracks.map((t) => {
+    const quality = Math.min(1, Math.log10((t.playCount ?? 0) + 1) / 9)
+    const unseenChan = t.artist && chanSeen.has(t.artist) ? 0 : 1
+    const jitter = mulberry32(hashStr(t.videoId + salt))()
+    const s = 0.3 * quality + 0.2 * unseenChan + 0.5 * jitter
+    return { t, s }
+  })
+  scored.sort((a, b) => b.s - a.s)
+  return scored.map((x) => x.t)
+}
+
+/** seen hatao — fresh kam ho to reused tail se poora karo (app kabhi khali nahi) */
+function freshFirst(tracks: QalbTrack[], want: number): QalbTrack[] {
+  const { fresh, reused } = splitSeen(tracks)
+  if (fresh.length >= want) return fresh
+  return [...fresh, ...reused.slice(0, Math.max(0, want - fresh.length))]
+}
+
+/** static fallback pool ko bhi har baar alag dikhao (rotate + jitter) */
+function rotateFallback(query: string, count: number, salt: number): QalbTrack[] {
+  const pool = islamicOnly(fallbackTracksFor(query, 24))
+  if (pool.length <= count) return pool
+  const off = ((salt % pool.length) + pool.length) % pool.length
+  const rotated = [...pool.slice(off), ...pool.slice(0, off)]
+  return chipOrder(rotated, salt).slice(0, count)
+}
+
 /** iTube page — strict islamic filter ke saath InnerTube search */
 export async function itubeFetch(
   query: string,
-  continuation: string | null
+  continuation: string | null,
+  opts?: { chipKey?: string; salt?: number }
 ): Promise<ITubePage> {
+  const salt = opts?.salt ?? 0
+
+  // ── FRESH CHIP LOAD — variants + parallel + shuffle (har click naya) ──
+  if (!continuation && opts?.chipKey) {
+    const cat = CHIP_CAT[opts.chipKey]
+    const variants =
+      ITUBE_CATS.find((c) => c.key === cat)?.queries ?? [query]
+    const seed = Math.floor(Date.now() / 3_600_000) + salt * 7919
+    const rnd = mulberry32(seed)
+    const iA = Math.floor(rnd() * 1000 + salt) % variants.length
+    const iB = (iA + 1 + Math.floor(rnd() * 7)) % variants.length
+    const qa = variants[iA]
+    const qb = variants[iB === iA ? (iA + 1) % variants.length : iB]
+
+    const [pa, pb] = await Promise.all([
+      itubeSearchX(qa, '', null),
+      qb !== qa ? itubeSearchX(qb, '', null) : Promise.resolve(null),
+    ])
+
+    const byId = new Map<string, QalbTrack>()
+    for (const page of [pa, pb]) {
+      if (!page) continue
+      for (const t of islamicOnly(videosToTracks(page.videos, 'itube'))) {
+        const prev = byId.get(t.videoId)
+        if (!prev || (t.playCount ?? 0) > (prev.playCount ?? 0)) byId.set(t.videoId, t)
+      }
+    }
+    let tracks = [...byId.values()]
+    tracks = freshFirst(chipOrder(tracks, salt), 18)
+    if (tracks.length) return { tracks, continuation: pa?.continuation ?? null }
+    // network fail → fallback (bhi rotate hota hai)
+    return { tracks: rotateFallback(query, 12, salt), continuation: null }
+  }
+
   const page = await itubeSearchX(query, '', continuation)
 
   // continuation pages par filter ke baad khali aa sake — 1 retry
   if (page && !page.videos.length && continuation) {
     const retry = await itubeSearchX(query, '', continuation)
     if (retry && retry.videos.length) {
-      return { tracks: islamicOnly(videosToTracks(retry.videos, 'itube')), continuation: retry.continuation }
+      const tracks = islamicOnly(videosToTracks(retry.videos, 'itube'))
+      return { tracks: freshFirst(tracks, 14), continuation: retry.continuation }
     }
     return { tracks: [], continuation: null }
   }
 
   if (!page || !page.videos.length) {
     // network fail — verified islamic pool fallback (app kabhi khali nahi)
-    return { tracks: islamicOnly(fallbackTracksFor(query, 12)), continuation: null }
+    return { tracks: rotateFallback(query, 12, salt), continuation: null }
   }
 
   let tracks = islamicOnly(videosToTracks(page.videos, 'itube'))
   // strict filter ke baad bhi kuch bacha hi nahi — fallback de do
   if (!tracks.length && !continuation) {
-    tracks = islamicOnly(fallbackTracksFor(query, 12))
+    tracks = rotateFallback(query, 12, salt)
+    return { tracks, continuation: null }
+  }
+
+  // search / continuation — seen pehle hatado + har baar alag order
+  if (!continuation) {
+    tracks = freshFirst(chipOrder(tracks, salt), 14)
+  } else {
+    tracks = freshFirst(tracks, 14)
   }
   return { tracks, continuation: page.continuation }
 }

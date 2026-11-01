@@ -146,6 +146,7 @@ export interface ItubeEvent {
   c: string // category
   a: string // channel
   t: number // epoch ms
+  d?: number // seconds watched (close/switch par flush hota hai)
 }
 
 const EVENTS_KEY = 'qalb_itube_events_v1'
@@ -188,6 +189,23 @@ export function recordItubeWatch(track: QalbTrack) {
   writeJson(EVENTS_KEY, list.slice(-MAX_EVENTS))
 }
 
+/**
+ * v0.5.15 — WATCH-TIME TRAINING: video band/switch hone par kitna dekha
+ * (seconds) LAST event me flush karo. Jitna dekha utna strong signal —
+ * sirf click-karke-chhod-dena kam weight rakhega.
+ */
+export function updateLastWatchDuration(seconds: number) {
+  if (typeof window === 'undefined' || !Number.isFinite(seconds) || seconds < 3) return
+  const list = readJson<ItubeEvent[]>(EVENTS_KEY, [])
+  if (!list.length) return
+  const last = list[list.length - 1]
+  // 2 min ke andar wale last event hi update hoga (naye events beech me
+  // aa gaye to galat entry ko touch nahi karenge)
+  if (Date.now() - last.t > 120_000) return
+  last.d = Math.max(last.d ?? 0, Math.min(3600, Math.round(seconds)))
+  writeJson(EVENTS_KEY, list)
+}
+
 export function clearItubeEvents() {
   writeJson(EVENTS_KEY, [])
 }
@@ -210,7 +228,10 @@ export function getItubeTaste(): ItubeTaste {
   const watched = new Set<string>()
   for (const e of events) {
     const days = Math.max(0, (now - e.t) / 86_400_000)
-    const w = Math.exp(-days / HALF_LIFE_DAYS)
+    // v0.5.15: watch-time factor — jitna dekha utna zyada weight
+    // (na khola → 1x, 90s dekha → 1x, 3+ min → 2x cap)
+    const durF = e.d && e.d > 0 ? Math.min(2, 0.5 + e.d / 60) : 1
+    const w = Math.exp(-days / HALF_LIFE_DAYS) * durF
     if (e.c) cat.set(e.c, (cat.get(e.c) ?? 0) + w)
     if (e.a) chan.set(e.a, (chan.get(e.a) ?? 0) + w)
     watched.add(e.v)
@@ -248,6 +269,8 @@ export function splitSeen(pool: QalbTrack[]): { fresh: QalbTrack[]; reused: Qalb
   for (const t of pool) (seen.has(t.videoId) ? reused : fresh).push(t)
   return { fresh, reused }
 }
+
+export { hashStr }
 
 // ── Feed builder ────────────────────────────────────────────────
 
