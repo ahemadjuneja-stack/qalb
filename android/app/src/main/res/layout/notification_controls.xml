@@ -5,6 +5,7 @@
     (user request: pichhli bar me buttons door-door the + chhote the)
   • EK HI ROW — 62dp total (Android 12+ ~64dp compact height-cap me safe)
   • Koi thumbnail NAHI (user request)
+  • v0.5.31 — close (×) bada circle-button (right corner)
   • A13 content-fields NOTE: builder me setContentTitle/Text ZAROORI hai
     (v0.5.17 me missing tha isliye notification hi drop ho gayi thi)
 -->
@@ -55,15 +56,18 @@
             android:contentDescription="Agla kalam" />
     </LinearLayout>
 
-    <!-- Right corner: close (×) -->
+    <!-- Right corner: close (×) — v0.5.31 BADA + clear circle-button
+         (user report: "× ka option add karo" — purana 30dp halka ×
+         dikhta hi nahi tha. Ab 40dp + sage circle bg + strong tint) -->
     <ImageView
         android:id="@+id/notif_close"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
         android:layout_gravity="end|center_vertical"
-        android:layout_marginEnd="8dp"
-        android:padding="8dp"
+        android:layout_marginEnd="6dp"
+        android:padding="10dp"
         android:src="@drawable/ic_notif_close"
-        android:tint="#5A6E61"
+        android:tint="#1C2F24"
+        android:background="@drawable/notif_close_bg"
         android:contentDescription="Band karein" />
 </FrameLayout>

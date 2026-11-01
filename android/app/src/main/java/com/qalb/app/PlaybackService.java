@@ -175,6 +175,26 @@ public class PlaybackService extends Service {
             // × button (ya JS stop) — song band, notification hatao, app NA kholo
             emitMediaAction("stop"); // JS: isPlaying=false → YT pause + service stop
             releaseWakeLock();
+            // v0.5.31 — notification FORAN + guaranteed gayab:
+            // stopForeground(REMOVE) notification ko shade se hatata hai,
+            // manager.cancel() belt-and-braces (kuch OEMs par sirf stopSelf()
+            // se FGS notification 1-2 sec latki reh jati thi). minSdk 24 =
+            // STOP_FOREGROUND_REMOVE hamesha available.
+            try {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } catch (Exception ignored) {
+                try {
+                    //noinspection deprecation
+                    stopForeground(true);
+                } catch (Exception ignored2) {
+                }
+            }
+            try {
+                NotificationManager nm =
+                        (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nm != null) nm.cancel(NOTIFICATION_ID);
+            } catch (Exception ignored) {
+            }
             stopSelf();
             return START_NOT_STICKY;
         }

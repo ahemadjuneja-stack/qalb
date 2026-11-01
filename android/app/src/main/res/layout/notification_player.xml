@@ -2,7 +2,7 @@
 <!--
   Qalb — Expanded media notification (v0.5.19)
   • UPAR bada button cluster: [prev | play/pause circle | next] — paas-paas,
-    close (×) usi row ke right corner me
+    close (×) usi row ke right corner me (v0.5.31: bada circle-button)
   • Neeche title + artist (thumbnail NAHI — user request)
   • Buttons row SABSE UPAR — kabhi cut hui to bhi buttons safe
 -->
@@ -62,12 +62,13 @@
 
         <ImageView
             android:id="@+id/notif_close"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
             android:layout_gravity="end|center_vertical"
-            android:padding="8dp"
+            android:padding="10dp"
             android:src="@drawable/ic_notif_close"
-            android:tint="#5A6E61"
+            android:tint="#1C2F24"
+            android:background="@drawable/notif_close_bg"
             android:contentDescription="Band karein" />
     </FrameLayout>
 
