@@ -16,6 +16,7 @@ import { checkForUpdateEngine, useUpdateStore } from '@/lib/update-engine'
 import { resetBootCounters, fullResetAndReload } from '@/lib/boot-guard'
 import { QALB } from '@/lib/qalb'
 import { UpdatePopup } from '@/components/qalb/update-popup'
+import { QalbLogoMark } from '@/components/qalb/qalb-logo-mark'
 
 // ── shared shell ──────────────────────────────────────────────────
 
@@ -74,14 +75,18 @@ function ActionButton({
 }
 
 // ── 0. Boot splash (SSR/client pehli frame — hydration-safe gate) ──
+// OFFICIAL LOGO — user ka asli logo (traced SVG) + zinda animation:
+// patto me dark-red glow breathing + dil lub-dub dhadkan. Bg wahi
+// #1f1f1d jo native splash/launcher tile ka hai — seamless handoff.
 
 export function BootSplash() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background text-foreground">
-      <p className="text-2xl font-black tracking-tight">
-        Qa<span className="text-emerald-500">lb</span>
-      </p>
-      <div className="mt-4 h-6 w-6 animate-spin rounded-full border-2 border-emerald-400/30 border-t-emerald-500" />
+    <div
+      className="flex min-h-screen flex-col items-center justify-center"
+      style={{ background: '#1f1f1d' }}
+    >
+      <QalbLogoMark className="w-60 max-w-[72vw]" />
+      <div className="mt-8 h-5 w-5 animate-spin rounded-full border-2 border-white/15 border-t-[#fe0e16]" />
     </div>
   )
 }

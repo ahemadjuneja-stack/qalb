@@ -575,6 +575,43 @@
   animation: qalb-ph-text 1.5s ease-in-out infinite;
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   Qalb OFFICIAL LOGO MARK — zinda animation (v0.5.8)
+   User ka asli logo (traced SVG): patto (leaf cutouts) me dark-red
+   glow breathing + dil lub-dub dhadkan + splash entry fade.
+   Sab compositor-friendly (opacity/transform) — Android WebView 60fps.
+   ═══════════════════════════════════════════════════════════════════ */
+.qalb-leaf-glow {
+  opacity: 0.4;
+  animation: qalb-leaf-breathe 3.6s ease-in-out infinite;
+}
+.qalb-glow-a { animation-delay: 0s; }
+.qalb-glow-b { animation-delay: 1.2s; }
+.qalb-glow-l { animation-delay: 2.4s; }
+@keyframes qalb-leaf-breathe {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.qalb-heart-group {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: qalb-logo-heartbeat 1.9s ease-in-out infinite;
+}
+@keyframes qalb-logo-heartbeat {
+  0%, 100% { transform: scale(1); }
+  12% { transform: scale(1.09); }
+  24% { transform: scale(1); }
+  36% { transform: scale(1.05); }
+  50% { transform: scale(1); }
+}
+.qalb-mark-live {
+  animation: qalb-logo-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes qalb-logo-in {
+  from { opacity: 0; transform: scale(0.93); }
+  to { opacity: 1; transform: scale(1); }
+}
+
 /* Accessibility — motion kam pasand karne walon ke liye */
 @media (prefers-reduced-motion: reduce) {
   .qalb-beat,
@@ -589,7 +626,10 @@
   .qalb-heartbeat-slider,
   .qalb-heartbeat-slider [data-slot='slider-range'],
   .qalb-heartbeat-slider [data-slot='slider-thumb'],
-  .qalb-ph-text {
+  .qalb-ph-text,
+  .qalb-leaf-glow,
+  .qalb-heart-group,
+  .qalb-mark-live {
     animation: none !important;
   }
 }
