@@ -12,7 +12,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RectF;
@@ -24,7 +23,6 @@ import android.os.PowerManager;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
-import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 
@@ -37,20 +35,21 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Qalb — Playback Foreground Service (MediaSession + custom sage notification)
+ * Qalb — Playback Foreground Service (MediaSession + MediaStyle notification)
  *
  * Naat chalte waqt ye service foreground mode me chalti hai:
  *  - MediaSessionCompat: lock screen + headset buttons par standard media controls
- *  - CUSTOM notification (v0.2.2): light sage theme card — app jaisa look:
- *      • sage ivory background (#EEF3E8) + deep emerald ink text
- *      • HEARTBEAT seek line — 3-frame ViewFlipper upar-niche-upar-niche bounce
- *        (auto-cycle hota hai, har frame ke liye re-notify NAHI karna padta)
- *      • Close (×) button — tap = song stop + notification band, app NAHI khulti
+ *  - MediaStyle notification (v0.5.16): STANDARD media card — shade, lock screen
+ *    aur headset par prev • play/pause • next (+ expanded me stop) buttons
+ *    GUARANTEED. Purana custom RemoteViews sage card (v0.2.2) Android 12+ par
+ *    height-cap me wrap hota tha — neeche wali buttons row kat jaati thi, isliye
+ *    ab system MediaStyle use hota hai (sage rounded thumbnail + emerald accent
+ *    wahi rehte hain; seekbar system PlaybackState se apne aap banata hai).
  *  - Notification button presses → QalbNativePlugin.emitMediaAction() →
  *    WebView JS player store control
  *  - PARTIAL_WAKE_LOCK hold karta hai taaki screen band hone par bhi
  *    CPU/WebView chalta rahe aur YouTube IFrame ka audio na ruke
- *  - Playing me 1s interpolation ticker: seek line + times smooth aage badhte
+ *  - Playing me 1s interpolation ticker: seekbar position smooth aage badhta hai
  *
  * JS side (player-provider) se QalbNative plugin ke through start/update/stop.
  *
@@ -84,16 +83,7 @@ public class PlaybackService extends Service {
     private static final int SAGE_INK = 0xFF1C2F24;     // deep emerald ink
     private static final int SAGE_MUTED = 0xFF5A6E61;   // muted sage text
     private static final int SAGE_ACCENT = 0xFF0F9163;  // emerald accent
-    private static final int SAGE_TRACK = 0xFFD7E3D2;   // seek track (halka sage)
     private static final int ACCENT = SAGE_ACCENT;      // system chrome accent
-
-    // ── Seek bitmap geometry (ECG heartbeat waveform) ──────────────
-    // Bitmap fitXY se notification width par stretch hota hai — ECG waveform
-    // uniform repeat hota hai isliye stretch me distortion nahi.
-    private static final int SEEK_W = 600;
-    private static final int SEEK_H = 64;
-    private static final float SEEK_OFFSET_PX = 8f;     // bounce amplitude (~3dp)
-    private static final int SEEK_PULSES = 5;           // itne heartbeats poori line me
 
     private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -112,7 +102,7 @@ public class PlaybackService extends Service {
     private double durationSec;
     private Bitmap artwork;
 
-    /** Position interpolation ticker (1s) — seek line + times chalte rahe */
+    /** Position interpolation ticker (1s) — seekbar + times chalte rahe */
     private final Runnable tickRunnable = new Runnable() {
         @Override
         public void run() {
@@ -497,84 +487,7 @@ public class PlaybackService extends Service {
         }
     }
 
-    // ── seek bitmaps (ECG heartbeat waveform frames) ─────────────────
-
-    /**
-     * ECG/EKG heartbeat waveform path — image reference jaisi:
-     * flat → P bump (chhota upar) → Q dip → R spike (lamba upar) →
-     * S dip (neeche) → recover → T wave → flat … repeat
-     */
-    private static Path buildEcgPath() {
-        Path p = new Path();
-        float baseY = SEEK_H / 2f;
-        float pw = SEEK_W / (float) SEEK_PULSES;
-        p.moveTo(0, baseY);
-        for (int i = 0; i < SEEK_PULSES; i++) {
-            float x0 = i * pw;
-            p.lineTo(x0 + 0.14f * pw, baseY);                       // flat
-            p.quadTo(x0 + 0.19f * pw, baseY - 10f,                  // P wave bump
-                    x0 + 0.24f * pw, baseY);
-            p.lineTo(x0 + 0.36f * pw, baseY);                       // flat
-            p.lineTo(x0 + 0.40f * pw, baseY + 8f);                  // Q dip
-            p.lineTo(x0 + 0.46f * pw, baseY - 30f);                 // R spike (lamba upar)
-            p.lineTo(x0 + 0.51f * pw, baseY + 16f);                 // S dip (neeche)
-            p.lineTo(x0 + 0.55f * pw, baseY);                       // recover
-            p.lineTo(x0 + 0.63f * pw, baseY);                       // flat
-            p.quadTo(x0 + 0.68f * pw, baseY - 12f,                  // T wave
-                    x0 + 0.73f * pw, baseY);
-            p.lineTo(x0 + pw, baseY);                               // pulse end
-        }
-        return p;
-    }
-
-    /**
-     * Ek ECG seek frame render karo. yOffset = waveform ka vertical bounce
-     * (heartbeat: -amp / 0 / +amp). Track sage, traveled hissa emerald glow
-     * ke sath — player ke ECG seekbar jaisa look.
-     */
-    private static Bitmap renderSeekFrame(float progress, float yOffset) {
-        try {
-            Bitmap bmp = Bitmap.createBitmap(SEEK_W, SEEK_H, Bitmap.Config.ARGB_8888);
-            Canvas c = new Canvas(bmp);
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeJoin(Paint.Join.ROUND);
-
-            Path ecg = buildEcgPath();
-            c.save();
-            c.translate(0, yOffset);
-
-            // track — poori ECG line halki sage me
-            p.setColor(SAGE_TRACK);
-            p.setStrokeWidth(SEEK_H * 0.09f);
-            c.drawPath(ecg, p);
-
-            // progress — traveled hissa bright emerald + glow
-            float prog = Math.max(0f, Math.min(1f, progress));
-            if (prog > 0f) {
-                float endX = SEEK_W * prog;
-                c.save();
-                c.clipRect(0f, -SEEK_H, endX, SEEK_H * 2f);
-                // glow pass (wide, semi-transparent)
-                p.setColor(SAGE_ACCENT);
-                p.setAlpha(80);
-                p.setStrokeWidth(SEEK_H * 0.24f);
-                c.drawPath(ecg, p);
-                // main line
-                p.setAlpha(255);
-                p.setStrokeWidth(SEEK_H * 0.10f);
-                c.drawPath(ecg, p);
-                c.restore();
-            }
-            c.restore();
-            return bmp;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /** Thumbnail ko rounded-corner card me convert karo (sage card ke sath match) */
+    /** Thumbnail ko rounded-corner card me convert karo (sage accent ke sath match) */
     private static Bitmap roundedThumb(Bitmap src) {
         if (src == null) return null;
         try {
@@ -601,18 +514,6 @@ public class PlaybackService extends Service {
         }
     }
 
-    private static String fmtTime(double sec) {
-        try {
-            if (sec < 0 || Double.isNaN(sec) || Double.isInfinite(sec)) sec = 0;
-            long s = (long) sec;
-            long m = s / 60;
-            s = s % 60;
-            return m + ":" + String.format("%02d", s);
-        } catch (Exception e) {
-            return "0:00";
-        }
-    }
-
     // ── notification ─────────────────────────────────────────────────
 
     private void pushNotification() {
@@ -629,52 +530,6 @@ public class PlaybackService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    /** Custom sage notification views banao (theme match + heartbeat + close) */
-    private RemoteViews buildRemoteViews() {
-        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_player);
-
-        // text + thumb
-        rv.setTextViewText(R.id.notif_title, currentTitle != null ? currentTitle : "Naat chal rahi hai");
-        rv.setTextViewText(R.id.notif_artist,
-                (currentArtist != null ? currentArtist : "Qalb") + " • Qalb");
-        rv.setTextViewText(R.id.notif_pos, fmtTime(positionSec));
-        rv.setTextViewText(R.id.notif_dur, fmtTime(durationSec));
-
-        try {
-            Bitmap large = artwork != null ? artwork : fallbackArt();
-            Bitmap rounded = roundedThumb(large);
-            if (rounded != null) rv.setImageViewBitmap(R.id.notif_thumb, rounded);
-        } catch (Exception ignored) {
-        }
-
-        // heartbeat seek frames: upar / center / niche — ViewFlipper 140ms cycle
-        float prog = durationSec > 0 ? (float) (positionSec / durationSec) : 0f;
-        Bitmap fA = renderSeekFrame(prog, -SEEK_OFFSET_PX);
-        Bitmap fB = renderSeekFrame(prog, 0f);
-        Bitmap fC = renderSeekFrame(prog, SEEK_OFFSET_PX);
-        if (fA != null) rv.setImageViewBitmap(R.id.notif_seek_a, fA);
-        if (fB != null) rv.setImageViewBitmap(R.id.notif_seek_b, fB);
-        if (fC != null) rv.setImageViewBitmap(R.id.notif_seek_c, fC);
-        if (fB != null) rv.setImageViewBitmap(R.id.notif_seek_static, fB);
-
-        // playing → flipper bounce; paused → static line
-        rv.setViewVisibility(R.id.notif_flip,
-                playing ? android.view.View.VISIBLE : android.view.View.GONE);
-        rv.setViewVisibility(R.id.notif_seek_static,
-                playing ? android.view.View.GONE : android.view.View.VISIBLE);
-
-        // toggle icon
-        rv.setImageViewResource(R.id.notif_toggle, playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
-
-        // clicks
-        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
-        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
-        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
-        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
-
-        return rv;
-    }
-
     private Notification buildNotification() {
         Intent openIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent openPi = openIntent != null
@@ -683,23 +538,50 @@ public class PlaybackService extends Service {
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
                 : null;
 
-        RemoteViews views = buildRemoteViews();
-
         // NOTE: API 36 me Notification.CATEGORY_MEDIA constant REMOVE ho chuka hai
         // (androidx NotificationCompat se bhi) — isliye category set nahi karte
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_qalb)
-                .setContentTitle(currentTitle)
-                .setContentText(currentArtist != null ? currentArtist + " • Qalb" : "Qalb")
+                .setContentTitle(currentTitle != null ? currentTitle : "Naat chal rahi hai")
+                .setContentText((currentArtist != null ? currentArtist : "Qalb") + " • Qalb")
                 .setContentIntent(openPi)
-                .setCustomContentView(views)
-                .setCustomBigContentView(views)
+                .setDeleteIntent(actionPi(ACTION_STOP, 14)) // swipe-close = stop
                 .setOngoing(playing) // pause me swipe-dismiss allowed
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
-                .setColor(SAGE_ACCENT); // system chrome bits sage accent me
+                .setColor(SAGE_ACCENT) // system chrome bits sage accent me
+                // ── MEDIA BUTTONS (v0.5.16) — shade + lock screen + headset +
+                // Android Auto par guaranteed. Pehle custom RemoteViews card tha
+                // jisme Android 12+ ka height-cap neeche wali buttons row kaat
+                // deta tha (user report: next/play lock-home screen par gayab).
+                .addAction(R.drawable.ic_notif_prev, "Pichla", actionPi(ACTION_PREV, 11))
+                .addAction(playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play,
+                        playing ? "Pause" : "Play", actionPi(ACTION_TOGGLE, 12))
+                .addAction(R.drawable.ic_notif_next, "Agla", actionPi(ACTION_NEXT, 13))
+                .addAction(R.drawable.ic_notif_close, "Band", actionPi(ACTION_STOP, 14));
+
+        // sage rounded thumbnail — brand look (network thumb na mile to crescent)
+        try {
+            Bitmap large = artwork != null ? artwork : fallbackArt();
+            Bitmap rounded = roundedThumb(large);
+            if (rounded != null) b.setLargeIcon(rounded);
+        } catch (Exception ignored) {
+        }
+
+        // MediaStyle — system ko batata hai ye PROPER media notification hai:
+        // • lock screen (Android 11+) media card session se banega — saare buttons
+        // • Android 12+/13+ custom-view height-cap problem se poori mukti
+        // • seekbar + elapsed time system khud PlaybackState se render karta hai
+        try {
+            if (session != null) {
+                b.setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                        .setMediaSession(session.getSessionToken())
+                        .setShowActionsInCompactView(0, 1, 2)); // prev • play/pause • next
+            }
+        } catch (Exception ignored) {
+        }
 
         return b.build();
     }
