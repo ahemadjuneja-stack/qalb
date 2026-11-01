@@ -81,8 +81,14 @@ public class QalbNativePlugin extends Plugin {
         void onBack();
     }
 
+    /** PiP event (MainActivity) → JS player-provider bridge */
+    public interface PipEmitter {
+        void onPipEvent(String kind);
+    }
+
     private static volatile MediaActionEmitter mediaEmitter;
     private static volatile BackEmitter backEmitter;
+    private static volatile PipEmitter pipEmitter;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // ── Back navigation fallback state (v0.2.2) ──────────────────────
@@ -90,6 +96,22 @@ public class QalbNativePlugin extends Plugin {
     private static volatile Runnable backFallback;
     private static final long BACK_FALLBACK_MS = 500L;
     private static volatile java.lang.ref.WeakReference<Activity> backActivityRef;
+
+    // ── v0.5.34 — MEDIA NOTIFICATION CARD: OFF (compliance mode) ─────
+    // YouTube content ab foreground-only (background ka legal jugad =
+    // Picture-in-Picture). FGS media card + wake lock + KeepAlive hack
+    // sab DISABLE — screen lock par playback khud ruk jata hai (YT rules).
+    // NOTE: sirf OWN-LICENSED audio engine (future) ke liye wapis true karna.
+    private static final boolean MEDIA_CARD_ENABLED = false;
+
+    // ── v0.5.34 — PICTURE-IN-PICTURE state (JS → native) ───────────
+    // JS player-provider sirf YT queue playback ke waqt flag ON karta hai
+    // (reels / iTube watch par OFF). MainActivity.onUserLeaveHint isi se
+    // PiP me video VISIBLE rakh kar chalata hai — player chhupta nahi
+    // (YouTube embed rules ke mutabiq). pipRect = video card ka viewport
+    // rect [x, y, w, h] — PiP window usi jagah se khulta hai.
+    private static volatile boolean pipWanted = false;
+    private static volatile float[] pipRect = null;
 
     @Override
     public void load() {
@@ -108,9 +130,38 @@ public class QalbNativePlugin extends Plugin {
             } catch (Exception ignored) {
             }
         });
+        pipEmitter = kind -> mainHandler.post(() -> {
+            try {
+                JSObject data = new JSObject();
+                data.put("kind", kind);
+                notifyListeners("pipEvent", data);
+            } catch (Exception ignored) {
+            }
+        });
     }
 
-    /** PlaybackService se button press forward karne ke liye (static entry) */
+    /** PiP lifecycle event JS ko bhejo ("entered" | "closed") */
+    public static void emitPipEvent(String kind) {
+        PipEmitter e = pipEmitter;
+        if (e != null) {
+            try {
+                e.onPipEvent(kind);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** MainActivity.onUserLeaveHint — PiP abhi enter karna hai? */
+    public static boolean isPipWanted() {
+        return pipWanted;
+    }
+
+    /** PiP source-rect hint [x, y, w, h] (viewport px) — null = poora window */
+    public static float[] pipSourceRect() {
+        return pipRect;
+    }
+
+/** PlaybackService se button press forward karne ke liye (static entry) */
     public static void emitMediaAction(String action) {
         MediaActionEmitter e = mediaEmitter;
         if (e != null) {
@@ -194,6 +245,12 @@ public class QalbNativePlugin extends Plugin {
 
     @PluginMethod
     public void startPlayback(PluginCall call) {
+        // v0.5.34 — MEDIA CARD OFF (compliance mode): FGS/notification band.
+        // Background sunne ke liye legal jugad PiP hai (MainActivity).
+        if (!MEDIA_CARD_ENABLED) {
+            call.resolve();
+            return;
+        }
         try {
             String title = call.getString("title", "Naat chal rahi hai");
             String artist = call.getString("artist", "Qalb");
@@ -218,6 +275,11 @@ public class QalbNativePlugin extends Plugin {
 
     @PluginMethod
     public void updatePlayback(PluginCall call) {
+        // v0.5.34 — MEDIA CARD OFF — koi service/notification update nahi
+        if (!MEDIA_CARD_ENABLED) {
+            call.resolve();
+            return;
+        }
         try {
             String title = call.getString("title", "Naat chal rahi hai");
             String artist = call.getString("artist", "Qalb");
@@ -240,6 +302,29 @@ public class QalbNativePlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("playback stop fail: " + safeMsg(e));
+        }
+    }
+
+    // ── v0.5.34 — PiP flag (JS → native) ─────────────────────────────
+    // JS har state change par bhejta hai: on=true sirf YT queue playback
+    // ke waqt. Rect (viewport px) video card / video anchor ka hota hai —
+    // PiP window wahin se khulta hai (source-rect hint).
+    @PluginMethod
+    public void setPipWanted(PluginCall call) {
+        try {
+            pipWanted = Boolean.TRUE.equals(call.getBoolean("on"));
+            Double x = call.getDouble("x");
+            Double y = call.getDouble("y");
+            Double w = call.getDouble("w");
+            Double h = call.getDouble("h");
+            if (x != null && y != null && w != null && h != null && w > 1 && h > 1) {
+                pipRect = new float[]{x.floatValue(), y.floatValue(), w.floatValue(), h.floatValue()};
+            } else {
+                pipRect = null;
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("pip flag fail: " + safeMsg(e));
         }
     }
 

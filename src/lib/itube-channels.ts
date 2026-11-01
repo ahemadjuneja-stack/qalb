@@ -1,14 +1,16 @@
 'use client'
 
-// Qalb — iTube CHANNELS (v0.5.21)
+// Qalb — iTube CHANNELS (v0.5.21, v0.5.34 Data API rewrite)
 // ─────────────────────────────────────────────────────────────────
 // User request: iTube ke andar kisi bhi channel me jaa sake aur
 // subscribe kar sake.
 //
-//   • CHANNEL SEARCH  — InnerTube search se channelRenderer + video
-//     byline fallback (collectChannelsX) — koi bhi channel mil jayega
-//   • CHANNEL PAGE    — InnerTube browse (browseId UC…, Videos-tab
-//     params) se channel ki videos + header meta (name/avatar/subs)
+//   • CHANNEL SEARCH  — official Data API search (type=channel)
+//   • CHANNEL PAGE    — Data API channelId search (order=date) +
+//                       channels.list meta (name/avatar/subs)
+//   • RELATED         — Data API me related-videos endpoint NAHI hai
+//                       (YouTube ne 2016 me remove kiya) — isliye video
+//                       title keywords se "more like this" search
 //   • SUBSCRIBE       — YouTube ka asli subscribe Google login maangta
 //     hai (3rd-party app ko API scope hi nahi milta) — isliye app-level
 //     FOLLOW store: subscribed channels iTube home par avatar-row me
@@ -19,22 +21,17 @@
 // app update ke baad bhi bache rehte hain (auth jaisa hi pattern).
 
 import type { QalbTrack } from '@/lib/types'
+import { videosToTracks } from '@/lib/innertube-x'
 import {
-  CLIENT_VERSION,
-  DESKTOP_UA,
-  INNERTUBE_CONTEXT,
-  INNERTUBE_KEY,
-  collectChannelMetaX,
-  collectChannelsX,
-  collectVideosX,
-  videosToTracks,
-  type RawChannelX,
-} from '@/lib/innertube-x'
-import { innertubePostJson } from '@/lib/youtube-search-source'
+  ytSearch,
+  ytChannelVideos,
+  ytChannelDetails,
+  ytVideoDetails,
+  titleKeywords,
+  hasYtApiKey,
+} from '@/lib/yt-data'
 import { isBlockedResultX } from '@/lib/result-filter'
-import { isNativeApp, nativeKvGet, nativeKvSet } from '@/plugins/qalb-native'
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import { nativeKvGet, nativeKvSet } from '@/plugins/qalb-native'
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -53,30 +50,15 @@ export interface ChannelVideosPage {
   meta: { title: string; avatar: string; subs: string }
 }
 
-const BROWSE_HEADERS = {
-  'User-Agent': DESKTOP_UA,
-  'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-  'X-YouTube-Client-Name': '1',
-  'X-YouTube-Client-Version': CLIENT_VERSION,
-  Referer: 'https://www.youtube.com/',
-}
-
-// Verified channel VIDEOS-tab browse params (InnerTube standard)
-const VIDEOS_TAB_PARAMS = 'EgZ2aWRlb3PyBgQKAjoA'
-
 // ── Channel search (koi bhi channel dhoondo) ─────────────────────
 
 export async function searchChannels(query: string, limit = 8): Promise<ChannelInfo[]> {
-  if (!isNativeApp() || !query.trim()) return []
-  const data = await innertubePostJson(
-    `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
-    BROWSE_HEADERS,
-    { ...INNERTUBE_CONTEXT, query: query.trim() }
-  ).catch(() => null)
-  if (!data) return []
-  const raw: RawChannelX[] = []
-  collectChannelsX(data, raw)
-  return raw
+  if (!query.trim() || !hasYtApiKey()) return []
+  const page = await ytSearch(query.trim(), { type: 'channel', maxResults: limit }).catch(
+    () => null
+  )
+  if (!page) return []
+  return page.channels
     .filter((c) => !isBlockedResultX(`${c.title} ${c.desc}`.toLowerCase()))
     .slice(0, limit)
     .map((c) => ({
@@ -84,98 +66,119 @@ export async function searchChannels(query: string, limit = 8): Promise<ChannelI
       name: c.title,
       avatar: c.avatar,
       subsText: c.subsText,
-      videoCount: c.videoCount,
+      videoCount: c.videoCount ? `${c.videoCount} videos` : '',
       desc: c.desc,
     }))
 }
 
-// ── Channel page (browseId → videos tab) ─────────────────────────
+// ── Channel page (channelId → latest videos + meta) ──────────────
 
 export async function fetchChannelVideos(
   browseId: string,
   continuation: string | null,
   fallbackName = ''
 ): Promise<ChannelVideosPage | null> {
-  if (!isNativeApp() || !browseId) return null
-  const post = (body: Record<string, unknown>) =>
-    innertubePostJson(
-      `https://www.youtube.com/youtubei/v1/browse?key=${INNERTUBE_KEY}&prettyPrint=false`,
-      BROWSE_HEADERS,
-      body
-    ).catch(() => null)
+  if (!browseId || !hasYtApiKey()) return null
 
-  let data = continuation
-    ? await post({ ...INNERTUBE_CONTEXT, continuation })
-    : await post({ ...INNERTUBE_CONTEXT, browseId, params: VIDEOS_TAB_PARAMS })
+  const page = await ytChannelVideos(browseId, continuation).catch(() => null)
+  if (!page) return null
 
-  // Videos-tab params fail ho (layout change) — plain browse (home tab)
-  if (!continuation && data) {
-    const probe: any[] = []
-    collectVideosX(data, probe, [])
-    if (!probe.length) {
-      const alt = await post({ ...INNERTUBE_CONTEXT, browseId })
-      if (alt) {
-        const altVideos: any[] = []
-        collectVideosX(alt, altVideos, [])
-        if (altVideos.length) data = alt
+  // Channel meta — pehli page par fetch (continuation par cached feel)
+  let meta = { title: fallbackName, avatar: '', subs: '' }
+  if (!continuation) {
+    const ch = await ytChannelDetails(browseId).catch(() => null)
+    if (ch) {
+      meta = {
+        title: ch.title || fallbackName,
+        avatar: ch.avatar ?? '',
+        subs: ch.subsText,
       }
     }
   }
-  if (!data) return null
-
-  const videos: any[] = []
-  const tokens: string[] = []
-  collectVideosX(data, videos, tokens)
-  const meta: Record<string, string> = { title: fallbackName, avatar: '', subs: '' }
-  collectChannelMetaX(data, meta)
 
   // Channel ki videos par strict islamic filter NAHI (user ne khud
   // channel chuna) — sirf blocked-content safety net
-  // v0.5.23: lockup format me channel-page videos ka byline sirf
-  // views/published hota hai (channel name ki row nahi) — artist khali
-  // ('YouTube') reh jaye to channel ka asli naam bhar do
   const chanName = meta.title || fallbackName
-  const tracks = videosToTracks(videos, 'itchan')
-    .map((t) =>
-      !t.artist || t.artist === 'YouTube' ? { ...t, artist: chanName || t.artist } : t
-    )
-    // v0.5.25 — series-aware filter (Ertugrul/Yousuf channel pages par
-    // 'movie/film' word wali episode titles block na ho)
-    .filter((t) => !isBlockedResultX(`${t.title} ${t.artist ?? ''}`.toLowerCase()))
+  const tracks = videosToTracks(
+    page.videos.map((v) => ({
+      videoId: v.videoId,
+      title: v.title,
+      channel: chanName || v.channel || 'YouTube',
+      channelId: v.channelId ?? browseId,
+      views: v.views,
+      viewsText: v.viewsText,
+      durationSec: v.durationSec,
+      published: v.published,
+    })),
+    'itchan'
+  ).filter((t) => !isBlockedResultX(`${t.title} ${t.artist ?? ''}`.toLowerCase()))
+
   return {
     tracks,
-    continuation: tokens[0] ?? null,
-    meta: { title: meta.title || fallbackName, avatar: meta.avatar, subs: meta.subs },
+    continuation: page.nextPageToken,
+    meta,
   }
 }
 
-// ── Watch-page related (v0.5.22 — InnerTube "next" endpoint) ─────
-// YouTube watch screen ka ASLI related feed (alag-alag channels se)
-// + continuation — neeche scroll karne par aur aati rahegi.
+// ── Related videos ("more like this") ────────────────────────────
+// Data API me asli related-feed endpoint nahi hai — isliye video ke
+// title keywords se search (same-channel videos ko thoda boost).
 
 export interface RelatedPage {
   tracks: QalbTrack[]
   continuation: string | null
 }
 
+// videoId → search keywords (continuation pages ke liye yaad rakhta hai)
+const relKeywordCache = new Map<string, string>()
+
 export async function fetchRelatedVideos(
   videoId: string,
   continuation: string | null
 ): Promise<RelatedPage | null> {
-  if (!isNativeApp() || !videoId) return null
-  const body = continuation
-    ? { ...INNERTUBE_CONTEXT, continuation }
-    : { ...INNERTUBE_CONTEXT, videoId }
-  const data = await innertubePostJson(
-    `https://www.youtube.com/youtubei/v1/next?key=${INNERTUBE_KEY}&prettyPrint=false`,
-    BROWSE_HEADERS,
-    body
-  ).catch(() => null)
-  if (!data) return null
-  const videos: any[] = []
-  const tokens: string[] = []
-  collectVideosX(data, videos, tokens)
-  return { tracks: videosToTracks(videos, 'itrel'), continuation: tokens[0] ?? null }
+  if (!videoId || !hasYtApiKey()) return null
+
+  // Data API me asli related-feed endpoint nahi — video title keywords
+  // se "more like this" search. Continuation par wahi keyword + pageToken.
+  let kw = relKeywordCache.get(videoId) ?? null
+  let pageToken = continuation
+  if (!kw) {
+    const base = await ytVideoDetails(videoId).catch(() => null)
+    if (!base?.title) return null
+    kw = titleKeywords(base.title)
+    relKeywordCache.set(videoId, kw)
+    if (relKeywordCache.size > 50) {
+      // purane entries hatao (bounded cache)
+      const first = relKeywordCache.keys().next().value
+      if (first) relKeywordCache.delete(first)
+    }
+    pageToken = null
+  }
+
+  const page = await ytSearch(kw, {
+    pageToken,
+    maxResults: 25,
+    type: 'video',
+  }).catch(() => null)
+  if (!page) return null
+
+  const tracks = videosToTracks(
+    page.videos
+      .filter((v) => v.durationSec > 0)
+      .map((v) => ({
+        videoId: v.videoId,
+        title: v.title,
+        channel: v.channel,
+        channelId: v.channelId,
+        views: v.views,
+        viewsText: v.viewsText,
+        durationSec: v.durationSec,
+        published: v.published,
+      })),
+    'itrel'
+  ).filter((t) => t.videoId !== videoId)
+
+  return { tracks, continuation: page.nextPageToken }
 }
 
 // ── Track → channel ref (tags me stashed ch:UC…) ─────────────────
@@ -188,6 +191,11 @@ export function channelRefOf(t: QalbTrack): { id: string; name: string } | null 
 
 function channelToInfo(c: { id: string; name: string }): ChannelInfo {
   return { id: c.id, name: c.name, avatar: null, subsText: '', videoCount: '', desc: '' }
+}
+
+/** Subscribe/feature cards ke liye — sub entry ya plain ref ko ChannelInfo banao */
+export function asChannelInfo(c: SubEntry | { id: string; name: string }): ChannelInfo {
+  return 'subsText' in c ? c : channelToInfo(c)
 }
 
 // ── Subscriptions (app-level follow store) ───────────────────────
@@ -300,24 +308,53 @@ export function getFeaturedChannels(): Promise<ChannelInfo[]> {
     const cache = readJson<{ t: number; list: ChannelInfo[] }>(FEAT_KEY, { t: 0, list: [] })
     if (cache.t && Date.now() - cache.t < FEAT_TTL && cache.list.length) return cache.list
 
-    const settled = await Promise.allSettled(FEATURED_NAMES.map((n) => searchChannels(n, 1)))
-    const list: ChannelInfo[] = []
+    // v0.5.34 — Data API quota-friendly: 6 alag searches (600 units) ki
+    // jagah EK search "islamic naat qawwali channels" + curated names se
+    // match. Fail ho to per-name fallback (sirf tab jab key ho).
+    let list: ChannelInfo[] = []
     const have = new Set<string>()
-    for (const r of settled) {
-      if (r.status !== 'fulfilled' || !r.value.length) continue
-      const c = r.value[0]
-      if (!have.has(c.id)) {
-        have.add(c.id)
-        list.push(c)
+
+    const bulk = await ytSearch(
+      FEATURED_NAMES.join(' OR ') + ' naat qawwali',
+      { type: 'channel', maxResults: 25 }
+    ).catch(() => null)
+    if (bulk) {
+      for (const c of bulk.channels) {
+        const name = FEATURED_NAMES.find(
+          (n) =>
+            c.title.toLowerCase().includes(n.toLowerCase()) ||
+            n.toLowerCase().includes(c.title.toLowerCase())
+        )
+        if (name && !have.has(c.channelId)) {
+          have.add(c.channelId)
+          list.push({
+            id: c.channelId,
+            name: c.title,
+            avatar: c.avatar,
+            subsText: c.subsText,
+            videoCount: c.videoCount ? `${c.videoCount} videos` : '',
+            desc: c.desc,
+          })
+        }
       }
     }
+
+    // jo curated names abhi bhi missing — per-name resolve (max 4)
+    const missing = FEATURED_NAMES.filter((n) => !list.some((c) => c.name.toLowerCase().includes(n.toLowerCase())))
+    if (missing.length) {
+      const settled = await Promise.allSettled(missing.slice(0, 4).map((n) => searchChannels(n, 1)))
+      for (const r of settled) {
+        if (r.status !== 'fulfilled' || !r.value.length) continue
+        const c = r.value[0]
+        if (!have.has(c.id)) {
+          have.add(c.id)
+          list.push(c)
+        }
+      }
+    }
+
     if (list.length) writeJson(FEAT_KEY, { t: Date.now(), list })
     return list
   })()
   return featPromise
-}
-
-/** Subscribe/feature cards ke liye — sub entry ya plain ref ko ChannelInfo banao */
-export function asChannelInfo(c: SubEntry | { id: string; name: string }): ChannelInfo {
-  return 'subsText' in c ? c : channelToInfo(c)
 }

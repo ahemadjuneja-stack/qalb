@@ -1,47 +1,31 @@
-// Qalb — InnerTube ENRICHED search core (client + server dono safe)
+// Qalb — ENRICHED search core — OFFICIAL Data API v3 (v0.5.34)
 // ─────────────────────────────────────────────────────────────────
-// live-catalog.ts (client) aur /api/yt-live route (server) dono isi
-// core ko use karte hain — ek hi parsing logic, kahin bhi chalao.
+// COMPLIANCE: v0.5.33 tak ye core YouTube ka private InnerTube endpoint
+// (/youtubei/v1) use karta tha — wo API Terms ke khilaaf tha. Ab enriched
+// search (views/duration/published ke saath) official YouTube Data API
+// v3 se hota hai (yt-data.ts).
 //
-// ENRICHED = views + duration + published time bhi capture hote hain
-// (normal youtube-search-source.ts sirf title/channel leta hai).
+// Callers (API unchanged): live-catalog.ts (client), itube.ts (client),
+// /api/yt-live route (server). Ek hi core, kahin bhi chalao.
 //
-// Verified InnerTube filter params (2026-10 live test):
-//   views = CAMSAhAB (view-count sort), date = EgIIAQ== (upload sort),
-//   week = EgQIAxAB, month = EgQIBBAB, year = EgQIBRAB
+// SP filter mapping (pehle InnerTube sp-tokens the, ab friendly keys):
+//   views  → order=viewCount
+//   date   → order=date
+//   week/month/year → publishedAfter (7/30/365 din) + relevance
+//   videoOnly (relevance) → default relevance order
 
 import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
-import { innertubePostJson, ytHttpGetText, ytExtractInitialData } from '@/lib/youtube-search-source'
+import { ytSearch, type DataVideo } from '@/lib/yt-data'
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-export const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
-// v0.5.13: client version refresh (stale 2025 version se YouTube empty
-// response de sakta hai) — youtube-search-source.ts ke saath synced
-export const CLIENT_VERSION = '2.20261001.01.00'
-export const DESKTOP_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-
-export const INNERTUBE_CONTEXT = {
-  context: {
-    client: {
-      clientName: 'WEB',
-      clientVersion: CLIENT_VERSION,
-      hl: 'en',
-      gl: 'IN',
-    },
-  },
-}
-
-// Verified search-filter params
+// Verified search-filter keys (Data API mapping — upar table dekho)
 export const SP = {
-  videoOnly: 'EgIQAQ%3D%3D', // video-only
-  views: 'CAMSAhAB', // view-count sort + video
-  date: 'EgIIAQ%3D%3D', // upload-date sort + video
-  week: 'EgQIAxAB', // this week + video
-  month: 'EgQIBBAB', // this month + video
-  year: 'EgQIBRAB', // this year + video
+  videoOnly: 'relevance', // video-only + relevance order
+  views: 'views', // view-count sort (famous first)
+  date: 'date', // upload-date sort
+  week: 'week', // this week
+  month: 'month', // this month
+  year: 'year', // this year
 } as const
 
 export type SpKey = keyof typeof SP
@@ -55,18 +39,85 @@ export function paramsFor(sort: string, period: string | null): string {
   return SP.videoOnly
 }
 
-// ── enriched video parsing ───────────────────────────────────────
+// ── enriched video shape (callers isi par depend hain) ───────────
 
 export interface RawVideoX {
   videoId: string
   title: string
   channel: string
-  channelId: string | null // UC… — video se channel page khulne ke liye (v0.5.21)
+  channelId: string | null // UC… — video se channel page khulne ke liye
   views: number
   viewsText: string
   durationSec: number // 0 = live/unknown (skip hota hai)
   published: string
 }
+
+function dataVideoToRawX(v: DataVideo): RawVideoX {
+  return {
+    videoId: v.videoId,
+    title: v.title,
+    channel: v.channel,
+    channelId: v.channelId,
+    views: v.views,
+    viewsText: v.viewsText || (v.views ? `${v.views} views` : ''),
+    durationSec: v.durationSec,
+    published: v.published,
+  }
+}
+
+export interface PageX {
+  videos: RawVideoX[]
+  continuation: string | null
+}
+
+/** sp-key → Data API opts */
+function optsForParams(params: string) {
+  switch (params) {
+    case SP.views:
+      return { order: 'viewCount' as const }
+    case SP.date:
+      return { order: 'date' as const }
+    case SP.week:
+      return { order: 'viewCount' as const, publishedAfterDays: 7 }
+    case SP.month:
+      return { order: 'viewCount' as const, publishedAfterDays: 30 }
+    case SP.year:
+      return { order: 'viewCount' as const, publishedAfterDays: 365 }
+    default:
+      return { order: 'relevance' as const }
+  }
+}
+
+/**
+ * ENRICHED search — official Data API v3. Query + filter key +
+ * continuation (Data API nextPageToken). Live/upcoming/3h+ videos skip
+ * (pehle jaisa hi rule — naat/qawwali/bayan playback ke liye).
+ */
+export async function innertubeSearchX(
+  query: string,
+  params: string,
+  continuation: string | null
+): Promise<PageX | null> {
+  const q = query.trim()
+  if (!q && !continuation) return null
+  const opts = optsForParams(params)
+  const page = await ytSearch(q, {
+    ...opts,
+    pageToken: continuation,
+    maxResults: 25,
+    type: 'video',
+  }).catch(() => null)
+  if (!page) return null
+
+  // duration filter: live (dur 0) aur 3h+ lambi videos skip — playback
+  // engine naat/qawwali ke liye bana hai
+  const videos = page.videos
+    .filter((v) => v.durationSec > 0 && v.durationSec < 3 * 3600)
+    .map(dataVideoToRawX)
+  return { videos, continuation: page.nextPageToken }
+}
+
+// ── views/duration parsers (legacy exports — scripts/tests use) ──
 
 export function parseViews(text: unknown): number {
   if (typeof text !== 'string') return 0
@@ -75,9 +126,7 @@ export function parseViews(text: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
-/** v0.5.23 — lockup byline short-form views ("7.4K views", "1.2M views",
- *  "10 lakh views") → number. parseViews sirf digits leta hai isliye
- *  "7.4K views" = 74 ban jata tha — lockup format me short-form hi aata hai. */
+/** "7.4K views" / "1.2M views" / "10 lakh views" → number */
 export function parseViewsShort(text: unknown): number {
   if (typeof text !== 'string') return 0
   const m = text
@@ -112,319 +161,7 @@ export function parseDuration(text: unknown): number {
   return sec
 }
 
-export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], depth = 0): void {
-  if (!node || typeof node !== 'object' || depth > 80) return
-  if (Array.isArray(node)) {
-    for (const item of node) collectVideosX(item, out, tokens, depth + 1)
-    return
-  }
-
-  const vr = node.videoRenderer
-  if (vr && typeof vr === 'object') {
-    const videoId = typeof vr.videoId === 'string' ? vr.videoId : null
-    const title =
-      vr.title?.runs?.[0]?.text ??
-      vr.title?.accessibility?.accessibilityData?.label ??
-      null
-    const channel =
-      vr.ownerText?.runs?.[0]?.text ??
-      vr.longBylineText?.runs?.[0]?.text ??
-      vr.shortBylineText?.runs?.[0]?.text ??
-      null
-    // v0.5.21 — channel id capture (byline navigation endpoint se):
-    // video card/watch screen par "channel me jao" isi se chalta hai
-    const channelId =
-      vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
-      vr.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
-      vr.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
-      null
-    const badgeStyles = Array.isArray(vr.badges)
-      ? vr.badges.map((b: any) => String(b?.metadataBadgeRenderer?.style ?? ''))
-      : []
-    const isLive = badgeStyles.some((s) => s.toUpperCase().includes('LIVE'))
-    const dur = parseDuration(
-      vr.lengthText?.simpleText ?? vr.lengthText?.accessibility?.accessibilityData?.label
-    )
-    const isUpcoming = Boolean(vr.upcomingEventData)
-    if (videoId && title && !isLive && !isUpcoming && dur > 0 && dur < 3 * 3600) {
-      out.push({
-        videoId,
-        title,
-        channel: channel || 'YouTube',
-        channelId: typeof channelId === 'string' ? channelId : null,
-        views: parseViews(vr.viewCountText?.simpleText),
-        viewsText: vr.shortViewCountText?.simpleText ?? vr.viewCountText?.simpleText ?? '',
-        durationSec: dur,
-        published: vr.publishedTimeText?.simpleText ?? '',
-      })
-    }
-  }
-
-  // v0.5.22 — compactVideoRenderer (watch-page "next" endpoint ke
-  // related videos isi format me aate hain) — same enrichment
-  const cvr = node.compactVideoRenderer
-  if (cvr && typeof cvr === 'object') {
-    const videoId = typeof cvr.videoId === 'string' ? cvr.videoId : null
-    const title = cvr.title?.simpleText ?? cvr.title?.runs?.[0]?.text ?? null
-    const channel =
-      cvr.longBylineText?.runs?.[0]?.text ??
-      cvr.shortBylineText?.runs?.[0]?.text ??
-      null
-    const channelId =
-      cvr.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
-      cvr.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
-      null
-    const dur = parseDuration(
-      cvr.lengthText?.simpleText ?? cvr.lengthText?.accessibility?.accessibilityData?.label
-    )
-    if (videoId && title && dur > 0 && dur < 3 * 3600) {
-      out.push({
-        videoId,
-        title,
-        channel: channel || 'YouTube',
-        channelId: typeof channelId === 'string' ? channelId : null,
-        views: parseViews(cvr.viewCountText?.simpleText),
-        viewsText: cvr.viewCountText?.simpleText ?? '',
-        durationSec: dur,
-        published: cvr.publishedTimeText?.simpleText ?? '',
-      })
-    }
-  }
-
-  // v0.5.23 — lockupViewModel (YouTube ka NAYA 2026 format):
-  // channel browse (videos-tab) aur watch-page related ("next" endpoint)
-  // ab videoRenderer/compactVideoRenderer ki jagah lockupViewModel bhejte
-  // hain — isi liye channel page ki videos load nahi ho rahi thi.
-  // Structure (live-verified 2026-11):
-  //   contentId = videoId, contentType = LOCKUP_CONTENT_TYPE_VIDEO
-  //   metadata.lockupMetadataViewModel.title.content = title
-  //   ...metadata.contentMetadataViewModel.metadataRows[].metadataParts[]
-  //       .text.content = "7.4K views" / "3 hours ago" / channel-name
-  //   metadata...image.decoratedAvatarViewModel...browseEndpoint.browseId
-  //     = channel UC… (related feed me milta hai)
-  //   contentImage.thumbnailViewModel.overlays[].thumbnailBottomOverlay
-  //     ViewModel.badges[].thumbnailBadgeViewModel.text = "8:02" duration
-  const lv = node.lockupViewModel
-  if (lv && typeof lv === 'object' && typeof lv.contentId === 'string') {
-    const isVideo = lv.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO'
-    const meta = lv.metadata?.lockupMetadataViewModel
-    const title = typeof meta?.title?.content === 'string' ? meta.title.content : null
-    if (isVideo && title) {
-      // byline rows flatten — views / published / channel classify
-      const parts: string[] = []
-      const rows = meta?.metadata?.contentMetadataViewModel?.metadataRows ?? []
-      for (const row of rows) {
-        for (const part of row?.metadataParts ?? []) {
-          const c = part?.text?.content
-          if (typeof c === 'string' && c.trim()) parts.push(c.trim())
-        }
-      }
-      let views = 0
-      let published = ''
-      let channel: string | null = null
-      for (const c of parts) {
-        const lc = c.toLowerCase()
-        if (!views && /\bviews?\b/.test(lc)) views = parseViewsShort(c)
-        else if (!views && /^[\d.,]+\s*(k|hazar|lac|lakh|mn?|crore|cr|bn?|b)?$/i.test(c))
-          views = parseViewsShort(c) // "1.1M" — bina 'views' word ke
-        else if (
-          !published &&
-          /\b(ago|min|hr|hour|day|week|month|year|mo|pehle)s?\b/.test(lc)
-        )
-          published = c
-        else if (!channel && c.length <= 80 && !/^\d+([:.]\d+)*\s*$/.test(c)) channel = c
-      }
-      // channelId — avatar ke "Go to channel" tap se (related feed)
-      const av = meta?.image?.decoratedAvatarViewModel
-      const channelId =
-        av?.rendererContext?.commandContext?.onTap?.innertubeCommand?.browseEndpoint?.browseId ??
-        null
-      const chanName =
-        channel ?? av?.a11yLabel?.replace(/^Go to channel\s*/i, '') ?? null
-      // duration — thumbnail badge text ("8:02"); live/shorts badge text
-      // time-pattern me nahi aata → dur 0 → skip (pehle jaisa rule)
-      let dur = 0
-      const overlays = lv.contentImage?.thumbnailViewModel?.overlays ?? []
-      for (const o of overlays) {
-        for (const b of o?.thumbnailBottomOverlayViewModel?.badges ?? []) {
-          const bt = b?.thumbnailBadgeViewModel?.text
-          if (typeof bt === 'string' && /^\d{1,2}(:\d{2}){1,2}$/.test(bt)) dur = parseDuration(bt)
-        }
-      }
-      if (dur > 0 && dur < 3 * 3600) {
-        out.push({
-          videoId: lv.contentId,
-          title,
-          channel: chanName || 'YouTube',
-          channelId: typeof channelId === 'string' ? channelId : null,
-          views,
-          viewsText: parts.find((c) => /\bviews?\b/i.test(c)) ?? '',
-          durationSec: dur,
-          published,
-        })
-      }
-    }
-  }
-
-  const token = node?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
-  if (typeof token === 'string' && token && !tokens.includes(token)) tokens.push(token)
-
-  for (const key of Object.keys(node)) collectVideosX(node[key], out, tokens, depth + 1)
-}
-
-export interface PageX {
-  videos: RawVideoX[]
-  continuation: string | null
-}
-
-// ── Channel collector (v0.5.21) — search results se channels nikalo ──
-
-export interface RawChannelX {
-  channelId: string
-  title: string
-  subsText: string
-  videoCount: string
-  avatar: string | null
-  desc: string
-}
-
-function thumbUrl(node: any): string | null {
-  const arr = node?.thumbnails
-  if (!Array.isArray(arr) || !arr.length) return null
-  const last = arr[arr.length - 1]
-  return typeof last?.url === 'string' && last.url ? last.url : null
-}
-
-/** Tree walk — channelRenderer (asli channel results) + videoRenderer
- *  byline fallback (jab search sirf videos deta hai). Dedupe by channelId. */
-export function collectChannelsX(node: any, out: RawChannelX[], depth = 0): void {
-  if (!node || typeof node !== 'object' || depth > 80) return
-  if (Array.isArray(node)) {
-    for (const item of node) collectChannelsX(item, out, depth + 1)
-    return
-  }
-
-  const cr = node.channelRenderer
-  if (cr && typeof cr === 'object' && typeof cr.channelId === 'string') {
-    const title = cr.title?.simpleText ?? cr.title?.runs?.[0]?.text ?? null
-    if (title) {
-      const byId = out.findIndex((c) => c.channelId === cr.channelId)
-      const entry: RawChannelX = {
-        channelId: cr.channelId,
-        title,
-        subsText: cr.subscriberCountText?.simpleText ?? '',
-        videoCount: cr.videoCountText?.simpleText ?? '',
-        avatar: thumbUrl(cr.avatar),
-        desc: cr.descriptionSnippet?.runs?.[0]?.text ?? '',
-      }
-      if (byId === -1) out.push(entry)
-    }
-  }
-
-  // videoRenderer byline fallback — channel entry jo abhi list me nahi
-  const vr = node.videoRenderer
-  if (vr && typeof vr === 'object') {
-    const cid = vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId
-    const cname = vr.ownerText?.runs?.[0]?.text
-    if (typeof cid === 'string' && cid && cname && !out.some((c) => c.channelId === cid)) {
-      out.push({
-        channelId: cid,
-        title: cname,
-        subsText: '',
-        videoCount: '',
-        avatar: thumbUrl(vr.ownerText?.runs?.[0]?.navigationEndpoint?.browseEndpoint
-          ?.thumbnails ?? vr.channelThumbnailSupportedRenderers?.channelThumbnailWithLinkRenderer
-          ?.thumbnail),
-        desc: '',
-      })
-    }
-  }
-
-  for (const key of Object.keys(node)) collectChannelsX(node[key], out, depth + 1)
-}
-
-/** Channel page (browse) ke response se header meta — title/avatar/subs */
-export function collectChannelMetaX(node: any, meta: Record<string, string>, depth = 0): void {
-  if (!node || typeof node !== 'object' || depth > 40) return
-  if (Array.isArray(node)) {
-    for (const item of node) collectChannelMetaX(item, meta, depth + 1)
-    return
-  }
-  const hdr = node.c4TabbedHeaderRenderer
-  if (hdr && typeof hdr === 'object') {
-    if (!meta.title) meta.title = hdr.title ?? ''
-    if (!meta.avatar) meta.avatar = thumbUrl(hdr.avatar) ?? ''
-    if (!meta.subs) meta.subs = hdr.subscriberCountText?.simpleText ?? ''
-  }
-  const mf = node.microformatDataRenderer
-  if (mf && typeof mf === 'object') {
-    if (!meta.title) meta.title = mf.title ?? ''
-    if (!meta.avatar) meta.avatar = thumbUrl(mf.thumbnail?.thumbnails ? mf.thumbnail : null) ?? ''
-  }
-  const ph = node.pageHeaderRenderer
-  if (ph && typeof ph === 'object' && !meta.title) {
-    const t =
-      ph.pageTitle ??
-      ph.content?.pageHeaderViewModel?.title?.dynamicTextViewModel?.text?.content ?? ''
-    if (t) meta.title = t
-  }
-  for (const key of Object.keys(node)) collectChannelMetaX(node[key], meta, depth + 1)
-}
-
-/** ENRICHED InnerTube search — query + filter params + continuation
- *  v0.5.13: JSON search fail/empty → HTML scrape fallback (youtube.com
- *  /results ka ytInitialData — same parser). Feed kabhi network-layout
- *  change se puri tarah na ruke. */
-export async function innertubeSearchX(
-  query: string,
-  params: string,
-  continuation: string | null
-): Promise<PageX | null> {
-  const parse = (data: any): PageX | null => {
-    if (!data || typeof data !== 'object') return null
-    const videos: RawVideoX[] = []
-    const tokens: string[] = []
-    collectVideosX(data, videos, tokens)
-    return { videos, continuation: tokens[0] ?? null }
-  }
-
-  const body = continuation
-    ? { ...INNERTUBE_CONTEXT, continuation }
-    : { ...INNERTUBE_CONTEXT, query, params }
-  const data = await innertubePostJson(
-    `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
-    {
-      'User-Agent': DESKTOP_UA,
-      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-      'X-YouTube-Client-Name': '1',
-      'X-YouTube-Client-Version': CLIENT_VERSION,
-      Referer: 'https://www.youtube.com/',
-    },
-    body
-  ).catch(() => null)
-  const parsed = parse(data)
-  if (parsed && parsed.videos.length) return parsed
-
-  // HTML scrape fallback — sirf pehla page (continuation support nahi)
-  if (continuation) return parsed
-  try {
-    const html = await ytHttpGetText(
-      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${params ? `&sp=${params}` : ''}&hl=en&gl=IN`,
-      {
-        'User-Agent': DESKTOP_UA,
-        'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-        Cookie: 'SOCS=CAI; CONSENT=YES+cb',
-      }
-    )
-    if (html) {
-      const scraped = parse(ytExtractInitialData(html))
-      if (scraped && scraped.videos.length) return scraped
-    }
-  } catch {
-    /* ignore — caller fallback pool pe chalega */
-  }
-  return parsed
-}
+// ── track mappers (unchanged public API) ─────────────────────────
 
 /** Title/channel se category infer — taste profile ko sahi category mile */
 export function inferCategory(text: string): string {

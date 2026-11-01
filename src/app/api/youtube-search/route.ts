@@ -1,8 +1,10 @@
 // Qalb — GET /api/youtube-search?q=<query>&cont=<continuation token>
-// 1) YouTube InnerTube (UNLIMITED — koi API key nahi chahiye, server-side)
-// 2) YOUTUBE_API_KEY env set ho → YouTube Data API v3 (embeddable-biased backup)
-// 3) warna local verified library se keyword search (offline sandbox fallback)
-// Response 1h in-memory cache me save hota hai.
+// ─────────────────────────────────────────────────────────────────
+// v0.5.34 COMPLIANCE: search ab SIRF official YouTube Data API v3 se
+// (pehle InnerTube primary tha — YouTube API Terms ke khilaaf).
+//   1) YouTube Data API v3 (yt-data.ts — key: YOUTUBE_API_KEY env)
+//   2) warna local verified library se keyword search (offline fallback)
+// Response 1h in-memory cache me save hota hai (quota bachata hai).
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -12,50 +14,6 @@ import { filterSearchResults } from '@/lib/result-filter'
 import type { QalbTrack } from '@/lib/types'
 
 const CACHE_TTL = 60 * 60 * 1000 // 1h
-
-interface YTSearchItem {
-  id?: { videoId?: string }
-  snippet?: {
-    title?: string
-    channelTitle?: string
-    thumbnails?: { medium?: { url?: string }; high?: { url?: string } }
-  }
-}
-
-async function searchYouTubeDataApi(q: string): Promise<QalbTrack[] | null> {
-  const key = process.env.YOUTUBE_API_KEY
-  if (!key) return null
-  try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/search')
-    url.searchParams.set('part', 'snippet')
-    url.searchParams.set('type', 'video')
-    url.searchParams.set('videoEmbeddable', 'true')
-    url.searchParams.set('maxResults', '15')
-    url.searchParams.set('q', q)
-    url.searchParams.set('relevanceLanguage', 'ur')
-    url.searchParams.set('regionCode', 'IN')
-    url.searchParams.set('safeSearch', 'strict')
-    url.searchParams.set('key', key)
-    const res = await fetch(url.toString(), { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return null
-    const data = await res.json()
-    const items = (data.items ?? []) as YTSearchItem[]
-    return items
-      .filter((i) => i.id?.videoId)
-      .map((i, idx) => ({
-        id: `yt-${i.id!.videoId}`,
-        videoId: i.id!.videoId!,
-        title: i.snippet?.title ?? 'Unknown',
-        artist: i.snippet?.channelTitle ?? 'YouTube',
-        category: 'SEARCH',
-        thumbnailUrl:
-          i.snippet?.thumbnails?.high?.url ?? i.snippet?.thumbnails?.medium?.url ?? null,
-        tags: `idx:${idx}`,
-      }))
-  } catch {
-    return null
-  }
-}
 
 function tokens(q: string): string[] {
   return q
@@ -117,10 +75,10 @@ export async function GET(req: Request) {
     const cont = searchParams.get('cont')
     const strict = searchParams.get('strict') === '1'
 
-    // ── SHORTS mode (v0.2.5 — Islamic Reels feed) ──
-    // Sirf guaranteed-vertical Shorts (shortsLockupViewModel parse).
-    // result-filter yahan skip — queries khud Islamic-specific hain +
-    // app-side block-list (`reelConfig/blocked`) user control deta hai.
+    // ── SHORTS mode (Islamic Reels feed) ──
+    // Data API: videoDuration=short + ≤61s filter. result-filter yahan
+    // skip — queries khud Islamic-specific hain + app-side block-list
+    // (`reelConfig/blocked`) user control deta hai.
     if (searchParams.get('shorts') === '1') {
       if (!q) return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
       const sKey = cacheKey(['yt-shorts', q])
@@ -128,7 +86,10 @@ export async function GET(req: Request) {
       if (sCached) return NextResponse.json({ shorts: sCached, source: 'cache' })
       const shorts = await youtubeShortsSearch(q)
       cacheSet(sKey, shorts, CACHE_TTL)
-      return NextResponse.json({ shorts, source: shorts.length ? 'innertube' : 'empty' })
+      return NextResponse.json({
+        shorts,
+        source: shorts.length ? 'youtube-data' : 'empty',
+      })
     }
 
     if (!q && !cont) {
@@ -145,8 +106,8 @@ export async function GET(req: Request) {
       })
     }
 
-    // 1) InnerTube — UNLIMITED, no key (server-side fetch, CORS nahi lagta)
-    // 2) cont token ke saath sirf InnerTube hi pagination deta hai
+    // 1) Official YouTube Data API v3 (search.list + videos.list enrich)
+    // 2) pageToken continuation officially supported
     const page = await youtubeSearchPage(q, cont)
     const filtered = filterSearchResults(page.tracks, strict)
     if (filtered.length) {
@@ -154,20 +115,13 @@ export async function GET(req: Request) {
       cacheSet(key, pageOut, CACHE_TTL)
       return NextResponse.json({
         tracks: filtered,
-        source: 'youtube',
+        source: 'youtube-data',
         continuation: page.continuation,
       })
     }
 
-    // 3) Data API backup (agar key ho) — sirf fresh search ke liye
-    let tracks: QalbTrack[] | null = cont ? null : filterSearchResults(await searchYouTubeDataApi(q) ?? [], strict)
-    if (tracks?.length) {
-      cacheSet(key, { tracks, continuation: null }, CACHE_TTL)
-      return NextResponse.json({ tracks, source: 'youtube', continuation: null })
-    }
-
-    // 4) library fallback
-    tracks = cont ? [] : await searchLocalLibrary(q)
+    // 3) library fallback (key missing / quota khatam / koi result nahi)
+    const tracks: QalbTrack[] = cont ? [] : await searchLocalLibrary(q)
     return NextResponse.json({ tracks, source: 'library', continuation: null })
   } catch (e) {
     console.error('[api/youtube-search] error:', e)

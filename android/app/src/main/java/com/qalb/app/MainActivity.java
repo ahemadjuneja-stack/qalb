@@ -1,8 +1,14 @@
 package com.qalb.app;
 
+import android.app.PictureInPictureParams;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Rational;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
@@ -72,6 +78,67 @@ public class MainActivity extends BridgeActivity {
 
         // Cold-start via Google OAuth deep link (Chrome ne appko launch kiya)
         handleOauthRedirect(getIntent());
+    }
+
+    // ── v0.5.34 — PICTURE-IN-PICTURE (legal background playback) ──
+    // YouTube ka rule: player VISIBLE rehna chahiye — screen-off/hidden
+    // background audio allowed NAHI. Jugad: user app se bahar jaye (home
+    // gesture, dusri app) aur naat/video chal rahi ho to ANDROID PiP me
+    // chhota VISIBLE video window khul jata hai (Chrome/Firefox jaisa).
+    // PiP band (X) ya screen lock → playback pause (JS pipEvent se).
+    // JS player-provider sirf YT queue playback ke waqt flag ON karta hai
+    // (reels/iTube watch par nahi — wo pehle hi background me pause hote).
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    && QalbNativePlugin.isPipWanted()) {
+                PictureInPictureParams.Builder b =
+                        new PictureInPictureParams.Builder().setAspectRatio(new Rational(16, 9));
+                // source-rect hint — video card jahan dikh raha hai wahin se
+                // PiP window khule (smooth zoom animation)
+                try {
+                    float[] r = QalbNativePlugin.pipSourceRect();
+                    if (r != null && r.length == 4 && r[2] > 1 && r[3] > 1) {
+                        android.graphics.Rect src = new android.graphics.Rect(
+                                Math.round(r[0]), Math.round(r[1]),
+                                Math.round(r[0] + r[2]), Math.round(r[1] + r[3]));
+                        b.setSourceRectHint(src);
+                    }
+                } catch (Exception ignored) {
+                }
+                enterPictureInPictureMode(b.build());
+            }
+        } catch (Exception ignored) {
+            // PiP fail (OEM quirk) — normal background, playback ruk jayega
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPip, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPip, newConfig);
+        try {
+            if (isInPip) {
+                // PiP khula — JS batao (audio-only full-player ko video mode
+                // switch karta hai taaki PiP window me video DIKHE)
+                QalbNativePlugin.emitPipEvent("entered");
+            } else {
+                // PiP band (X button / screen lock) — 450ms baad agar user
+                // app wapas expand NAHI kar raha (window focus nahi aaya) to
+                // JS pause kare (YouTube rule: invisible player = no playback)
+                final MainActivity act = this;
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    try {
+                        if (!act.hasWindowFocus()) {
+                            QalbNativePlugin.emitPipEvent("closed");
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }, 450L);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     // ── Google OAuth deep-link (v0.4.4) ─────────────────────────────

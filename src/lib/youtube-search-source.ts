@@ -1,267 +1,55 @@
-// Qalb — UNLIMITED YouTube search source (NO API KEY needed)
+// Qalb — YouTube search source — OFFICIAL Data API v3 (v0.5.34)
 // ─────────────────────────────────────────────────────────────────
-// YouTube Data API ki quota/key ki zaroorat NAHI — YouTube ka apna
-// web InnerTube endpoint use hota hai (wahi jo youtube.com khud use
-// karta hai). Isliye jo bhi naat/hamd/qawwali/kalam search karo —
-// sab milega. UNLIMITED.
+// COMPLIANCE REWRITE: v0.5.33 tak ye file YouTube ka private InnerTube
+// endpoint (/youtubei/v1) use karti thi — wo YouTube ke API Terms ke
+// khilaaf tha. Ab saara search official YouTube Data API v3 se hota hai
+// (yt-data.ts) — key: NEXT_PUBLIC_YOUTUBE_API_KEY (client) /
+// YOUTUBE_API_KEY (server).
 //
-//   1) POST /youtubei/v1/search   (WEB client JSON — pagination support)
-//   2) GET  /results?search_query (HTML → ytInitialData parse fallback)
+//   1) search.list  — video results (pageToken = continuation)
+//   2) videos.list  — views/duration enrichment (1 unit)
+//   3) shorts       — videoDuration=short + ≤61s filter
 //
-// Native (APK): CapacitorHttp — CORS bypass hota hai.
-// Web: normal fetch (CORS block ho to hosted /api/youtube-search
-// server-side wahi same parser use karta hai).
+// Quota note: search = 100 units; free tier 10,000/day — doston wali
+// app ke liye kaafi. Har response caller-level cache hota hai.
 
 import type { QalbTrack } from '@/lib/types'
-
-// YouTube web client ki PUBLIC key — youtube.com ke source me embedded
-const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
-// v0.5.13: client version refresh — stale (2025) version par YouTube
-// kabhi-kabhi empty/stale response deta hai. Current-ish WEB version.
-const CLIENT_NAME = 'WEB'
-const CLIENT_VERSION = '2.20261001.01.00'
-const DESKTOP_UA =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+import { ytSearch, ytShortsSearch as dataShortsSearch } from '@/lib/yt-data'
 
 export interface YTSearchPage {
   tracks: QalbTrack[]
-  continuation: string | null // agla page load karne ka token
+  continuation: string | null // agla page load karne ka token (nextPageToken)
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-interface RawVideo {
-  videoId: string
-  title: string
-  channel: string
-}
-
-// ── native detection + HTTP helpers ─────────────────────────────
-
-async function isNative(): Promise<boolean> {
-  try {
-    const { Capacitor } = await import('@capacitor/core')
-    return Boolean(Capacitor.isNativePlatform?.())
-  } catch {
-    return false
-  }
-}
-
-async function httpGetText(
-  url: string,
-  headers: Record<string, string>
-): Promise<string | null> {
-  try {
-    if (await isNative()) {
-      const { CapacitorHttp } = await import('@capacitor/core')
-      const res = await CapacitorHttp.get({
-        url,
-        headers,
-        connectTimeout: 8000,
-        readTimeout: 12000,
-        responseType: 'text',
-      })
-      if (res.status >= 200 && res.status < 300) {
-        return typeof res.data === 'string' ? res.data : JSON.stringify(res.data)
-      }
-      return null
-    }
-    const res = await fetch(url, { headers, signal: AbortSignal.timeout(12000) })
-    if (!res.ok) return null
-    return await res.text()
-  } catch {
-    return null
-  }
-}
-
-async function httpPostJson(
-  url: string,
-  headers: Record<string, string>,
-  body: unknown
-): Promise<any | null> {
-  try {
-    if (await isNative()) {
-      const { CapacitorHttp } = await import('@capacitor/core')
-      const res = await CapacitorHttp.post({
-        url,
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        data: body as Record<string, unknown>,
-        connectTimeout: 8000,
-        readTimeout: 12000,
-      })
-      if (res.status >= 200 && res.status < 300) return res.data
-      return null
-    }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(12000),
-    })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
-export { httpGetText as ytHttpGetText, extractYtInitialData as ytExtractInitialData }
-
-// reels.ts (v0.2.6) download bhi yahi helper use karta hai —
-// native par CapacitorHttp (CORS bypass), web par normal fetch
-export { httpPostJson as innertubePostJson }
-
-// ── recursive videoRenderer collector (layout-change proof) ─────
-// Poore JSON tree me har videoRenderer dhoondta hai — YouTube ka
-// layout badle to bhi parsing tooti nahi. Live/upcoming skip hote hain.
-
-function collectVideos(node: any, videos: RawVideo[], tokens: string[], depth = 0): void {
-  if (!node || typeof node !== 'object' || depth > 80) return
-  if (Array.isArray(node)) {
-    for (const item of node) collectVideos(item, videos, tokens, depth + 1)
-    return
-  }
-
-  const vr = node.videoRenderer
-  if (vr && typeof vr === 'object') {
-    const videoId = typeof vr.videoId === 'string' ? vr.videoId : null
-    const title =
-      vr.title?.runs?.[0]?.text ??
-      vr.title?.accessibility?.accessibilityData?.label ??
-      null
-    const channel =
-      vr.ownerText?.runs?.[0]?.text ??
-      vr.longBylineText?.runs?.[0]?.text ??
-      vr.shortBylineText?.runs?.[0]?.text ??
-      null
-    const badgeStyles = Array.isArray(vr.badges)
-      ? vr.badges.map((b: any) => String(b?.metadataBadgeRenderer?.style ?? ''))
-      : []
-    const isLive = badgeStyles.some((s) => s.toUpperCase().includes('LIVE'))
-    const isUpcoming = Boolean(vr.upcomingEventData)
-    if (videoId && title && !isLive && !isUpcoming) {
-      videos.push({ videoId, title, channel: channel || 'YouTube' })
-    }
-  }
-
-  const token = node?.continuationItemRenderer?.continuationEndpoint?.continuationCommand
-    ?.token
-  if (typeof token === 'string' && token && !tokens.includes(token)) tokens.push(token)
-
-  for (const key of Object.keys(node)) collectVideos(node[key], videos, tokens, depth + 1)
-}
-
-// ── Shorts collector (v0.2.5 — Islamic Reels ke liye) ────────────
-// shortsLockupViewModel = YouTube Shorts shelf ke items — YE GUARANTEED
-// 9:16 VERTICAL hote hain (YouTube khud sirf Shorts isi me daalta hai,
-// thumbnail bhi isOriginalAspectRatio: true vertical aata hai — tested).
-// reelItemRenderer = purane layouts ka shorts item (fallback).
-
+// Shorts raw item — reels feed (reels.ts) + /api/youtube-search use karte hain
 export interface RawShort {
   videoId: string
   title: string
   views: string
 }
 
-function collectShorts(node: any, shorts: RawShort[], depth = 0): void {
-  if (!node || typeof node !== 'object' || depth > 80) return
-  if (Array.isArray(node)) {
-    for (const item of node) collectShorts(item, shorts, depth + 1)
-    return
-  }
-
-  const lockup = node.shortsLockupViewModel
-  if (lockup && typeof lockup === 'object') {
-    const videoId =
-      lockup?.onTap?.innertubeCommand?.reelWatchEndpoint?.videoId ??
-      (typeof lockup?.entityId === 'string'
-        ? lockup.entityId.replace('shorts-shelf-item-', '')
-        : null)
-    const title =
-      lockup?.overlayMetadata?.primaryText?.content ??
-      (typeof lockup?.accessibilityText === 'string'
-        ? lockup.accessibilityText.split(',').slice(0, -1).join(',')
-        : null)
-    const views = lockup?.overlayMetadata?.secondaryText?.content ?? ''
-    if (typeof videoId === 'string' && videoId && title) {
-      shorts.push({ videoId, title, views })
-    }
-  }
-
-  const reel = node.reelItemRenderer
-  if (reel && typeof reel === 'object') {
-    const videoId = typeof reel.videoId === 'string' ? reel.videoId : null
-    const title =
-      reel.headline?.simpleText ??
-      reel.headline?.runs?.[0]?.text ??
-      null
-    const views = reel.viewCountText?.simpleText ?? ''
-    if (videoId && title) shorts.push({ videoId, title, views })
-  }
-
-  for (const key of Object.keys(node)) collectShorts(node[key], shorts, depth + 1)
-}
-
-function dedupeShorts(shorts: RawShort[]): RawShort[] {
-  const seen = new Set<string>()
-  const out: RawShort[] = []
-  for (const s of shorts) {
-    if (seen.has(s.videoId)) continue
-    seen.add(s.videoId)
-    out.push(s)
-  }
-  return out
-}
-
 /**
- * Sirf YouTube SHORTS (guaranteed 9:16 vertical) search — Islamic Reels feed.
- * InnerTube WEB endpoint, NO API KEY, NO quota. Har query ~15-40 shorts laata hai
- * (Shorts shelf se — landscape videos in me aa hi nahi sakte).
+ * Main YouTube search — official Data API v3. `continuation` = Data API
+ * ka nextPageToken (pehle InnerTube tokens the — v0.5.34 se schema badla).
  */
-export async function youtubeShortsSearch(q: string): Promise<RawShort[]> {
+export async function youtubeSearchPage(
+  q: string,
+  continuation: string | null = null
+): Promise<YTSearchPage> {
   const query = q.trim()
-  if (!query) return []
-  const data = await httpPostJson(
-    `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
-    {
-      'User-Agent': DESKTOP_UA,
-      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-      'X-YouTube-Client-Name': '1',
-      'X-YouTube-Client-Version': CLIENT_VERSION,
-      Referer: 'https://www.youtube.com/',
-    },
-    { ...INNERTUBE_CONTEXT, query }
-  ).catch(() => null)
-  const shorts: RawShort[] = []
-  if (data) collectShorts(data, shorts)
-  if (shorts.length) return dedupeShorts(shorts)
+  if (!query && !continuation) return { tracks: [], continuation: null }
 
-  // fallback: HTML scrape (same parse)
-  const html = await httpGetText(
-    `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=en&gl=IN`,
-    {
-      'User-Agent': DESKTOP_UA,
-      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-      Cookie: 'SOCS=CAI; CONSENT=YES+cb',
-    }
-  ).catch(() => null)
-  if (html) {
-    const parsed = extractYtInitialData(html)
-    if (parsed) collectShorts(parsed, shorts)
-  }
-  return dedupeShorts(shorts)
-}
+  const page = await ytSearch(query, {
+    pageToken: continuation,
+    maxResults: 25,
+    type: 'video',
+  }).catch(() => null)
 
-function pageFromData(data: any): YTSearchPage | null {
-  if (!data || typeof data !== 'object') return null
-  const videos: RawVideo[] = []
-  const tokens: string[] = []
-  collectVideos(data, videos, tokens)
+  if (!page || !page.videos.length) return { tracks: [], continuation: null }
 
-  // dedupe by videoId
   const seen = new Set<string>()
   const tracks: QalbTrack[] = []
-  videos.forEach((v, idx) => {
+  page.videos.forEach((v, idx) => {
     if (seen.has(v.videoId)) return
     seen.add(v.videoId)
     tracks.push({
@@ -275,84 +63,20 @@ function pageFromData(data: any): YTSearchPage | null {
     })
   })
 
-  if (!tracks.length && !tokens.length) return null
-  return { tracks, continuation: tokens[0] ?? null }
+  return { tracks, continuation: page.nextPageToken }
 }
 
-// ── 1. InnerTube JSON search (primary — fast + paginated) ───────
-
-const INNERTUBE_CONTEXT = {
-  context: {
-    client: {
-      clientName: CLIENT_NAME,
-      clientVersion: CLIENT_VERSION,
-      hl: 'en',
-      gl: 'IN',
-    },
-  },
-}
-
-async function innertubeSearch(
-  q: string,
-  continuation: string | null
-): Promise<YTSearchPage | null> {
-  const body = continuation
-    ? { ...INNERTUBE_CONTEXT, continuation }
-    : { ...INNERTUBE_CONTEXT, query: q }
-  const data = await httpPostJson(
-    `https://www.youtube.com/youtubei/v1/search?key=${INNERTUBE_KEY}&prettyPrint=false`,
-    {
-      'User-Agent': DESKTOP_UA,
-      'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-      'X-YouTube-Client-Name': '1',
-      'X-YouTube-Client-Version': CLIENT_VERSION,
-      Referer: 'https://www.youtube.com/',
-    },
-    body
-  )
-  return pageFromData(data)
-}
-
-// ── 2. HTML scrape fallback ─────────────────────────────────────
-
-function extractYtInitialData(html: string): any | null {
-  const marker = 'var ytInitialData = '
-  const start = html.indexOf(marker)
-  if (start === -1) return null
-  const jsonStart = start + marker.length
-  const end = html.indexOf(';</script>', jsonStart)
-  if (end === -1) return null
+/**
+ * Sirf YouTube SHORT-STYLE videos (≤60s) — Islamic Reels feed.
+ * Data API vertical-detection nahi deta, isliye videoDuration=short +
+ * duration filter — landscape chhoti videos bhi aa sakti hain (rare).
+ */
+export async function youtubeShortsSearch(q: string): Promise<RawShort[]> {
+  const query = q.trim()
+  if (!query) return []
   try {
-    return JSON.parse(html.slice(jsonStart, end))
+    return await dataShortsSearch(query)
   } catch {
-    return null
+    return []
   }
-}
-
-async function scrapeSearchHtml(q: string): Promise<YTSearchPage | null> {
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(
-    q
-  )}&sp=EgIQAQ%3D%3D&hl=en&gl=IN`
-  const html = await httpGetText(url, {
-    'User-Agent': DESKTOP_UA,
-    'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
-    Cookie: 'SOCS=CAI; CONSENT=YES+cb',
-  })
-  if (!html) return null
-  return pageFromData(extractYtInitialData(html))
-}
-
-// ── public API ──────────────────────────────────────────────────
-
-export async function youtubeSearchPage(
-  q: string,
-  continuation: string | null = null
-): Promise<YTSearchPage> {
-  if (!q.trim() && !continuation) return { tracks: [], continuation: null }
-  const innertube = await innertubeSearch(q, continuation).catch(() => null)
-  if (innertube) return innertube
-  // HTML scrape se sirf pehla page milta hai (pagination nahi)
-  if (continuation) return { tracks: [], continuation: null }
-  const scraped = await scrapeSearchHtml(q).catch(() => null)
-  return scraped ?? { tracks: [], continuation: null }
 }

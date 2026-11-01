@@ -1,13 +1,16 @@
-// Qalb — GET /api/yt-live?q=<query>&sp=<innertube params>&cont=<continuation>
+// Qalb — GET /api/yt-live?q=<query>&sp=<filter-key>&cont=<continuation>
 // ─────────────────────────────────────────────────────────────────
-// LIVE content engine ka SERVER-SIDE path (web runtime).
-// Browser se YouTube direct fetch CORS/bot-block hota hai — isliye web
-// par live-catalog.ts ye route hit karta hai (same-origin, no CORS).
-// APK native par wahi calls device-side direct jaati hain (CapacitorHttp).
+// ENRICHED content engine ka SERVER-SIDE path (web runtime).
+// Browser se YouTube direct fetch CORS block karta hai — isliye web par
+// live-catalog.ts / itube.ts ye route hit karte hain (same-origin).
+// APK native par wahi calls device-side direct jaati hain.
 //
-// ENRICHED results — views + duration + published time included.
+// v0.5.34 COMPLIANCE: engine ab official YouTube Data API v3 hai
+// (innertube-x.ts → yt-data.ts). sp = friendly filter key:
+// relevance|views|date|week|month|year
+//
+// ENRICHED results — views + duration + published included.
 // Response 30 min in-memory cache (search-cache helpers).
-// Ye route FILTERED search support karta hai: sp = views|date|week|month|year|video
 
 import { NextResponse } from 'next/server'
 import { cacheGet, cacheSet, cacheKey } from '@/lib/search-cache'
@@ -20,14 +23,12 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const q = (searchParams.get('q') || '').trim()
     const cont = searchParams.get('cont')
-    const spRaw = searchParams.get('sp') || 'video'
+    const spRaw = searchParams.get('sp') || 'videoOnly'
 
-    // sp: friendly key ya raw params token dono accept
+    // sp: friendly key (SP map) — unknown key → videoOnly default
     const sp = Object.prototype.hasOwnProperty.call(SP, spRaw)
       ? SP[spRaw as SpKey]
-      : spRaw.startsWith('Eg') || spRaw.startsWith('CAM')
-        ? spRaw
-        : SP.videoOnly
+      : SP.videoOnly
 
     if (!q && !cont) {
       return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
@@ -43,7 +44,7 @@ export async function GET(req: Request) {
       })
     }
 
-    // server-side InnerTube — UNLIMITED, no API key
+    // server-side official Data API search (enriched)
     const page = await innertubeSearchX(q, sp, cont)
     if (!page) {
       return NextResponse.json({ videos: [], continuation: null, source: 'empty' })
@@ -51,7 +52,7 @@ export async function GET(req: Request) {
 
     const out = { videos: page.videos, continuation: page.continuation }
     cacheSet(key, out, CACHE_TTL)
-    return NextResponse.json({ ...out, source: 'innertube' })
+    return NextResponse.json({ ...out, source: 'youtube-data' })
   } catch (e) {
     console.error('yt-live route error:', e)
     return NextResponse.json({ videos: [], continuation: null, source: 'error' })

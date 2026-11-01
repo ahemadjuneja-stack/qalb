@@ -1,9 +1,11 @@
 'use client'
 
-// iTube — YouTube-style ISLAMIC video hub (v0.5.0)
+// iTube — YouTube-style ISLAMIC video hub (v0.5.0, v0.5.34 Data API)
 // ─────────────────────────────────────────────────────────────────
-// Reels ki jagah: InnerTube enriched search (views/duration/published ke
-// saath) + STRICT Islamic filter + taste-based personalization.
+// Reels ki jagah: official Data API enriched search (views/duration/
+// published ke saath) + STRICT Islamic filter + taste-based
+// personalization. Islamic content pehli priority — chips, home feed
+// aur search sab islamic-only filter se guzarte hain.
 //
 //   • Chips  → curated Islamic queries (Naat/Qawwali/Bayan/Movies/Series…)
 //   • Search → user free-text, results paak filter se guzarte hain

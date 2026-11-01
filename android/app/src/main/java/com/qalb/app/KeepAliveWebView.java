@@ -9,13 +9,19 @@ import com.getcapacitor.CapacitorWebView;
 /**
  * Qalb — KeepAliveWebView
  *
- * Screen lock / app background hone par Android WebView ko "invisible"
- * treat karke Chromium media (YouTube IFrame audio) rok deta hai.
- * Ye subclass window/view visibility ko HAMESHA VISIBLE report karwata
- * hai — isliye naat screen band hone ke baad bhi chalti rehti hai.
+ * v0.5.34 COMPLIANCE MODE — ye class ab INERT hai (kuch nahi karti).
  *
- * PlaybackService (foreground service + wake lock) iske saath mil kar
- * process ko Doze se bachata hai.
+ * Pehle ye screen-lock/app-background par WebView ko HAMESHA VISIBLE
+ * report karwata tha taaki YouTube IFrame ka audio background me chalta
+ * rahe — wo YouTube ke rules ke khilaaf tha (player invisible + audio
+ * chalta raha = Premium feature ka bypass).
+ *
+ * Ab: real visibility pass-through hoti hai — screen band / app background
+ * hote hi WebView ka media NATURALLY pause ho jata hai (YouTube rules ke
+ * mutabiq). Background sunne ka legal jugad = Picture-in-Picture
+ * (MainActivity.onUserLeaveHint) — player VISIBLE rehta hai.
+ *
+ * Class remove NAHI ki (koi purana layout/ref toot na jaye) — bas no-op.
  */
 public class KeepAliveWebView extends CapacitorWebView {
 
@@ -30,12 +36,12 @@ public class KeepAliveWebView extends CapacitorWebView {
 
     @Override
     protected void onWindowVisibilityChanged(int visibility) {
-        // Hamesha system ko VISIBLE batao — warna Chromium audio pause kar deta hai
-        super.onWindowVisibilityChanged(View.VISIBLE);
+        // v0.5.34 — real visibility pass-through (compliance)
+        super.onWindowVisibilityChanged(visibility);
     }
 
     @Override
     protected void onVisibilityChanged(View changedView, int visibility) {
-        super.onVisibilityChanged(changedView, View.VISIBLE);
+        super.onVisibilityChanged(changedView, visibility);
     }
 }

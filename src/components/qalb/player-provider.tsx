@@ -11,6 +11,7 @@
 // • Background playback: Android foreground service — screen lock pe bhi naat chalti rahe
 
 import { useEffect, useRef } from 'react'
+import { X } from 'lucide-react'
 import { usePlayerStore, ytBridge } from '@/lib/player-store'
 import { useToast } from '@/hooks/use-toast'
 import { loadYouTubeIframeApi, type YTNamespace } from '@/lib/yt-api'
@@ -19,6 +20,10 @@ import {
   nativeStopPlayback,
   nativeSetStatusBar,
   onNativeMediaAction,
+  isNativeApp,
+  nativeSetPipWanted,
+  onNativePipEvent,
+  type PipRect,
   type QalbMediaAction,
 } from '@/plugins/qalb-native'
 import { getTheme } from '@/lib/theme'
@@ -51,6 +56,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioOnly = usePlayerStore((s) => s.audioOnly)
   const fullOpen = usePlayerStore((s) => s.fullOpen)
   const videoRect = usePlayerStore((s) => s.videoRect)
+  const itubeActive = usePlayerStore((s) => s.itubeActive)
 
   const currentTrack = currentIndex >= 0 ? queue[currentIndex] : null
   const currentVideoId = currentTrack?.videoId ?? null
@@ -235,6 +241,100 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // ── v0.5.34 — PICTURE-IN-PICTURE SYNC (legal background playback) ──
+  // YT queue playback chal raha ho (reels/iTube watch NAHI) to native ko
+  // batao — app minimize par MainActivity PiP window kholta hai (Chrome
+  // jaisa VISIBLE floating video). Ye YouTube-compliant background hai:
+  // player chhupta nahi, sirf chhota ho jata hai. Screen lock / PiP band
+  // = playback pause (pipEvent closed se).
+  useEffect(() => {
+    if (!isNativeApp()) return
+    let lastSig = ''
+    const push = () => {
+      const s = usePlayerStore.getState()
+      const t = s.currentIndex >= 0 ? s.queue[s.currentIndex] : null
+      const want = Boolean(t && s.isPlaying && !s.itubeActive)
+      let rect: PipRect | null = null
+      if (want && hostRef.current) {
+        try {
+          const r = hostRef.current.getBoundingClientRect()
+          // sirf sahi-size visible rect bhejo (hidden 1px host skip)
+          if (
+            r.width > 60 &&
+            r.height > 40 &&
+            r.bottom > 0 &&
+            r.top < window.innerHeight
+          ) {
+            rect = { x: r.left, y: r.top, w: r.width, h: r.height }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      const sig = `${want}|${
+        rect
+          ? `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.w)},${Math.round(rect.h)}`
+          : '-'
+      }`
+      if (sig === lastSig) return
+      lastSig = sig
+      void nativeSetPipWanted(want, rect)
+    }
+    push()
+    const unsub = usePlayerStore.subscribe(push)
+    const iv = window.setInterval(push, 2000) // rect drift catch (scroll etc.)
+    return () => {
+      unsub()
+      window.clearInterval(iv)
+      lastSig = 'teardown'
+      void nativeSetPipWanted(false)
+    }
+  }, [])
+
+  // ── PiP lifecycle — entered: video dikhao, closed: pause ──────────
+  useEffect(() => {
+    let un: (() => void) | null = null
+    onNativePipEvent((kind) => {
+      if (kind === 'entered') {
+        // PiP window me VIDEO dikhe — audio-only walkman UI ki jagah
+        const s = usePlayerStore.getState()
+        if (s.fullOpen && s.audioOnly && s.currentIndex >= 0) {
+          usePlayerStore.setState({ audioOnly: false })
+        }
+      } else if (kind === 'closed') {
+        // PiP X-button / screen lock — player gayab = playback band
+        // (YouTube rule: invisible player ke saath playback nahi)
+        usePlayerStore.setState({ isPlaying: false })
+      }
+    }).then((fn) => {
+      un = fn
+    })
+    return () => {
+      un?.()
+    }
+  }, [])
+
+  // ── Foreground wapas — YT iframe re-sync ────────────────────────
+  // Compliance mode me background/screen-lock par Chromium media khud
+  // pause hota hai (KeepAlive hack gaya). Store isPlaying true rehta hai
+  // — wapas aate hi wahi se chalao (Chrome jaisa resume).
+  useEffect(() => {
+    const onFg = () => {
+      const s = usePlayerStore.getState()
+      if (s.isPlaying && s.currentIndex >= 0 && s.ytApiReady) {
+        window.setTimeout(() => {
+          try {
+            ytBridge.play()
+          } catch {
+            /* iframe not ready */
+          }
+        }, 250)
+      }
+    }
+    window.addEventListener('qalbAppFg', onFg)
+    return () => window.removeEventListener('qalbAppFg', onFg)
+  }, [])
+
   // State changes → notification turant update (play/pause icon, thumbnail, seekbar)
   useEffect(() => {
     return usePlayerStore.subscribe((s, prev) => {
@@ -394,6 +494,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // video mode me host VideoAnchor ke measured rect par baithta hai
   // (walkman logo ki jagah); rect aane tak invisible; warna hidden corner.
   const videoMode = fullOpen && !audioOnly && Boolean(currentTrack)
+  // v0.5.34 — mini video card sirf PLAYING + full-player-band + iTube-band
+  const cardMode =
+    Boolean(currentTrack) && isPlaying && !fullOpen && !itubeActive
 
   let hostClass: string
   let hostStyle: React.CSSProperties = {}
@@ -410,6 +513,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   } else if (videoMode) {
     // rect measure hone tak invisible (80ms me aa jata hai)
     hostClass = 'pointer-events-none fixed inset-x-0 top-0 z-[65] h-[240px] w-full bg-black opacity-0'
+  } else if (cardMode) {
+    // v0.5.34 — VISIBLE MINI VIDEO CARD: audio-only playback me bhi YT
+    // iframe chhota sa VISIBLE rehta hai (bottom-right, mini-player ke
+    // upar) — YouTube ka "player ko chhupao mat" rule ab compliant hai
+    // (1px hidden hack gaya). Tap → full video player, ✕ → pause.
+    hostClass =
+      'pointer-events-none fixed right-3 z-40 h-[83px] w-[148px] overflow-hidden rounded-xl bg-black shadow-xl ring-1 ring-white/15'
+    hostStyle = { bottom: 'calc(8rem + env(safe-area-inset-bottom))' }
   } else {
     hostClass =
       'pointer-events-none fixed bottom-0 right-0 z-0 h-1 w-1 overflow-hidden opacity-[0.02]'
@@ -423,6 +534,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       <div aria-hidden={!videoMode} className={hostClass} style={hostStyle}>
         <div ref={hostRef} className="h-full w-full" />
       </div>
+      {/* mini video card controls — tap = full video player, ✕ = pause */}
+      {cardMode && (
+        <div
+          className="pointer-events-none fixed right-3 z-[41]"
+          style={{ bottom: 'calc(8rem + env(safe-area-inset-bottom))' }}
+        >
+          <button
+            type="button"
+            aria-label="Full player kholen"
+            onClick={() => usePlayerStore.setState({ fullOpen: true, audioOnly: false })}
+            className="pointer-events-auto absolute inset-0 h-[83px] w-[148px] cursor-pointer"
+          />
+          <button
+            type="button"
+            aria-label="Playback pause"
+            onClick={() => usePlayerStore.setState({ isPlaying: false })}
+            className="pointer-events-auto absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/90 text-white/90 shadow ring-1 ring-white/20"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </>
   )
 }
