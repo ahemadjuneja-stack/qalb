@@ -257,6 +257,58 @@ export function ItubeWatch({
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
+  // ── v0.5.28 NET OFF/ON FAST RECOVERY ───────────────────────────
+  // Net katte par YT iframe endless buffering me atak jata tha aur net
+  // wapas aane par khud recover nahi karta (user: "loading zyada leta
+  // hai"). Ab: offline par save position; online par 1.2s baad wahi
+  // video CURRENT POSITION se reload + resume — 2-3 dab me wapas chalu.
+  useEffect(() => {
+    const resumeRef = { playing: false }
+
+    const onOffline = () => {
+      try {
+        const p = ytPlayerRef.current
+        if (!p) return
+        const st = p.getPlayerState()
+        resumeRef.playing = st === 1 || st === 3 // playing ya buffering
+      } catch {
+        /* player gone */
+      }
+    }
+
+    const onOnline = () => {
+      const vid = curVidRef.current
+      if (!vid) return
+      window.setTimeout(() => {
+        try {
+          const p = ytPlayerRef.current
+          if (!p) return
+          const pos = posRef.current || 0
+          p.loadVideoById(vid, Math.floor(pos))
+          if (!resumeRef.playing) {
+            // user ne khud pause kiya tha — load ke turant baad pause
+            window.setTimeout(() => {
+              try {
+                if (posRef.current > 0) p.pauseVideo()
+              } catch {
+                /* ignore */
+              }
+            }, 2500)
+          }
+        } catch {
+          /* player gone */
+        }
+      }, 1200)
+    }
+
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online', onOnline)
+    return () => {
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [])
+
   const toggleFullscreen = () => {
     try {
       if (document.fullscreenElement) {

@@ -26,6 +26,10 @@ interface PlayerState {
   failedVideoIds: string[]
   recents: QalbTrack[]
   itubeActive: boolean // v0.5.19: iTube video watch khula hai (uske YT player par notification buttons)
+  // v0.5.28 — video mode me YT host isi rect par baithta hai (full-player
+  // modal apne walkman-cover ke EXACT spot ko measure karke deta hai —
+  // "video wahi dikhe jahan walkman ka logo hai")
+  videoRect: { top: number; left: number; width: number; height: number } | null
 
   // internal setters
   setYtApiReady: (v: boolean) => void
@@ -34,6 +38,7 @@ interface PlayerState {
   setDuration: (d: number) => void
   markFailed: (videoId: string) => void
   setItubeActive: (v: boolean) => void
+  setVideoRect: (r: { top: number; left: number; width: number; height: number } | null) => void
 
   // actions
   playQueue: (tracks: QalbTrack[], startIndex?: number) => void
@@ -119,7 +124,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   failedVideoIds: [],
   recents: [],
   itubeActive: false,
+  videoRect: null,
 
+  setVideoRect: (r) => set({ videoRect: r }),
   setYtApiReady: (v) => set({ ytApiReady: v }),
   setBuffering: (v) => set({ isBuffering: v }),
   setPosition: (p) => set({ position: p }),

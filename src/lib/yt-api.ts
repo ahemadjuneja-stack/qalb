@@ -5,7 +5,7 @@
 // dono isi se YT API load karte hain — single script, single promise.
 
 export interface YTPlayer {
-  loadVideoById: (videoId: string) => void
+  loadVideoById: (videoId: string, startSeconds?: number) => void
   cueVideoById: (videoId: string) => void
   playVideo: () => void
   pauseVideo: () => void

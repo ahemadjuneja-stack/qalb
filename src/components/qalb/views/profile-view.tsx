@@ -18,16 +18,20 @@ import {
   LogIn,
   LogOut,
   Sparkles,
+  Heart,
+  Play,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAppUpdate } from '@/hooks/use-app-update'
 import { getDownloads, removeDownload, isNativeCapacitor } from '@/lib/downloads'
+import { useFavoritesStore } from '@/lib/favorites'
+import { usePlayerStore } from '@/lib/player-store'
 import { QALB } from '@/lib/qalb'
 import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import { useQalbAuth } from '@/lib/auth'
 import { getTasteProfile, useTasteStore } from '@/lib/recommend'
 import { useViewBackHandler } from '@/lib/back-stack'
-import type { SavedDownload } from '@/lib/types'
+import type { QalbTrack, SavedDownload } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
 
@@ -67,6 +71,27 @@ export function ProfileView() {
     setTheme(getTheme())
     return () => clearTimeout(t)
   }, [])
+
+  // v0.5.28 — favorites (player ke ❤️ se bani list)
+  const favorites = useFavoritesStore((s) => s.favorites)
+  const loadFavorites = useFavoritesStore((s) => s.loadFavorites)
+  const favLoaded = useFavoritesStore((s) => s.loaded)
+  const toggleFavorite = useFavoritesStore((s) => s.toggleFavorite)
+  const playQueue = usePlayerStore((s) => s.playQueue)
+
+  useEffect(() => {
+    if (!favLoaded) loadFavorites()
+  }, [favLoaded, loadFavorites])
+
+  const playFavorite = (track: QalbTrack, i: number) => {
+    playQueue(favorites, i)
+    toast({ title: 'Chal raha hai ❤️', description: track.title })
+  }
+
+  const unFavorite = (track: QalbTrack) => {
+    toggleFavorite(track)
+    toast({ title: 'Favorites se hata diya', description: track.title })
+  }
 
   const saveName = (value: string) => {
     const v = value.trim() || 'Musafir'
@@ -316,6 +341,62 @@ export function ProfileView() {
             >
               <Download className="h-4 w-4" /> Update Download Karein (APK)
             </button>
+          </div>
+        )}
+      </section>
+
+      {/* favorites — player ke ❤️ se bani list (v0.5.28) */}
+      <section aria-label="Favorites">
+        <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
+          <Heart className="h-4 w-4" /> Favorites ({favorites.length})
+        </h2>
+        {favorites.length === 0 ? (
+          <div className="card-surface rounded-2xl p-5 text-center">
+            <p className="text-sm text-emerald-200/60">Abhi koi favorite nahi.</p>
+            <p className="mt-1 text-[11px] text-emerald-200/40">
+              Player me ❤️ button dabao — pasand ka qawwali/naat yahan jama hoga.
+            </p>
+          </div>
+        ) : (
+          <div className="card-surface thin-scrollbar max-h-80 overflow-y-auto rounded-2xl p-2">
+            {favorites.map((t, i) => (
+              <div key={t.videoId} className="flex items-center gap-3 rounded-xl px-2 py-2">
+                <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
+                  {t.thumbnailUrl ? (
+                    <img src={t.thumbnailUrl} alt="" className="absolute left-1/2 top-1/2 h-[133.33%] w-auto max-w-none min-w-full -translate-x-1/2 -translate-y-1/2 object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center">🕌</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => playFavorite(t, i)}
+                  className="min-w-0 flex-1 text-left"
+                  aria-label={`Play ${t.title}`}
+                >
+                  <span className="block truncate text-[13px] font-semibold text-emerald-50">
+                    {t.title}
+                  </span>
+                  <span className="block text-[10.5px] text-emerald-200/50">{t.artist}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => playFavorite(t, i)}
+                  aria-label={`Play ${t.title}`}
+                  className="emerald-gradient flex h-8 w-8 items-center justify-center rounded-full text-emerald-950 transition active:scale-90"
+                >
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => unFavorite(t)}
+                  aria-label={`Remove ${t.title} from favorites`}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-rose-300/80 transition hover:bg-rose-400/10 hover:text-rose-300"
+                >
+                  <Heart className="h-4 w-4 fill-current" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </section>
