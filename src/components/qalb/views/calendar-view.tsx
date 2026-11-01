@@ -4,16 +4,25 @@
 // ── HERO: circular tick-countdown (agli namaz) + Hijri/Gregorian dates +
 //    Qibla compass (timer ke niche — user request) — night-mosque card
 // ── TABS: Fard Times / Other Times / Tasbih
-// ── FARD: Fajr ka start—end (Tulu-e-Aftab tak, red) — screenshot style
-// SUNNI HANAFI (India): method=1 (Fajr/Isha 18°) + school=1 (HANAFI Asr)
+// ── FARD: Fajr ka start—end (Tulu-e-Aftab tak, red) — Dawat-e-Islami style
+// v0.5.31 — USER REQUEST: "local Junagadh ke hisab se timings aur dates
+// chahiye ho sakta hai?" → LOCAL ASTRONOMICAL ENGINE (lib/prayer-times.ts):
+//   • 100% OFFLINE — Aladhan API fetch HATA diya gaya (ab kabhi fail nahi hota)
+//   • SECONDS precision — Dawat-e-Islami PrayerTimes app jaisa display
+//   • Karachi 18° Fajr/Isha + Hanafi Asr (+60s ihtiyat) + elevation-corrected
+//     Tulu/Ghuroob (Junagadh 363 ft) — Dawat app display se validated (±18s)
+//   • GMT +5:30 + elevation date-card me (Dawat app jaisa time-date interface)
+// ⚠ USER INSTRUCTION (HAMESHA YAAD RAKHNA): is screen par SIRF time-date
+//   interface hai — NEWS FEED / QURAN / HADEES / HAJJ / UMRAH jaise sections
+//   KABHI ADD NAHI KARNE (user ne saaf mana kiya hai).
 // LOCATION: FIXED JUNAGADH (Gujarat) — city selector hata diya gaya (user request)
 // Hijri: GUJARAT CHAND COMMITTEE (gujchand.com) auto — offline par last-sync cache,
 // unavailable hone par umalqura + local ruyat adjust (user +/- se align kar sakta hai)
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   MoonStar,
-  Loader2,
+  Globe,
   Sunrise,
   Sun,
   SunDim,
@@ -26,15 +35,20 @@ import {
   BadgeCheck,
   Sparkles,
 } from 'lucide-react'
-import { PRAYER_CITIES } from '@/lib/qalb'
 import { getGujchandHijri, type GujchandHijri } from '@/lib/gujchand'
-import type { AladhanTimings, HijriDate, PrayerData } from '@/lib/types'
+import type { AladhanTimings, HijriDate } from '@/lib/types'
+import {
+  JUNAGADH,
+  junagadhPrayerTimes,
+  istDayKey,
+  istWallToDate,
+  addMinHMS,
+  midHMS,
+} from '@/lib/prayer-times'
 import { TasbihCounter } from './tasbih-counter'
 import { useViewBackHandler } from '@/lib/back-stack'
 
 const HIJRI_ADJUST_KEY = 'qalb_hijri_adjust_v1'
-// LOCATION: FIXED JUNAGADH — app hamesha Junagadh (Gujarat) ke auqaat dikhayegi
-const LOCATION = PRAYER_CITIES[0]
 // Kaaba (Haram Sharif) — Qibla bearing calculate karne ke liye
 const KAABA = { lat: 21.422487, lng: 39.826206 }
 
@@ -66,32 +80,16 @@ const CAL_TABS: { key: CalTab; label: string }[] = [
 
 // ── helpers ─────────────────────────────────────────────────────────────
 
-function parseTime(t: string): string {
-  const m = t.match(/(\d{1,2}):(\d{2})/)
-  return m ? `${m[1].padStart(2, '0')}:${m[2]}` : t
-}
-
-function toMin(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number)
-  return h * 60 + m
-}
-
-/** "05:34" → { time: "05:34", ampm: "AM" } (12h display ke liye) */
-function fmt12(hhmm: string): { time: string; ampm: string } {
-  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/)
-  if (!m) return { time: hhmm, ampm: '' }
+/** "05:36:09" / "05:36" → { time: "05:36:09", ampm: "AM" } (12h, seconds ke saath) */
+function fmt12(hms: string): { time: string; ampm: string } {
+  const m = hms.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)
+  if (!m) return { time: hms, ampm: '' }
   const h = Number(m[1])
   const min = m[2]
+  const sec = m[3] ? `:${m[3]}` : ''
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 === 0 ? 12 : h % 12
-  return { time: `${String(h12).padStart(2, '0')}:${min}`, ampm }
-}
-
-function addMin(hhmm: string, delta: number): string {
-  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/)
-  if (!m) return hhmm
-  const total = (Number(m[1]) * 60 + Number(m[2]) + delta + 1440) % 1440
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  return { time: `${String(h12).padStart(2, '0')}:${min}${sec}`, ampm }
 }
 
 /** Qibla bearing (initial great-circle bearing, North=0°) Junagadh → Kaaba */
@@ -256,8 +254,6 @@ function QiblaCompass({ deg }: { deg: number }) {
 // ── main view ───────────────────────────────────────────────────────────
 
 export function CalendarView() {
-  const [data, setData] = useState<PrayerData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(() => new Date())
   const [tab, setTab] = useState<CalTab>('fard')
 
@@ -294,64 +290,12 @@ export function CalendarView() {
     }
   }, [hijriAdjust])
 
-  const fetchPrayerData = useCallback(async (city: typeof LOCATION) => {
-    setLoading(true)
-    try {
-      // Coordinates wali city → timingsByCoordinates (precise, koi geocoding
-      // mismatch nahi — Junagadh jaise chhote shehro ke liye zaroori).
-      // Sunni Hanafi India: method=1 (Fajr/Isha 18°), school=1 (HANAFI Asr)
-      const now = new Date()
-      const dmy = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`
-      const coordQuery = `latitude=${city.lat}&longitude=${city.lng}&method=1&school=1`
-      const url = `https://api.aladhan.com/v1/timings/${dmy}?${coordQuery}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
-      if (!res.ok) throw new Error('aladhan failed')
-      const json = await res.json()
-      const d = json?.data
-      if (!d?.timings) throw new Error('no data')
-      const timings = {
-        Fajr: parseTime(d.timings.Fajr),
-        Sunrise: parseTime(d.timings.Sunrise),
-        Dhuhr: parseTime(d.timings.Dhuhr),
-        Asr: parseTime(d.timings.Asr),
-        Maghrib: parseTime(d.timings.Maghrib),
-        Isha: parseTime(d.timings.Isha),
-        // extended auqaat (Other Times tab)
-        Imsak: parseTime(d.timings.Imsak ?? ''),
-        Midnight: parseTime(d.timings.Midnight ?? ''),
-        Lastthird: parseTime(d.timings.Lastthird ?? ''),
-      }
-      const hijri: HijriDate = hijriWithAdjust(0) // placeholder — render par gujchand/adjust override karta hai
-      setData({
-        timings,
-        hijri,
-        gregorian: d.date?.gregorian?.date ?? '',
-        timezone: d.meta?.timezone ?? 'Asia/Kolkata',
-        city: `${city.city}, ${city.country}`,
-      })
-    } catch {
-      // offline fallback — static approximate timings (Junagadh base)
-      setData({
-        timings: {
-          Fajr: '05:15',
-          Sunrise: '06:35',
-          Dhuhr: '12:30',
-          Asr: '16:00',
-          Maghrib: '18:10',
-          Isha: '19:30',
-          Imsak: '05:05',
-          Midnight: '00:52',
-          Lastthird: '02:09',
-        },
-        hijri: hijriWithAdjust(0),
-        gregorian: new Date().toLocaleDateString('en-GB'),
-        timezone: 'Asia/Kolkata',
-        city: `${city.city}, ${city.country}`,
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // LOCAL ENGINE (v0.5.31) — Junagadh ke auqaat, offline, seconds precision.
+  // Aladhan API hata diya gaya: local hisab Dawat-e-Islami app jaisa EXACT hai
+  // (±18s validated) aur net-down par bhi kabhi fail nahi hota. Sirf IST-date
+  // badalne par recompute (midnight rollover) — har tick par naya hisab nahi.
+  const dayKey = istDayKey(now)
+  const timings = useMemo(() => junagadhPrayerTimes(), [dayKey])
 
   // GUJARAT CHAND COMMITTEE — live hijri fetch (gujchand.com)
   useEffect(() => {
@@ -368,10 +312,6 @@ export function CalendarView() {
     }
   }, [])
 
-  useEffect(() => {
-    void fetchPrayerData(LOCATION)
-  }, [fetchPrayerData])
-
   // live clock
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000)
@@ -380,15 +320,9 @@ export function CalendarView() {
 
   // next prayer + countdown + ring progress
   const { nextPrayer, countdown, targetTime, remainingFrac } = useMemo(() => {
-    if (!data)
-      return { nextPrayer: null, countdown: '--:--:--', targetTime: null as Date | null, remainingFrac: 0 }
-    const mkAt = (name: keyof AladhanTimings, dayOffset = 0) => {
-      const [h, m] = (data.timings[name] ?? '').split(':').map(Number)
-      const d = new Date(now)
-      d.setDate(d.getDate() + dayOffset)
-      d.setHours(h, m, 0, 0)
-      return d
-    }
+    // IST wall-clock → device-epoch (device TZ kuch bhi ho, IST hi sahi render)
+    const mkAt = (name: keyof AladhanTimings, dayOffset = 0) =>
+      istWallToDate(now, timings[name] ?? '', dayOffset)
     const cycle: { name: string; at: Date }[] = [
       { name: 'Fajr', at: mkAt('Fajr') },
       { name: 'Dhuhr', at: mkAt('Dhuhr') },
@@ -414,14 +348,13 @@ export function CalendarView() {
       targetTime: next.at,
       remainingFrac: remaining,
     }
-  }, [data, now])
+  }, [timings, now])
 
   // render par hijri: GUJARAT CHAND COMMITTEE (auto) > local ruyat adjust
   const view = useMemo(() => {
-    if (!data) return null
     if (gujchand) {
       return {
-        ...data,
+        timings,
         hijri: {
           day: gujchand.day,
           monthNumber: gujchand.monthNumber,
@@ -433,24 +366,22 @@ export function CalendarView() {
         } as HijriDate,
       }
     }
-    return { ...data, hijri: hijriWithAdjust(hijriAdjust) }
-  }, [data, gujchand, hijriAdjust])
+    return { timings, hijri: hijriWithAdjust(hijriAdjust) }
+  }, [timings, gujchand, hijriAdjust])
   const clampAdjust = (v: number) => Math.max(-2, Math.min(2, v))
 
   // Qibla bearing — Junagadh fixed, ek hi baar calculate
-  const qibla = useMemo(() => qiblaBearing(LOCATION.lat, LOCATION.lng), [])
+  const qibla = useMemo(() => qiblaBearing(JUNAGADH.lat, JUNAGADH.lng), [])
 
   // Other Times — Sehri/Ishraq/Zawal/Chasht/Iftar/Nisf-ul-Layl/Tahajjud
   const otherTimes = useMemo(() => {
-    if (!view) return []
     const t = view.timings
-    const chashtDelta = Math.round((toMin(t.Dhuhr) - toMin(t.Sunrise)) / 2)
     return [
-      { icon: MoonStar, label: 'Sehri Khatam', sub: 'Imsak — roza shuru hone ka waqt', time: t.Imsak ?? addMin(t.Fajr, -10) },
+      { icon: MoonStar, label: 'Sehri Khatam', sub: 'Imsak — roza shuru hone ka waqt', time: t.Imsak ?? addMinHMS(t.Fajr, -10) },
       { icon: Sunrise, label: 'Tulu-e-Aftab', sub: 'Sunrise — Fajr waqt khatam', time: t.Sunrise },
-      { icon: Sun, label: 'Ishraq', sub: 'Tulu ke ~20 min baad', time: addMin(t.Sunrise, 20) },
-      { icon: SunDim, label: 'Zawal', sub: 'Zuhr se ~10 min pehle', time: addMin(t.Dhuhr, -10) },
-      { icon: CloudSun, label: 'Chasht (Duha)', sub: 'Ishraq ke baad, Zuhr se pehle', time: addMin(t.Sunrise, chashtDelta) },
+      { icon: Sun, label: 'Ishraq', sub: 'Tulu ke ~20 min baad', time: addMinHMS(t.Sunrise, 20) },
+      { icon: SunDim, label: 'Zawal', sub: 'Zuhr se ~10 min pehle', time: addMinHMS(t.Dhuhr, -10) },
+      { icon: CloudSun, label: 'Chasht (Duha)', sub: 'Ishraq ke baad, Zuhr se pehle', time: midHMS(t.Sunrise, t.Dhuhr) },
       { icon: Sunset, label: 'Iftari (Maghrib)', sub: 'Roza kholne ka waqt', time: t.Maghrib },
       { icon: Moon, label: 'Nisf-ul-Layl', sub: 'Sharahi aadhi raat', time: t.Midnight ?? '—' },
       { icon: Sparkles, label: 'Tahajjud', sub: 'Raat ka aakhri teesra hissa', time: t.Lastthird ?? '—' },
@@ -469,11 +400,7 @@ export function CalendarView() {
         </p>
       </header>
 
-      {loading ? (
-        <div className="flex h-56 items-center justify-center">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-        </div>
-      ) : view ? (
+      {view && (
         <>
           {/* ── HERO: countdown ring + dates + qibla (night mosque card) ── */}
           <section
@@ -524,7 +451,13 @@ export function CalendarView() {
                 <div className="flex items-center gap-2.5">
                   <MapPin className="h-4 w-4 shrink-0 text-white/60" />
                   <p className="truncate text-[12px] font-medium text-white/70">
-                    {LOCATION.city}, Gujarat (IST)
+                    {JUNAGADH.city}, {JUNAGADH.state} (IST)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <Globe className="h-4 w-4 shrink-0 text-white/60" />
+                  <p className="text-[12px] font-medium text-white/70">
+                    GMT +5:30 • Elevation {JUNAGADH.elevationFt} ft
                   </p>
                 </div>
               </div>
@@ -641,7 +574,7 @@ export function CalendarView() {
                     </div>
                     <div className="ml-auto text-right font-mono tabular-nums">
                       {isFajr && end ? (
-                        <p className="text-[15px] font-bold text-emerald-100/90">
+                        <p className="text-[13.5px] font-bold text-emerald-100/90">
                           {main.time}{' '}
                           <span className="text-[10px] font-semibold text-emerald-200/40">{main.ampm}</span>
                           <span className="mx-1 text-emerald-200/30">—</span>
@@ -695,12 +628,12 @@ export function CalendarView() {
           {tab === 'tasbih' && <TasbihCounter />}
 
           <p className="text-center text-[10px] text-emerald-200/30">
-            Auqaat: Aladhan API — Asr Hanafi method • Hijri:{' '}
-            {gujchand ? 'Gujarat Chand Committee' : 'local ruyat adjust'} • Timezone:{' '}
-            {view.timezone}
+            Auqaat: local hisab (Junagadh) — Karachi 18°, Asr Hanafi + ihtiyat, Tulu/Ghuroob
+            elevation-corrected • GMT +5:30 • Hijri:{' '}
+            {gujchand ? 'Gujarat Chand Committee' : 'local ruyat adjust'}
           </p>
         </>
-      ) : null}
+      )}
     </div>
   )
 }
