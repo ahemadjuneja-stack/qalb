@@ -308,7 +308,7 @@ public class UpdaterPlugin extends Plugin {
             // ye flag same-signer update ko BINA user-action install karta hai
             // (na installer dialog, na Play Protect scan prompt)
             params.setRequireUserAction(
-                    PackageInstaller.SessionParams.REQUIRE_USER_ACTION_NOT_REQUIRED);
+                    PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
             silent = true;
         }
 
