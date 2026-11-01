@@ -62,6 +62,9 @@ const GUEST_KEY = 'qalb_guest_v1'
 // native prefs nahi. v0.5.21: session ab dono jagah rehti hai.
 const KV_AUTH = 'qalb_auth_v1'
 const KV_GUEST = 'qalb_guest_v1'
+// v0.5.26: fullResetAndReload ka stash (WebView wipe se pehle native KV
+// me bache hue keys) — boot par localStorage khali ho to wapas likhte hain
+const KV_STASH = 'qalb_reset_stash_v1'
 
 function readGuest(): boolean {
   if (typeof window === 'undefined') return false
@@ -103,6 +106,54 @@ function mirrorGuestFlag(guest: boolean) {
   void nativeKvSet(KV_GUEST, guest ? '1' : '0')
 }
 
+// ── v0.5.26: CLOUD device-session (uninstall-proof restore) ──────
+// setSession ke 2.5s baad encrypted refresh-token cloud me save —
+// uninstall/reinstall/WebView-wipe HAR case me login wapis aayega.
+let cloudSaveTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleCloudSave(u: QalbUser) {
+  if (cloudSaveTimer) clearTimeout(cloudSaveTimer)
+  cloudSaveTimer = setTimeout(() => {
+    void import('@/lib/device-session')
+      .then((m) =>
+        m.saveDeviceSession({
+          uid: u.uid,
+          phone: u.phone,
+          email: u.email,
+          name: u.name,
+          photoUrl: u.photoUrl,
+          provider: u.provider,
+          refreshToken: u.refreshToken,
+        })
+      )
+      .catch(() => {})
+  }, 2500)
+}
+
+/** fullResetAndReload ka stash wapas localStorage me (khali ho to hi) */
+async function rehydrateResetStash(): Promise<void> {
+  try {
+    if (typeof window === 'undefined') return
+    if (window.localStorage.length > 0) {
+      // localStorage zinda hai — stash purana/purano-wala hai, mita do
+      void nativeKvSet(KV_STASH, '')
+      return
+    }
+    const raw = await nativeKvGet(KV_STASH)
+    if (!raw) return
+    const map = JSON.parse(raw) as Record<string, string>
+    for (const [k, v] of Object.entries(map)) {
+      try {
+        window.localStorage.setItem(k, v)
+      } catch {
+        /* ignore */
+      }
+    }
+    void nativeKvSet(KV_STASH, '')
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Login ke baad ka boot kaam (init fast-path + native-restore dono se) */
 function bootLoggedIn(u: QalbUser) {
   void ensureIdToken() // expiry nikaal rahi ho to chup-chaap refresh
@@ -116,25 +167,79 @@ function bootLoggedIn(u: QalbUser) {
   void u
 }
 
+/** Restore apply — localStorage + mirror + cloud teeno jagah likh do */
+function applyRestored(restored: QalbUser) {
+  persistUser(restored)
+  useQalbAuth.setState({ user: restored, guest: false, ready: true })
+  bootLoggedIn(restored)
+}
+
+/** v0.5.26: der se restore — mirror dobara + cloud device-session.
+ *  Slow-boot / update-first-boot par pehli koshish rukh jati thi —
+ *  ab 3s/8s par dobara koshish hoti hai (gate khud gayab ho jayega). */
+function scheduleLateRestore() {
+  const tries: Array<() => Promise<void>> = [
+    async () => {
+      const raw = await nativeKvGet(KV_AUTH)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as QalbUser
+      if (parsed?.uid && parsed?.refreshToken) applyRestored(parsed)
+    },
+    async () => {
+      const ds = await import('@/lib/device-session')
+      const seed = await ds.restoreDeviceSession()
+      if (seed) {
+        applyRestored({
+          uid: seed.uid,
+          phone: seed.phone,
+          email: seed.email,
+          name: seed.name,
+          photoUrl: seed.photoUrl,
+          provider: seed.provider,
+          idToken: '',
+          refreshToken: seed.refreshToken,
+          expiresAt: 0,
+        })
+      }
+    },
+  ]
+  let i = 0
+  const tick = () => {
+    const st = useQalbAuth.getState()
+    if (st.user || st.guest) return // beech me login/guest ho gaya — rukho
+    const fn = tries[i++]
+    if (!fn) return
+    void fn()
+      .catch(() => {})
+      .finally(() => {
+        const now = useQalbAuth.getState()
+        if (!now.user && !now.guest && i < tries.length) setTimeout(tick, i === 1 ? 3000 : 5000)
+      })
+  }
+  setTimeout(tick, 3000)
+}
+
 export const useQalbAuth = create<AuthState>((set) => ({
   user: null,
   ready: false,
   guest: false,
   loginOpen: false,
   init: () => {
-    const u = readUser()
-    if (u) {
-      // FAST PATH — localStorage zinda hai. Mirror ko bhi fresh rakho
-      // (purane APK se aaye user ka native backup yahin ban jayega).
-      void nativeKvSet(KV_AUTH, JSON.stringify(u))
-      set({ user: u, guest: false, ready: true })
-      bootLoggedIn(u)
-      return
-    }
-    // WebView storage wipe ho chuka hai (update/clear/quota) — native
-    // mirror se RESTORE. ready abhi false rahega (login-gate flash na
-    // ho), 1.6s race-guard: native atka to normal flow khud aage badhega.
     void (async () => {
+      // v0.5.26: factory-reset stash pehle wapas lao (khali localStorage)
+      await rehydrateResetStash()
+      const u = readUser()
+      if (u) {
+        // FAST PATH — localStorage zinda hai. Mirror ko bhi fresh rakho
+        // (purane APK se aaye user ka native backup yahin ban jayega).
+        void nativeKvSet(KV_AUTH, JSON.stringify(u))
+        set({ user: u, guest: false, ready: true })
+        bootLoggedIn(u)
+        return
+      }
+      // WebView storage wipe ho chuka hai (update/clear/quota) — native
+      // mirror se RESTORE. ready abhi false rahega (login-gate flash na
+      // ho), 4s race-guard: native atka to normal flow khud aage badhega.
       let restored: QalbUser | null = null
       let guestNative = false
       try {
@@ -151,24 +256,25 @@ export const useQalbAuth = create<AuthState>((set) => ({
             }
             guestNative = (await nativeKvGet(KV_GUEST)) === '1'
           })(),
-          new Promise<void>((resolve) => setTimeout(resolve, 1600)),
+          new Promise<void>((resolve) => setTimeout(resolve, 4000)),
         ])
       } catch {
         /* native nahi (web) / purana APK — local flow */
       }
       if (restored) {
-        // localStorage me wapas likho — poori app pehle jaisi chalegi
-        persistUser(restored)
-        set({ user: restored, guest: false, ready: true })
-        bootLoggedIn(restored)
+        applyRestored(restored)
       } else {
         set({ user: null, guest: readGuest() || guestNative, ready: true })
+        // v0.5.26: gate aane de — 3s/8s par mirror+cloud se dobara
+        // koshish hogi (slow boot / uninstall-reinstall dono cover)
+        if (!guestNative && !readGuest()) scheduleLateRestore()
       }
     })()
   },
   setSession: (u) => {
     persistUser(u)
     mirrorGuestFlag(false) // ab asli user hai
+    scheduleCloudSave(u) // v0.5.26: cloud device-session (uninstall-proof)
     set({ user: u, guest: false })
   },
   continueAsGuest: () => {
@@ -179,6 +285,10 @@ export const useQalbAuth = create<AuthState>((set) => ({
     persistUser(null)
     // manual logout → Musafir mode (gate dobara NAHI aata — app chalti rahe)
     mirrorGuestFlag(true)
+    // v0.5.26: cloud device-session bhi mitao — auto-restore na ho
+    void import('@/lib/device-session')
+      .then((m) => m.deleteDeviceSession())
+      .catch(() => {})
     set({ user: null, guest: true })
   },
   openLogin: () => set({ loginOpen: true }),
@@ -257,38 +367,60 @@ export async function ensureIdToken(): Promise<QalbUser | null> {
   const { apiKey } = await getAuthConfig()
   if (!apiKey) return u // key nahi — purana token try karo
 
-  try {
-    const res = await withNetTimeout(
-      fetch(`https://securetoken.googleapis.com/v1/token?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: u.refreshToken,
+  // v0.5.26: 2 koshish. PEHLE ka bug — koi bhi non-OK (5xx/429/api-key
+  // galti) par foran logout ho jata tha. Ab: sirf PAKKA auth-rejection
+  // (revoke/not-found) par logout; transient error par purana token.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1200))
+    try {
+      const res = await withNetTimeout(
+        fetch(`https://securetoken.googleapis.com/v1/token?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            grant_type: 'refresh_token',
+            refresh_token: u.refreshToken,
+          }),
         }),
-      }),
-      10_000
-    )
-    if (!res.ok) {
-      useQalbAuth.getState().logout() // refresh token revoke — logout
-      return null
+        10_000
+      )
+      if (res.ok) {
+        const j = (await res.json()) as {
+          id_token: string
+          refresh_token: string
+          expires_in: string
+        }
+        const next: QalbUser = {
+          ...u,
+          idToken: j.id_token,
+          refreshToken: j.refresh_token,
+          expiresAt: Date.now() + Number(j.expires_in || 3600) * 1000,
+        }
+        useQalbAuth.getState().setSession(next)
+        return next
+      }
+      // !res.ok — asli wajah padho: pakka auth-rejection? (v0.5.26)
+      let msg = ''
+      try {
+        const j = (await res.json()) as { error?: { message?: string } }
+        msg = String(j?.error?.message ?? '')
+      } catch {
+        /* body skip */
+      }
+      if (
+        /INVALID_REFRESH_TOKEN|USER_NOT_FOUND|USER_DISABLED|INVALID_ID_TOKEN|UNREGISTERED|TOKEN_EXPIRED/i.test(
+          msg
+        )
+      ) {
+        useQalbAuth.getState().logout() // token sach me revoke — logout
+        return null
+      }
+      // transient (5xx/429/api-key) — agri attempt / purana token
+    } catch {
+      return u // network slow — purana token se kaam chalao
     }
-    const j = (await res.json()) as {
-      id_token: string
-      refresh_token: string
-      expires_in: string
-    }
-    const next: QalbUser = {
-      ...u,
-      idToken: j.id_token,
-      refreshToken: j.refresh_token,
-      expiresAt: Date.now() + Number(j.expires_in || 3600) * 1000,
-    }
-    useQalbAuth.getState().setSession(next)
-    return next
-  } catch {
-    return u // network slow — purana token se kaam chalao
   }
+  return u // dono koshish transient-fail — logout NAHI
 }
 
 // ── reCAPTCHA invisible (phone auth ka app verifier) ────────────

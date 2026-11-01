@@ -88,6 +88,8 @@ export interface QalbNativePluginInterface {
   // ── Native KV store (v0.5.21) — login/subs ka WebView-proof mirror ──
   kvSet(options: { key: string; value: string }): Promise<void>
   kvGet(options: { key: string }): Promise<{ value: string | null }>
+  // ── Device key (v0.5.26) — uninstall-proof cloud login restore ──
+  androidId(): Promise<{ value: string | null }>
 }
 
 const QalbNative = registerPlugin<QalbNativePluginInterface>('QalbNative')
@@ -503,6 +505,19 @@ export async function nativeKvGet(key: string): Promise<string | null> {
     const r = await QalbNative.kvGet({ key })
     const v = r?.value
     return typeof v === 'string' && v.length ? v : null
+  } catch {
+    return null
+  }
+}
+
+/** ANDROID_ID — uninstall/reinstall par bhi same rehta hai (same signing
+ *  key + user). null = web / purana APK / emulator. (v0.5.26) */
+export async function nativeAndroidId(): Promise<string | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.androidId()
+    const v = r?.value
+    return typeof v === 'string' && v.length >= 8 ? v : null
   } catch {
     return null
   }

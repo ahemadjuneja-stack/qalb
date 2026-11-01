@@ -51,6 +51,25 @@ service cloud.firestore {
     // ── logged-in users ka apna data (future ke liye) ──
     match /users/{uid}       { allow read, write: if request.auth != null; }
 
+    // ── DEVICE SESSION (v0.5.26) — uninstall-proof login restore ──
+    // Doc id = sha256(ANDROID_ID+salt); value me AES-256-GCM encrypted
+    // refresh-token. `get` allowed (device khud apna id jaanta hai),
+    // `list` BAND — koi enumeration possible nahi. Field-validate.
+    match /deviceSessions/{doc} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if true
+        && request.resource.data.keys().hasOnly(
+             ['v','uid','name','email','phone','photoUrl','provider','d','at'])
+        && request.resource.data.v == 1
+        && request.resource.data.uid is string
+        && request.resource.data.uid.size() > 0
+        && request.resource.data.d is string
+        && request.resource.data.d.size() > 0
+        && request.resource.data.d.size() < 3000;
+      allow delete: if true;
+    }
+
     // ── baaki sab kuch default CLOSED ──
     match /{document=**}     { allow read, write: if false; }
   }

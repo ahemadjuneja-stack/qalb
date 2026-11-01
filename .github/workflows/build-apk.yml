@@ -524,3 +524,32 @@ jobs:
             && echo "Firestore updated: v${{ steps.ver.outputs.versionName }} (code ${{ steps.ver.outputs.versionCode }}, mandatory=$MANDATORY)"
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # ── 10. Publish Firestore rules (v0.5.26 — deviceSessions) ────
+      # firestore.rules repo me hai — console me manually paste karna
+      # bhool jaata tha. Ab best-effort auto-publish (fail = skip, purane
+      # rules zinda rehte hain).
+      - name: Publish Firestore rules (best-effort)
+        continue-on-error: true
+        run: |
+          gcloud services enable firebaserules.googleapis.com --project="$FPID" 2>&1 | tail -1 || true
+          TOKEN=$(gcloud auth print-access-token)
+          BODY=$(jq -n --arg c "$(cat firestore.rules)" \
+            '{source:{files:[{name:"firestore.rules", content:$c}]}}')
+          RS=$(curl -sS -m 30 -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "https://firebaserules.googleapis.com/v1/projects/${FPID}/rulesets")
+          NAME=$(echo "$RS" | jq -r '.name // empty')
+          if [ -z "$NAME" ]; then
+            echo "Rules publish SKIP — ruleset create fail (rules untouched):"
+            echo "$RS" | head -c 600; echo
+            exit 0
+          fi
+          UPD=$(curl -sS -m 30 -X PATCH \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"rulesetName\":\"$NAME\"}" \
+            "https://firebaserules.googleapis.com/v1/projects/${FPID}/releases/cloud.firestore")
+          echo "Rules RELEASED: $NAME → $(echo "$UPD" | jq -r '.rulesetName // .error.message // "ok"' | head -c 300)"

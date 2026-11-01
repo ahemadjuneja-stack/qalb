@@ -17,6 +17,7 @@
 import {
   nativeMarkSessionOk,
   nativeFactoryResetWebView,
+  nativeKvSet,
 } from '@/plugins/qalb-native'
 
 const BOOTS_KEY = 'qalb_boots'
@@ -115,6 +116,10 @@ export async function fullResetAndReload(): Promise<void> {
   } catch {
     /* ignore */
   }
+  // v0.5.26: preserve-keys ka STASH native KV me bhi — neeche wala native
+  // wipe localStorage ke re-set kiye hue keys bhi udva dega, isliye boot
+  // par auth.ts rehydrateResetStash() stash se wapas likh dega.
+  void nativeKvSet('qalb_reset_stash_v1', JSON.stringify(preserveKeys))
   try {
     window.sessionStorage?.clear?.()
   } catch {

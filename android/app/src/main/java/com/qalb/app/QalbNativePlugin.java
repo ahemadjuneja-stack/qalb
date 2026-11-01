@@ -908,4 +908,32 @@ public class QalbNativePlugin extends Plugin {
         res.put("value", out);
         call.resolve(res);
     }
+
+    // ── Device key (v0.5.26) — uninstall-proof cloud login restore ──
+    // ANDROID_ID: signing-key + user + device scoped — app UNINSTALL-
+    // REINSTALL par bhi SAME rehta hai (factory reset par hi badalta
+    // hai). Koi permission nahi lagti. Isse JS ek hash banata hai aur
+    // cloud me encrypted refresh-token rakhta hai — app naye install
+    // me bhi chup-chaap login restore kar leti hai (WebView wipe /
+    // uninstall / pehli baar update — HAR case me kaam karta hai).
+
+    /** JS: { value: "16-hex" | null } — device ka ANDROID_ID */
+    @PluginMethod
+    public void androidId(PluginCall call) {
+        String out = null;
+        try {
+            android.content.Context ctx = getContext();
+            if (ctx != null) {
+                out = android.provider.Settings.Secure.getString(
+                        ctx.getContentResolver(), android.provider.Settings.Secure.ANDROID_ID);
+                // emulator/na-jane-wala device "9774d56d682e549c" (null
+                // ke barabar) — JS ko null bhejo
+                if ("9774d56d682e549c".equals(out)) out = null;
+            }
+        } catch (Exception ignored) {
+        }
+        JSObject res = new JSObject();
+        res.put("value", out);
+        call.resolve(res);
+    }
 }
