@@ -24,6 +24,7 @@ import { BannerEcg } from '@/components/qalb/banner-ecg'
 import { QalbLogoMark } from '@/components/qalb/qalb-logo-mark'
 import {
   authErrorMessage,
+  googleSignInAuto,
   takeSheetFailDiag,
   clearPhoneSession,
   getAuthConfig,
@@ -74,6 +75,20 @@ export function LoginGate() {
       alive = false
     }
   }, [])
+
+  // v0.5.27: ZERO-TAP AUTO LOGIN — gate dikh raha hai = session restore
+  // nahi hui (update/uninstall/clear-data). Google Credential Manager
+  // pehle-authorized account chup-chaap wapis deta hai (authorization
+  // GOOGLE KE SERVER par hai — phone data me nahi). 1 account = sheet
+  // bhi nahi khulti, seedha login. Naye user par foran 'no-authorized'
+  // — koi wait nahi, gate normal. EK dafa hi try (loop kabhi nahi).
+  const autoTried = useRef(false)
+  useEffect(() => {
+    if (autoTried.current) return
+    if (!cfg?.apiKey || !cfg.googleClientId) return
+    autoTried.current = true
+    void googleSignInAuto()
+  }, [cfg])
 
   // resend countdown
   useEffect(() => {

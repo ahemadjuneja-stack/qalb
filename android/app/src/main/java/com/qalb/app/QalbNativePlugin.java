@@ -38,6 +38,18 @@ import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.tasks.Task;
 
+// Credential Manager (v0.5.27) — zero-tap Google auto re-login
+import androidx.credentials.CredentialManager;
+import androidx.credentials.CustomCredential;
+import androidx.credentials.GetCredentialRequest;
+import androidx.credentials.GetCredentialResponse;
+import androidx.credentials.CredentialManagerCallback;
+import androidx.credentials.exceptions.GetCredentialException;
+import androidx.credentials.exceptions.GetCredentialCancellationException;
+import androidx.credentials.exceptions.NoCredentialException;
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
+
 /**
  * Qalb — Native bridge plugin
  *
@@ -806,6 +818,92 @@ public class QalbNativePlugin extends Plugin {
             call.reject("api-" + e.getStatusCode());
         } catch (Exception e) {
             call.reject("google result fail: " + safeMsg(e));
+        }
+    }
+
+    /**
+     * JS: ZERO-TAP Google auto re-login (v0.5.27) — PERMANENT login fix ka
+     * native half. Credential Manager se SIRF pehle-se-authorized Google
+     * account maangte hain:
+     *   • filterByAuthorizedAccounts(true) — authorization Google ke SERVER
+     *     par saved hai (package+signing-key+account) — app UNINSTALL /
+     *     UPDATE / CLEAR-DATA ke baad bhi zinda rehta hai
+     *   • autoSelectEnabled(true) — EXACTLY 1 account ho to sheet bhi nahi
+     *     khulti, foran id_token (naya user = NoCredentialException, foran)
+     * Success → { idToken, email } resolve. Koi bhi fail → reject (JS
+     * chup-chaap ignore karta hai — normal login gate dikhega).
+     */
+    @PluginMethod
+    public void googleIdTokenAuto(PluginCall call) {
+        try {
+            String serverClientId = call.getString("serverClientId");
+            if (serverClientId == null || serverClientId.trim().isEmpty()) {
+                call.reject("no server client id");
+                return;
+            }
+            Activity activity = getActivity();
+            if (activity == null) {
+                call.reject("no activity");
+                return;
+            }
+            int gms = GoogleApiAvailability.getInstance()
+                    .isGooglePlayServicesAvailable(activity);
+            if (gms != ConnectionResult.SUCCESS) {
+                call.reject("gms-" + gms);
+                return;
+            }
+            GetGoogleIdOption option = new GetGoogleIdOption.Builder()
+                    .setServerClientId(serverClientId.trim())
+                    .setFilterByAuthorizedAccounts(true)
+                    .setAutoSelectEnabled(true)
+                    .build();
+            GetCredentialRequest request = new GetCredentialRequest.Builder()
+                    .addCredentialOption(option)
+                    .build();
+            CredentialManager cm = CredentialManager.create(activity);
+            android.os.CancellationSignal signal = new android.os.CancellationSignal();
+            java.util.concurrent.Executor ex =
+                    androidx.core.content.ContextCompat.getMainExecutor(activity);
+            cm.getCredentialAsync(activity, request, signal, ex,
+                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
+                    @Override
+                    public void onResult(GetCredentialResponse response) {
+                        try {
+                            androidx.credentials.Credential cred = response.getCredential();
+                            if (cred instanceof CustomCredential
+                                    && GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN
+                                            .equals(cred.getType())) {
+                                GoogleIdTokenCredential g = GoogleIdTokenCredential
+                                        .createFrom(cred.getData());
+                                String tok = g.getIdToken();
+                                if (tok != null && !tok.isEmpty()) {
+                                    JSObject res = new JSObject();
+                                    res.put("idToken", tok);
+                                    res.put("email", g.getId() == null ? "" : g.getId());
+                                    call.resolve(res);
+                                    return;
+                                }
+                            }
+                            call.reject("no-id-token");
+                        } catch (Exception e) {
+                            call.reject("auto-result-fail: " + safeMsg(e));
+                        }
+                    }
+
+                    @Override
+                    public void onError(GetCredentialException e) {
+                        if (e instanceof NoCredentialException) {
+                            call.reject("no-authorized"); // naya user — gate normal
+                        } else if (e instanceof GetCredentialCancellationException) {
+                            call.reject("cancelled");
+                        } else {
+                            call.reject("auto-fail " + e.getClass().getSimpleName()
+                                    + ": " + safeMsg(e));
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            call.reject("auto-fail: " + safeMsg(e));
         }
     }
 

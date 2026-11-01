@@ -72,6 +72,11 @@ export interface QalbNativePluginInterface {
     email?: string
   }>
   googleSignOut(): Promise<void>
+  // ── ZERO-TAP Google auto re-login (v0.5.27) — uninstall-proof ──
+  googleIdTokenAuto(options: { serverClientId: string }): Promise<{
+    idToken: string
+    email?: string
+  }>
   // ── Native HTTP (v0.4.5) — WebView DNS/CORS bypass fallback ──
   httpPostForm(options: { url: string; body: string }): Promise<{
     status: number
@@ -414,6 +419,23 @@ export async function nativeGoogleSignOut(): Promise<void> {
     await QalbNative.googleSignOut()
   } catch {
     /* ignore */
+  }
+}
+
+/** v0.5.27: ZERO-TAP Google auto re-login — sirf pehle-authorized account
+ *  (Google server par saved — uninstall/update/clear-data ke baad bhi).
+ *  1 account = sheet bhi nahi khulti. Fail = null (gate normal dikhega). */
+export async function nativeGoogleIdTokenAuto(
+  serverClientId: string
+): Promise<{ idToken: string; email?: string } | null> {
+  if (!isNativeApp()) return null
+  try {
+    const r = await QalbNative.googleIdTokenAuto({ serverClientId })
+    if (r?.idToken) return { idToken: r.idToken, email: r.email ?? undefined }
+    return null
+  } catch {
+    /* no-authorized / cancelled / gms-missing — chup-chaap, gate normal */
+    return null
   }
 }
 

@@ -1143,6 +1143,36 @@ export async function googleSignIn(): Promise<QalbUser> {
 }
 
 /**
+ * v0.5.27 — ZERO-TAP AUTO LOGIN (permanent login fix ka JS half).
+ * Google Credential Manager se SIRF pehle-se-authorized account maango —
+ * wo authorization Google ke SERVER par hoti hai (package+signing-key),
+ * phone ke app-data me NAHI. Isliye UPDATE / UNINSTALL-REINSTALL /
+ * CLEAR-DATA ke baad bhi account milta hai aur session khud ban jati hai
+ * — user ko KUCH nahi karna padta, sheet bhi nahi khulti (1 account =
+ * auto-select). Koi bhi fail = null (login gate normal dikhega — naye
+ * users par foran 'no-authorized' aata hai, koi wait/error nahi).
+ */
+export async function googleSignInAuto(): Promise<QalbUser | null> {
+  try {
+    const { apiKey, googleClientId } = await getAuthConfig()
+    if (!apiKey || !googleClientId) return null
+    const { isNativeApp, nativeGoogleIdTokenAuto } = await import(
+      '@/plugins/qalb-native'
+    )
+    if (!isNativeApp()) return null
+    const sheetClient =
+      (process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID as string | undefined) ??
+      googleClientId
+    const r = await nativeGoogleIdTokenAuto(sheetClient)
+    if (!r?.idToken) return null
+    // wahi idp flow — completeLogin (setSession + mirror + cloud backup)
+    return await googleIdpLogin(r.idToken, apiKey)
+  } catch {
+    return null // auto-path user ko KABHI error nahi dikhata
+  }
+}
+
+/**
  * BROWSER BACKUP (user ki marzi se) — Chrome loopback OAuth flow. Ye
  * function sirf login screen ke "Browser se login" button se chalta hai,
  * kabhi automatic nahi. Wait 2 min — infinite spinner kabhi nahi.
