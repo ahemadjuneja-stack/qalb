@@ -33,8 +33,9 @@ import { useViewBackHandler } from '@/lib/back-stack'
 import { viewsLabel } from '@/lib/innertube-x'
 import { recordPlay } from '@/lib/recommend'
 import { recordItubeWatch, updateLastWatchDuration, rankRelated } from '@/lib/itube-brain'
-import { trackPub } from '@/lib/itube'
-import { channelRefOf } from '@/lib/itube-channels'
+import { islamicOnly, trackPub } from '@/lib/itube'
+import { channelRefOf, fetchChannelVideos, fetchRelatedVideos } from '@/lib/itube-channels'
+import { isBlockedResult } from '@/lib/result-filter'
 import { loadYouTubeIframeApi, type YTPlayer } from '@/lib/yt-api'
 import { usePlayerStore } from '@/lib/player-store'
 import {
@@ -93,6 +94,13 @@ export function ItubeWatch({
   const [readyVid, setReadyVid] = useState<string | null>(null)
   const [likeTick, setLikeTick] = useState(0)
   const [bgTiny, setBgTiny] = useState(false)
+  // ── v0.5.22 related feed (YouTube watch-page jaisa) ──────────────
+  const [chanVids, setChanVids] = useState<QalbTrack[]>([]) // isi channel ki videos
+  const [ytRel, setYtRel] = useState<QalbTrack[]>([]) // YT ka asli related feed
+  const [relCont, setRelCont] = useState<string | null>(null)
+  const [relLoading, setRelLoading] = useState(false)
+  const [relDone, setRelDone] = useState(false)
+  const relReqRef = useRef(0)
   const scrollerRef = useRef<HTMLDivElement>(null)
   // v0.5.15 WATCH-TIME TRAINING — video kitne second dekha gaya (close/
   // switch par flush). Jitna dekha utna strong algorithm signal.
@@ -316,6 +324,85 @@ export function ItubeWatch({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.videoId])
 
+  // ── v0.5.22: video switch par related feed FRESH (YT watch jaisa):
+  // (1) usi channel ki videos (ch: tag se browse) — sabse pehle dikhti
+  // (2) YT ka ASLI related feed (next endpoint) — islamic filter ke saath;
+  // fail hone par purana local pool (rankRelated) fallback hai
+  useEffect(() => {
+    const vid = track.videoId
+    const cref = channelRefOf(track)
+    const my = ++relReqRef.current
+    setChanVids([])
+    setYtRel([])
+    setRelCont(null)
+    setRelDone(false)
+    setRelLoading(true)
+    void (async () => {
+      const [chanRes, relRes] = await Promise.allSettled([
+        cref ? fetchChannelVideos(cref.id, null, cref.name) : Promise.resolve(null),
+        fetchRelatedVideos(vid, null),
+      ])
+      if (my !== relReqRef.current) return
+      if (chanRes.status === 'fulfilled' && chanRes.value) {
+        setChanVids(
+          chanRes.value.tracks
+            .filter(
+              (t) =>
+                t.videoId !== vid &&
+                !isBlockedResult(`${t.title} ${t.artist ?? ''}`.toLowerCase())
+            )
+            .slice(0, 6) // YouTube jitni — kuch same-channel videos pehle
+        )
+      }
+      if (relRes.status === 'fulfilled' && relRes.value) {
+        const filtered = islamicOnly(relRes.value.tracks).filter((t) => t.videoId !== vid)
+        setYtRel(filtered)
+        setRelCont(relRes.value.continuation)
+        if (!filtered.length && !relRes.value.continuation) setRelDone(true)
+      } else {
+        setRelDone(true) // YT related fail — local fallback list hi dikhegi
+      }
+      setRelLoading(false)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track.videoId])
+
+  // related pagination — scroller bottom par continuation se aur videos
+  const loadMoreRelated = async () => {
+    const token = relCont
+    if (!token || relLoading) return
+    const vid = track.videoId
+    const my = relReqRef.current
+    setRelLoading(true)
+    try {
+      const page = await fetchRelatedVideos(vid, token)
+      if (my !== relReqRef.current) return
+      if (page) {
+        const have = new Set([
+          vid,
+          ...chanVids.map((c) => c.videoId),
+          ...ytRel.map((r) => r.videoId),
+        ])
+        const add = islamicOnly(page.tracks).filter((t) => !have.has(t.videoId))
+        setYtRel((prev) => [...prev, ...add])
+        setRelCont(page.continuation)
+        if (!page.continuation) setRelDone(true)
+      } else {
+        setRelDone(true)
+      }
+    } finally {
+      setRelLoading(false)
+    }
+  }
+
+  // watch-screen scroll — bottom par related aur lao (infinite)
+  const onWatchScroll = () => {
+    const el = scrollerRef.current
+    if (!el) return
+    if (el.scrollTop + el.clientHeight < el.scrollHeight - 700) return
+    if (relCont && !relLoading && !relDone) void loadMoreRelated()
+  }
+
   // ── background/foreground detect (native event + web fallback) ──
   useEffect(() => {
     const applyBg = (bg: boolean) => {
@@ -495,15 +582,57 @@ export function ItubeWatch({
   const views = viewsLabel(track.playCount)
   const cref = onOpenChannel ? channelRefOf(track) : null
 
+  // display list: YT ka asli related (mila to wahi), warna local pool
+  const chanExcl = new Set([track.videoId, ...chanVids.map((c) => c.videoId)])
+  const ytRelList = ytRel.filter((t) => !chanExcl.has(t.videoId))
+  const relatedList = ytRelList.length ? ytRelList : relatedRanked
+
+  // related/channel row — dono sections isi se (YT app jaisa compact row)
+  const relRow = (r: QalbTrack) => {
+    const rv = viewsLabel(r.playCount)
+    return (
+      <button
+        key={r.id}
+        type="button"
+        onClick={() => onPick(r)}
+        className="flex w-full items-start gap-3 rounded-xl p-2 text-left transition active:bg-emerald-400/[0.06]"
+      >
+        <div className="relative w-[140px] shrink-0 overflow-hidden rounded-lg bg-emerald-400/[0.06]">
+          <img
+            src={r.thumbnailUrl ?? ''}
+            alt={r.title}
+            loading="lazy"
+            className="aspect-video w-full object-cover"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="line-clamp-2 text-[12.5px] font-bold leading-snug text-emerald-50">
+            {r.title}
+          </p>
+          <p className="mt-1 truncate text-[11px] text-emerald-200/55">
+            {r.artist}
+            {rv ? ` • ${rv}` : ''}
+          </p>
+        </div>
+      </button>
+    )
+  }
+
   return (
     <div
       className="fixed inset-0 z-[70] bg-emerald-950 pt-[env(safe-area-inset-top)]"
       role="dialog"
       aria-label={`${track.title} — iTube watch`}
     >
-      <div ref={scrollerRef} className="h-full overflow-y-auto overscroll-contain">
-        {/* ── player (edge-to-edge, YT watch jaisa) ── */}
-        <div className="relative aspect-video w-full overflow-hidden bg-black">
+      <div
+        ref={scrollerRef}
+        onScroll={onWatchScroll}
+        className="h-full overflow-y-auto overscroll-contain"
+      >
+        {/* ── player (edge-to-edge, YT watch jaisa) — STICKY (v0.5.22):
+            neeche scroll karne par video upar chipka rahega, suggested
+            videos uske neeche se guzregi — YouTube app ka exact feel ── */}
+        <div className="sticky top-0 z-20 aspect-video w-full overflow-hidden bg-black">
           {/* player host — background me naat-style 1x1 tiny ho jata hai
               (visible-video ka surface-bind tootega hi nahi, audio chalta rahega) */}
           <div
@@ -600,44 +729,29 @@ export function ItubeWatch({
           </div>
         </div>
 
-        {/* ── related ── */}
+        {/* ── isi channel se (v0.5.22 — YouTube jaisa) ── */}
+        {chanVids.length ? (
+          <div className="mt-4 border-t border-emerald-400/10 px-2 pt-3">
+            <p className="px-2 pb-2 text-[13px] font-bold text-emerald-50">Isi channel se</p>
+            {chanVids.map((r) => relRow(r))}
+          </div>
+        ) : null}
+
+        {/* ── related (alag channels) + infinite scroll (v0.5.22) ── */}
         <div className="mt-4 border-t border-emerald-400/10 px-2 pt-3">
           <p className="px-2 pb-2 text-[13px] font-bold text-emerald-50">Aage dekhein</p>
-          {relatedRanked.length ? (
-            relatedRanked.map((r) => {
-              const rv = viewsLabel(r.playCount)
-              return (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => onPick(r)}
-                  className="flex w-full items-start gap-3 rounded-xl p-2 text-left transition active:bg-emerald-400/[0.06]"
-                >
-                  <div className="relative w-[140px] shrink-0 overflow-hidden rounded-lg bg-emerald-400/[0.06]">
-                    <img
-                      src={r.thumbnailUrl ?? ''}
-                      alt={r.title}
-                      loading="lazy"
-                      className="aspect-video w-full object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-[12.5px] font-bold leading-snug text-emerald-50">
-                      {r.title}
-                    </p>
-                    <p className="mt-1 truncate text-[11px] text-emerald-200/55">
-                      {r.artist}
-                      {rv ? ` • ${rv}` : ''}
-                    </p>
-                  </div>
-                </button>
-              )
-            })
+          {relatedList.length ? (
+            relatedList.map((r) => relRow(r))
           ) : (
             <p className="px-2 pb-3 text-[11.5px] text-emerald-200/40">
               Bas yahi tak — upar back kar ke aur khojein 🌙
             </p>
           )}
+          {relLoading ? (
+            <div className="flex justify-center py-2">
+              <Loader2 className="h-5 w-5 animate-spin text-emerald-300" />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

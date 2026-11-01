@@ -132,6 +132,37 @@ export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], de
     }
   }
 
+  // v0.5.22 — compactVideoRenderer (watch-page "next" endpoint ke
+  // related videos isi format me aate hain) — same enrichment
+  const cvr = node.compactVideoRenderer
+  if (cvr && typeof cvr === 'object') {
+    const videoId = typeof cvr.videoId === 'string' ? cvr.videoId : null
+    const title = cvr.title?.simpleText ?? cvr.title?.runs?.[0]?.text ?? null
+    const channel =
+      cvr.longBylineText?.runs?.[0]?.text ??
+      cvr.shortBylineText?.runs?.[0]?.text ??
+      null
+    const channelId =
+      cvr.longBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
+      cvr.shortBylineText?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId ??
+      null
+    const dur = parseDuration(
+      cvr.lengthText?.simpleText ?? cvr.lengthText?.accessibility?.accessibilityData?.label
+    )
+    if (videoId && title && dur > 0 && dur < 3 * 3600) {
+      out.push({
+        videoId,
+        title,
+        channel: channel || 'YouTube',
+        channelId: typeof channelId === 'string' ? channelId : null,
+        views: parseViews(cvr.viewCountText?.simpleText),
+        viewsText: cvr.viewCountText?.simpleText ?? '',
+        durationSec: dur,
+        published: cvr.publishedTimeText?.simpleText ?? '',
+      })
+    }
+  }
+
   const token = node?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token
   if (typeof token === 'string' && token && !tokens.includes(token)) tokens.push(token)
 

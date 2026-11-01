@@ -141,6 +141,35 @@ export async function fetchChannelVideos(
   }
 }
 
+// ── Watch-page related (v0.5.22 — InnerTube "next" endpoint) ─────
+// YouTube watch screen ka ASLI related feed (alag-alag channels se)
+// + continuation — neeche scroll karne par aur aati rahegi.
+
+export interface RelatedPage {
+  tracks: QalbTrack[]
+  continuation: string | null
+}
+
+export async function fetchRelatedVideos(
+  videoId: string,
+  continuation: string | null
+): Promise<RelatedPage | null> {
+  if (!isNativeApp() || !videoId) return null
+  const body = continuation
+    ? { ...INNERTUBE_CONTEXT, continuation }
+    : { ...INNERTUBE_CONTEXT, videoId }
+  const data = await innertubePostJson(
+    `https://www.youtube.com/youtubei/v1/next?key=${INNERTUBE_KEY}&prettyPrint=false`,
+    BROWSE_HEADERS,
+    body
+  ).catch(() => null)
+  if (!data) return null
+  const videos: any[] = []
+  const tokens: string[] = []
+  collectVideosX(data, videos, tokens)
+  return { tracks: videosToTracks(videos, 'itrel'), continuation: tokens[0] ?? null }
+}
+
 // ── Track → channel ref (tags me stashed ch:UC…) ─────────────────
 
 export function channelRefOf(t: QalbTrack): { id: string; name: string } | null {
