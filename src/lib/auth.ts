@@ -639,16 +639,26 @@ async function consumePendingOauthSafe(): Promise<string | null> {
   }
 }
 
-/** Chrome se wapas aane ka wait — native event + poll (dono channels) */
+/**
+ * Chrome se wapas aane ka wait — native event + poll (dono channels)
+ * + RESUME-CANCEL (v0.5.13): user Chrome me login screen chhod ke app
+ * me wapas aa jaye (bina login) to loader FORAN band ho jaye — button
+ * dobara dabane par fresh Chrome try. 3 cancel channels:
+ *   1. visibilitychange (WebView)  2. @capacitor/app appStateChange
+ *   (native lifecycle — WebView kabhi event miss kare to bhi pakka)
+ *   3. 700ms poll (redirect aaya to pehle hi login complete)
+ */
 function waitForOauthRedirect(timeoutMs: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let done = false
     let poll: ReturnType<typeof setInterval> | null = null
     let timer: ReturnType<typeof setTimeout> | null = null
     let onVis: (() => void) | null = null
+    let appStateHandle: { remove: () => Promise<void> } | null = null
     const cleanup = () => {
       window.removeEventListener('qalbOauthRedirect', handler as EventListener)
       if (onVis) document.removeEventListener('visibilitychange', onVis)
+      if (appStateHandle) void appStateHandle.remove().catch(() => {})
       if (poll) clearInterval(poll)
       if (timer) clearTimeout(timer)
     }
@@ -671,18 +681,33 @@ function waitForOauthRedirect(timeoutMs: number): Promise<string> {
       if (d && typeof d.url === 'string' && d.url) ok(d.url)
     }
     window.addEventListener('qalbOauthRedirect', handler as EventListener)
-    // SPINNER-FIX (v0.4.5): user Chrome se bina login ke wapas aa gaya to
-    // app khud cancel kare — 3s grace (redirect event/pending pehle aa
-    // sakta hai), phir bhi kuch nahi to google-cancel (5 min spinner nahi)
-    onVis = () => {
-      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return
+    // SPINNER-FIX (v0.4.5) + RESUME-CANCEL (v0.5.13): user Chrome se bina
+    // login ke wapas aa gaya to app khud cancel kare — 3s grace (redirect
+    // event/pending pehle aa sakta hai), phir bhi kuch nahi to google-cancel
+    // (infinite spinner nahi; dobara dabane par fresh Chrome try)
+    const resumeCancel = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       setTimeout(() => {
         void consumePendingOauthSafe().then((u) => {
           if (!u) bad(new Error('google-cancel bina-login-wapas'))
         })
       }, 3000)
     }
+    onVis = resumeCancel
     document.addEventListener('visibilitychange', onVis)
+    // channel 2: native lifecycle — WebView visibilitychange kabhi-kabhi
+    // miss hota hai (background kill/wapas) — Capacitor App plugin se
+    // appStateChange pe bhi wahi cancel check (dono channels, jaise poll)
+    void (async () => {
+      try {
+        const { App } = await import('@capacitor/app')
+        appStateHandle = await App.addListener('appStateChange', (s) => {
+          if (s.isActive) resumeCancel()
+        })
+      } catch {
+        /* @capacitor/app na mile — visibilitychange channel kaafi hai */
+      }
+    })()
     poll = setInterval(() => {
       void consumePendingOauthSafe().then((u) => {
         if (u) ok(u)
@@ -881,13 +906,11 @@ async function finishGoogleAuth(
 }
 
 /**
- * GOOGLE SIGN-IN — v0.4.6: CHROME KABHI AUTO NAHI KHULEGA.
- * Native sheet (app ke andar account-picker) hi primary aur default hai.
- *   • Sheet phone ke GMS accounts dikhata hai — Chrome me account ho ya
- *     na ho, koi farak nahi (user ki asal request).
- *   • Sheet fail ya cancel ho to ERROR + guidance — Chrome khud nahi
- *     khulega. Browser wala flow user ki marzi se hoga:
- *     googleSignInBrowser() (login screen ka "backup" button).
+ * GOOGLE SIGN-IN — v0.5.13: ye ab BACKUP flow hai (UI ka "App ke andar
+ * login (backup)" button). PRIMARY ab chrome wala flow hai —
+ * googleSignInBrowser() (login screen ka main "Google se login karein"
+ * button), kyunki native sheet SHA-1/GMS config ki wajah se kuch devices
+ * par baar-baar fail ho rahi thi (sheet-fail | sha1=... error).
  */
 export async function googleSignIn(): Promise<QalbUser> {
   const { apiKey, googleClientId } = await getAuthConfig()
@@ -979,11 +1002,13 @@ export async function googleSignInBrowser(): Promise<QalbUser> {
     /* ignore */
   }
   const url = buildAuthorizeUrl(googleClientId, redirectUri, state, challenge)
-  // CUSTOM TABS pehle (v0.4.7) — login APP KE ANDAR overlay me, Chrome
-  // app bilkul nahi khulta. Custom Tabs engine na mile to system browser
-  // (last resort — behtar dead-end se).
+  // REAL CHROME pehle (v0.5.13 — user ka setting): login button dabate hi
+  // poora Chrome APP khule (Custom Tabs overlay nahi — user ko Chrome ke
+  // andar hi login screen dikhe). External fail ho to Custom Tabs fallback
+  // (openInSystemBrowser ke andar window.open web-dev fallback bhi hai).
   const { nativeOpenExternalInApp } = await import('@/plugins/qalb-native')
-  const opened = (await nativeOpenExternalInApp(url)) || (await openInSystemBrowser(url))
+  const opened =
+    (await openInSystemBrowser(url)) || (await nativeOpenExternalInApp(url))
   if (!opened) {
     void nativeStopOauthServer()
     throw new Error('google-no-browser')
@@ -1140,7 +1165,10 @@ function baseAuthMessage(kind: string, detail = ''): { title: string; desc: stri
         desc: 'Firebase Console → Authentication → Sign-in method → Google → Enable karein. Thodi der baad dobara try karein.',
       }
     case 'google-cancel':
-      return { title: 'Google login cancel ho gaya', desc: 'Dobara try karein.' }
+      return {
+        title: 'Chrome me login poora nahi hua',
+        desc: 'Google button dobara daba kar Chrome me apna account choose karein — login hote hi Qalb khud khul jayegi.',
+      }
     case 'sheet-cancelled':
       return {
         title: 'Aap ne Google sheet band kar di',

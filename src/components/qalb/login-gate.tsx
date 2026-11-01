@@ -254,13 +254,16 @@ export function LoginGate() {
                 </div>
               )}
 
-              {/* Google — sirf jab OAuth client id bake ho. Native sheet
-                  (app ke andar) — Chrome AUTO kabhi nahi khulta (v0.4.6) */}
+              {/* Google — sirf jab OAuth client id bake ho.
+                  PRIMARY = CHROME flow (v0.5.13): button dabate hi real
+                  Chrome app me Google login — native sheet SHA-1/GMS ki
+                  wajah se kuch devices par baar-baar fail thi. Backup
+                  (error ke baad) = native sheet app ke andar. */}
               {cfg?.apiKey && cfg.googleClientId && (
                 <>
                   <button
                     type="button"
-                    onClick={() => void handleGoogle(false)}
+                    onClick={() => void handleGoogle(true)}
                     disabled={busy !== null}
                     className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-3.5 text-[14px] font-bold text-slate-800 shadow-lg transition active:scale-[0.98] disabled:opacity-50"
                   >
@@ -272,18 +275,24 @@ export function LoginGate() {
                     Google se login karein
                   </button>
                   {busy === 'google' && (
-                    <button
-                      type="button"
-                      onClick={cancelGoogle}
-                      className="w-full py-1 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
-                    >
-                      Radd karein
-                    </button>
+                    <>
+                      <p className="text-center text-[11px] leading-relaxed text-emerald-200/55">
+                        Chrome me apna Google account choose karein — login
+                        hote hi Qalb khud khul jayegi.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={cancelGoogle}
+                        className="w-full py-1 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
+                      >
+                        Radd karein
+                      </button>
+                    </>
                   )}
                   {err && busy === null && (
                     <button
                       type="button"
-                      onClick={() => void handleGoogle(true)}
+                      onClick={() => void handleGoogle(false)}
                       disabled={busy !== null}
                       className="flex w-full items-center justify-center gap-2 py-1.5 text-center text-[12px] font-semibold text-emerald-200/55 transition active:scale-[0.98]"
                     >
