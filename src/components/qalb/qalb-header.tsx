@@ -29,9 +29,9 @@ export function QalbHeader({ section }: { section: QalbSection }) {
       aria-label={`Qalb — ${section}`}
     >
       <div className="flex items-center justify-between gap-3">
-        {/* OFFICIAL LOGO — animated mark, black tile (logo ka apna bg) */}
-        <div className="relative shrink-0 overflow-hidden rounded-xl bg-[#1f1f1d] px-2.5 py-2 shadow-[0_4px_14px_-6px_rgba(187,0,0,0.5)] ring-1 ring-red-600/30">
-          <QalbLogoMark className="h-12 w-auto" />
+        {/* OFFICIAL LOGO — animated mark, black tile, MEDIUM size (user request) */}
+        <div className="relative shrink-0 overflow-hidden rounded-xl bg-[#1f1f1d] px-2 py-1.5 shadow-[0_4px_14px_-6px_rgba(187,0,0,0.5)] ring-1 ring-red-600/30">
+          <QalbLogoMark className="h-11 w-auto" />
         </div>
         <span
           className="shrink-0 rounded-full border border-gold/35 bg-gold/10 px-3.5 py-1.5 text-[12.5px] font-extrabold tracking-wide text-gold shadow-[0_0_16px_-6px_var(--gold)]"

@@ -595,13 +595,13 @@
 .qalb-heart-group {
   transform-box: fill-box;
   transform-origin: center;
-  animation: qalb-logo-heartbeat 1.9s ease-in-out infinite;
+  animation: qalb-logo-heartbeat 1.7s ease-in-out infinite;
 }
 @keyframes qalb-logo-heartbeat {
   0%, 100% { transform: scale(1); }
-  12% { transform: scale(1.09); }
-  24% { transform: scale(1); }
-  36% { transform: scale(1.05); }
+  12% { transform: scale(1.13); }
+  24% { transform: scale(0.99); }
+  36% { transform: scale(1.07); }
   50% { transform: scale(1); }
 }
 .qalb-mark-live {

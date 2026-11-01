@@ -41,6 +41,19 @@ type Mode =
 
 const PAGE = 14
 
+// network watchdog — request atki to skeleton FOREVER na atke (v0.5.9)
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('itube-timeout')), ms)
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) },
+    )
+  })
+}
+
+const ITUBE_WATCHDOG_MS = 15000
+
 export function ITubeView({ visible }: { visible: boolean }) {
   const [watch, setWatch] = useState<QalbTrack | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'foryou' })
@@ -71,7 +84,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
     setLoading(true)
     setFailed(false)
     try {
-      const res = await buildItubeFeed(newSalt)
+      const res = await withTimeout(buildItubeFeed(newSalt), ITUBE_WATCHDOG_MS)
       if (my !== reqId.current) return
       // repeat-kill — jo dikh chuke wo hatao (pool thna ho to purane wapas)
       const { fresh, reused } = splitSeen(res.tracks)
@@ -138,7 +151,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
     else setLoading(true)
     setFailed(false)
     try {
-      const page = await itubeFetch(q, contToken)
+      const page = await withTimeout(itubeFetch(q, contToken), ITUBE_WATCHDOG_MS)
       if (my !== reqId.current) return
       setTracks((prev) => (contToken ? [...prev, ...page.tracks] : page.tracks))
       setCont(page.continuation)
@@ -159,24 +172,30 @@ export function ITubeView({ visible }: { visible: boolean }) {
     }
   }, [])
 
-  // chip/search change → fresh load
+  // ── EK unified load-effect (v0.5.9 FIX — auto-load race khatam):
+  // pehle DO alag effects the (mode-change + tab-revisit) — dono mount
+  // par ek saath fire hote the → 2 parallel requests → agar naya wala
+  // fail ho jaye to purana (successful) bhi DISCARD ho jata tha →
+  // skeleton hamesha stuck. Ab SIRF ek effect, SIRF ek request per
+  // transition: pehli visit / dobara visit / mode change — sab yahin.
+  const loadedKeyRef = useRef<string | null>(null)
   useEffect(() => {
+    const visiting = visible && !wasVisible.current
+    wasVisible.current = visible
     if (!visible) return
+    const modeKey =
+      mode.kind === 'chip' ? `chip:${mode.chip.key}` : mode.kind === 'search' ? `search:${mode.query}` : 'foryou'
+    // load ki zaroorat: tab pehli baar / dobara khula, YA mode badla
+    if (!visiting && loadedKeyRef.current === modeKey) return
+    loadedKeyRef.current = modeKey
     if (mode.kind === 'foryou') {
+      // har tab-visit par NAYA feed (user request: har bar naya video)
+      if (visiting) saltRef.current += 1
       void loadForYou(saltRef.current)
     } else {
       void load(mode, null)
     }
-  }, [mode.kind, mode.kind === 'chip' ? mode.chip.key : mode.kind === 'search' ? mode.query : 'fy', visible])
-
-  // TAB DOBARA KHULA → NAYA FEED (user request: har bar naya video)
-  useEffect(() => {
-    if (visible && !wasVisible.current && mode.kind === 'foryou') {
-      saltRef.current += 1
-      void loadForYou(saltRef.current)
-    }
-    wasVisible.current = visible
-  }, [visible])
+  }, [mode.kind, mode.kind === 'chip' ? mode.chip.key : mode.kind === 'search' ? mode.query : 'fy', visible, load, loadForYou])
 
   // infinite scroll — visible tab par hi scroll sunte hain
   useEffect(() => {
