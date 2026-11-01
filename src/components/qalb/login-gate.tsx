@@ -24,7 +24,6 @@ import { BannerEcg } from '@/components/qalb/banner-ecg'
 import { QalbLogoMark } from '@/components/qalb/qalb-logo-mark'
 import {
   authErrorMessage,
-  googleSignInAuto,
   takeSheetFailDiag,
   clearPhoneSession,
   getAuthConfig,
@@ -76,20 +75,15 @@ export function LoginGate() {
     }
   }, [])
 
-  // v0.5.27: ZERO-TAP AUTO LOGIN — gate dikh raha hai = session restore
-  // nahi hui (update/uninstall/clear-data). Google Credential Manager
-  // pehle-authorized account chup-chaap wapis deta hai (authorization
-  // GOOGLE KE SERVER par hai — phone data me nahi). 1 account = sheet
-  // bhi nahi khulti, seedha login. Naye user par foran 'no-authorized'
-  // — koi wait nahi, gate normal. EK dafa hi try (loop kabhi nahi).
-  const autoTried = useRef(false)
-  useEffect(() => {
-    if (autoTried.current) return
-    if (!cfg?.apiKey || !cfg.googleClientId) return
-    autoTried.current = true
-    void googleSignInAuto()
-  }, [cfg])
-
+  // v0.5.28: ZERO-TAP AUTO LOGIN HATA DIYA — user report: "App kill hone
+  // par har baar Google login dialogues aa raha hai". Wajah: Credential
+  // Manager ka auto-select SIRF 1 authorized account par silent hota hai;
+  // 2+ accounts (testing me kai accounts se login hua) par Google apni
+  // account-picker sheet KHUD khol deta hai — har gate-mount par dialog.
+  // AB: koi AUTOMATIC Google dialog NAHI — login sirf button dabane par.
+  // Session restore waise hi chup-chaap hota rahega: localStorage →
+  // native mirror → cloud device-session (auth.ts init + late-restore).
+  //
   // resend countdown
   useEffect(() => {
     if (resendIn <= 0) return
