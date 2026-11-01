@@ -10,6 +10,7 @@
 import { useEffect, useRef } from 'react'
 import { usePlayerStore, ytBridge } from '@/lib/player-store'
 import { useToast } from '@/hooks/use-toast'
+import { loadYouTubeIframeApi, type YTNamespace } from '@/lib/yt-api'
 import {
   nativeUpdatePlayback,
   nativeStopPlayback,
@@ -29,65 +30,10 @@ interface YTPlayer {
   getDuration: () => number
   destroy: () => void
 }
-interface YTNamespace {
-  Player: new (
-    el: HTMLElement | string,
-    config: {
-      height?: string
-      width?: string
-      videoId?: string
-      host?: string
-      playerVars?: Record<string, string | number>
-      events?: {
-        onReady?: () => void
-        onStateChange?: (e: { data: number }) => void
-        onError?: (e: { data: number }) => void
-      }
-    }
-  ) => YTPlayer
-  PlayerState: {
-    ENDED: number
-    PLAYING: number
-    PAUSED: number
-    BUFFERING: number
-    CUED: number
-  }
-}
-declare global {
-  interface Window {
-    YT?: YTNamespace
-    onYouTubeIframeAPIReady?: () => void
-  }
-}
 
-let ytApiLoading = false
-function loadYouTubeIframeApi(): Promise<YTNamespace> {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') return reject(new Error('no window'))
-    if (window.YT?.Player) return resolve(window.YT)
-    if (ytApiLoading) {
-      const wait = setInterval(() => {
-        if (window.YT?.Player) {
-          clearInterval(wait)
-          resolve(window.YT)
-        }
-      }, 150)
-      setTimeout(() => clearInterval(wait), 15000)
-      return
-    }
-    ytApiLoading = true
-    window.onYouTubeIframeAPIReady = () => {
-      if (window.YT) resolve(window.YT)
-    }
-    const tag = document.createElement('script')
-    tag.src = 'https://www.youtube.com/iframe_api'
-    tag.async = true
-    tag.onerror = () => reject(new Error('YT API load failed'))
-    document.head.appendChild(tag)
-    setTimeout(() => {
-      if (!window.YT?.Player) reject(new Error('YT API timeout'))
-    }, 15000)
-  })
+// YT API loader ab shared lib (yt-api.ts) me hai — itube-watch bhi wahi use karta hai
+function loadYouTubeIframeApiLocal(): Promise<YTNamespace> {
+  return loadYouTubeIframeApi()
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -107,7 +53,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // ── init YT player once ────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-    loadYouTubeIframeApi()
+    loadYouTubeIframeApiLocal()
       .then((YT) => {
         if (cancelled || !hostRef.current || playerRef.current) return
         const player = new YT.Player(hostRef.current, {
@@ -179,6 +125,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     // Notification / lock-screen / headset buttons → player store
     let unlisten: (() => void) | null = null
     onNativeMediaAction((action: QalbMediaAction) => {
+      // v0.5.19: iTube video watch khula hai? — notification buttons iTube
+      // apne YT player par chalata hai (naat store touch NAHI karna warna
+      // video + naat dono bajenge). iTube band hote hi flag false.
+      if (usePlayerStore.getState().itubeActive) return
       const st = usePlayerStore.getState()
       if (action === 'play') {
         if (st.queue.length && st.currentIndex >= 0) {

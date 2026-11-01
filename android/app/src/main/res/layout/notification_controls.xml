@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Qalb — Compact media control bar (v0.5.19)
+  • Bade buttons PAAS-PAAS ek cluster me: [prev | play/pause circle | next]
+    (user request: pichhli bar me buttons door-door the + chhote the)
+  • EK HI ROW — 62dp total (Android 12+ ~64dp compact height-cap me safe)
+  • Koi thumbnail NAHI (user request)
+  • A13 content-fields NOTE: builder me setContentTitle/Text ZAROORI hai
+    (v0.5.17 me missing tha isliye notification hi drop ho gayi thi)
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="#EEF3E8"
+    android:paddingTop="5dp"
+    android:paddingBottom="5dp">
+
+    <!-- Center cluster: prev | play/pause | next — tight gaps, bade buttons -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/notif_prev"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_notif_prev"
+            android:tint="#1C2F24"
+            android:contentDescription="Pichla kalam" />
+
+        <ImageView
+            android:id="@+id/notif_toggle"
+            android:layout_width="52dp"
+            android:layout_height="52dp"
+            android:padding="12dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/ic_notif_play"
+            android:tint="#FFFFFF"
+            android:background="@drawable/notif_toggle_bg"
+            android:contentDescription="Play / Pause" />
+
+        <ImageView
+            android:id="@+id/notif_next"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_notif_next"
+            android:tint="#1C2F24"
+            android:contentDescription="Agla kalam" />
+    </LinearLayout>
+
+    <!-- Right corner: close (×) -->
+    <ImageView
+        android:id="@+id/notif_close"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="8dp"
+        android:padding="8dp"
+        android:src="@drawable/ic_notif_close"
+        android:tint="#5A6E61"
+        android:contentDescription="Band karein" />
+</FrameLayout>

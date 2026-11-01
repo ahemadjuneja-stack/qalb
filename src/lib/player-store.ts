@@ -25,6 +25,7 @@ interface PlayerState {
   ytApiReady: boolean
   failedVideoIds: string[]
   recents: QalbTrack[]
+  itubeActive: boolean // v0.5.19: iTube video watch khula hai (uske YT player par notification buttons)
 
   // internal setters
   setYtApiReady: (v: boolean) => void
@@ -32,6 +33,7 @@ interface PlayerState {
   setPosition: (p: number) => void
   setDuration: (d: number) => void
   markFailed: (videoId: string) => void
+  setItubeActive: (v: boolean) => void
 
   // actions
   playQueue: (tracks: QalbTrack[], startIndex?: number) => void
@@ -116,6 +118,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   ytApiReady: false,
   failedVideoIds: [],
   recents: [],
+  itubeActive: false,
 
   setYtApiReady: (v) => set({ ytApiReady: v }),
   setBuffering: (v) => set({ isBuffering: v }),
@@ -127,6 +130,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         ? s.failedVideoIds
         : [...s.failedVideoIds, videoId],
     })),
+  setItubeActive: (v) => set({ itubeActive: v }),
 
   playQueue: (tracks, startIndex = 0) => {
     if (!tracks.length) return

@@ -16,22 +16,27 @@ import android.os.PowerManager;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 
 /**
- * Qalb — Playback Foreground Service (MediaSession + custom control bar)
+ * Qalb — Playback Foreground Service (MediaSession + custom clustered bar)
  *
  * Naat chalte waqt ye service foreground mode me chalti hai:
- *  - MediaSessionCompat: lock screen + headset buttons par standard media controls
- *  - MediaStyle notification (v0.5.18, WAPAS): custom RemoteViews (v0.5.17)
- *    user ke device par render NAHI hui (notification + lock-screen card dono
- *    gayab the) — MediaStyle PROVEN hai, wahi final. Buttons: addAction
- *    (A12-) + PlaybackState actions (A13+ system template). FIX: session
- *    state PEHLI notification se PEHLE set — A13 pehla render bhi buttons
- *    ke sath. KOI thumbnail NAHI (user request): setLargeIcon + ALBUM_ART
- *    + pura thumb-download chain hataya. 1s re-post loop bhi hata (sirf
- *    session update) — SystemUI churn kam.
+ *  - CUSTOM RemoteViews bar (v0.5.19): bade buttons PAAS-PAAS ek cluster me
+ *    [prev | play/pause | next] — user request. v0.5.17 custom bar gayab
+ *    kyu hui thi? ROOT CAUSE MIL GAYA: v0.5.17 me builder se
+ *    setContentTitle/setContentText hat gaye the — Android 13+ apps
+ *    targeting T ko custom-view notification me standard content fields
+ *    chahiye, bina unke system notification DROP kar deta hai. v0.2.2/
+ *    v0.5.15 ka custom card render HOTA tha kyunki wahan title/text set
+ *    the. Ab: custom views + title/text DONO (A13 header + extraction
+ *    safe) — system MediaStyle NAHI (system media card buttons apne aap
+ *    failta hai — spacing user-control nahi).
+ *  - MediaSessionCompat: headset/Bluetooth buttons (token notification me
+ *    NAHI — warna A11+ SystemUI custom views ko media card se replace
+ *    kar deta) — sirf session API se controls.
  *  - Notification button presses → QalbNativePlugin.emitMediaAction() →
  *    WebView JS player store control
  *  - PARTIAL_WAKE_LOCK hold karta hai taaki screen band hone par bhi
@@ -397,28 +402,42 @@ public class PlaybackService extends Service {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setColor(SAGE_ACCENT) // system chrome bits sage accent me
-                // ── MEDIA BUTTONS — addActions (A12-) + PlaybackState (A13+).
-                // v0.5.18: MediaStyle WAPAS (custom RemoteViews user ke device
-                // par render nahi hui) — lock-screen card + shade media template.
-                .addAction(R.drawable.ic_notif_prev, "Pichla", actionPi(ACTION_PREV, 11))
-                .addAction(playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play,
-                        playing ? "Pause" : "Play", actionPi(ACTION_TOGGLE, 12))
-                .addAction(R.drawable.ic_notif_next, "Agla", actionPi(ACTION_NEXT, 13))
-                .addAction(R.drawable.ic_notif_close, "Band", actionPi(ACTION_STOP, 14));
-
-        // MediaStyle — proper media notification: lock screen card (A11+) +
-        // Android 13+ system template jo buttons PlaybackState se banata hai.
-        // KOI thumbnail: setLargeIcon + ALBUM_ART dono removed (user request).
-        try {
-            if (session != null) {
-                b.setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
-                        .setMediaSession(session.getSessionToken())
-                        .setShowActionsInCompactView(0, 1, 2)); // prev • play/pause • next
-            }
-        } catch (Exception ignored) {
-        }
+                // ── v0.5.19 CUSTOM clustered bar — title/text UPAR SET HAIN
+                // (A13 requirement — v0.5.17 inko hatane se notification drop
+                // ho gayi thi). addActions/MediaStyle NAHI — decorated template
+                // me system actions-row + hamara bar double ho jata.
+                .setCustomContentView(buildControlsViews())  // collapsed = button bar
+                .setCustomBigContentView(buildBigViews());   // expanded = bar + title
 
         return b.build();
+    }
+
+    /** Compact control bar: prev | play/pause | next cluster + close — bade buttons */
+    private RemoteViews buildControlsViews() {
+        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_controls);
+        rv.setImageViewResource(R.id.notif_toggle,
+                playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
+        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
+        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
+        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
+        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
+        return rv;
+    }
+
+    /** Expanded view: bada cluster upar + title/artist neeche — thumbnail NAHI */
+    private RemoteViews buildBigViews() {
+        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_player);
+        rv.setImageViewResource(R.id.notif_toggle,
+                playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
+        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
+        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
+        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
+        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
+        rv.setTextViewText(R.id.notif_title,
+                currentTitle != null ? currentTitle : "Naat chal rahi hai");
+        rv.setTextViewText(R.id.notif_artist,
+                (currentArtist != null ? currentArtist : "Qalb") + " • Qalb");
+        return rv;
     }
 
     // ── wake lock ────────────────────────────────────────────────────
