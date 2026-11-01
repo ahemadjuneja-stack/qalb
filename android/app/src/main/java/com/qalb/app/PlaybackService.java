@@ -32,11 +32,22 @@ import androidx.core.app.NotificationCompat;
  *    chahiye, bina unke system notification DROP kar deta hai. v0.2.2/
  *    v0.5.15 ka custom card render HOTA tha kyunki wahan title/text set
  *    the. Ab: custom views + title/text DONO (A13 header + extraction
- *    safe) — system MediaStyle NAHI (system media card buttons apne aap
- *    failta hai — spacing user-control nahi).
- *  - MediaSessionCompat: headset/Bluetooth buttons (token notification me
- *    NAHI — warna A11+ SystemUI custom views ko media card se replace
- *    kar deta) — sirf session API se controls.
+ *    safe). PLAIN MediaStyle ab bhi NAHI (wo custom views ko REPLACE
+ *    kar deta — spacing user-control nahi) — NEECHE wala decorated
+ *    style dekho.
+ *  - MediaSessionCompat: headset/Bluetooth buttons — AUR v0.5.29 se session
+ *    TOKEN notification se juda hai (DecoratedMediaCustomViewStyle) —
+ *    LOCK-SCREEN MEDIA CARD ka PERMANENT FIX: Android 11/13+ lock screen
+ *    par play/next/prev card SIRF usi notification se banta hai jisme
+ *    MediaStyle-family template + session token ho. Custom views ke saath
+ *    token nahi tha → isMediaNotification() false → lock screen par media
+ *    card KABHI nahi banta tha (user: "lock lagane par layout nahi aaraha
+ *    next aur play ka — bar bar update karne par bhi"). DecoratedMedia-
+ *    CustomViewStyle = custom clustered bar (paas-paas buttons) SHADE me
+ *    dikhta rahega + notification SYSTEM ki nazar me MEDIA notification
+ *    ban jayegi → lock screen par system media card (prev/play/next +
+ *    seekbar, PlaybackState se) banta hai. FOREGROUND_SERVICE_IMMEDIATE
+ *    bhi — A12+ background-FGS notification ko ~10s postpone nahi karega.
  *  - Notification button presses → QalbNativePlugin.emitMediaAction() →
  *    WebView JS player store control
  *  - PARTIAL_WAKE_LOCK hold karta hai taaki screen band hone par bhi
@@ -404,10 +415,38 @@ public class PlaybackService extends Service {
                 .setColor(SAGE_ACCENT) // system chrome bits sage accent me
                 // ── v0.5.19 CUSTOM clustered bar — title/text UPAR SET HAIN
                 // (A13 requirement — v0.5.17 inko hatane se notification drop
-                // ho gayi thi). addActions/MediaStyle NAHI — decorated template
-                // me system actions-row + hamara bar double ho jata.
+                // ho gayi thi). addActions NAHI — decorated template me system
+                // actions-row + hamara bar double ho jata.
                 .setCustomContentView(buildControlsViews())  // collapsed = button bar
                 .setCustomBigContentView(buildBigViews());   // expanded = bar + title
+
+        // ── v0.5.29 LOCK-SCREEN MEDIA CARD — PERMANENT FIX ──────────
+        // A11+/A13+ lock screen media controls sirf MEDIA notification se
+        // bante hain (platform MediaStyle template + session token).
+        // DecoratedMediaCustomViewStyle: custom views PRESERVE karta hai
+        // (plain MediaStyle unhe replace kar deta tha — v0.5.18 ka issue)
+        // aur notification ko media notification bana deta hai → lock
+        // screen par system ka media card (prev/play/next + seekbar)
+        // PlaybackState se banta hai. Fallback: session null ho to bhi
+        // style lagao — shade me custom bar waise hi chalega.
+        try {
+            androidx.media.app.NotificationCompat.DecoratedMediaCustomViewStyle mediaStyle =
+                    new androidx.media.app.NotificationCompat.DecoratedMediaCustomViewStyle();
+            if (session != null) {
+                mediaStyle.setMediaSession(session.getSessionToken());
+            }
+            b.setStyle(mediaStyle);
+        } catch (Exception ignored) {
+            // style fail = purana custom-only behavior — crash nahi
+        }
+
+        // A12+ FGS notification delay khatam — lock lagane ke TURANT baad
+        // card dikhna chahiye, 10s baad nahi (foregroundServiceBehavior
+        // androidx.core 1.5+ — kisi purane build me na ho to catch me safe)
+        try {
+            b.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+        } catch (Exception ignored) {
+        }
 
         return b.build();
     }
