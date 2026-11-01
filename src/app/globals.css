@@ -464,12 +464,12 @@
 .qalb-divider {
   height: 2px;
   border-radius: 999px;
-  opacity: 0.55;
+  opacity: 0.4;
   background: linear-gradient(
     90deg,
     transparent,
-    var(--qalb-ekg) 30%,
-    var(--gold) 55%,
+    var(--foreground) 30%,
+    var(--foreground) 55%,
     transparent 85%
   );
   background-size: 200% 100%;

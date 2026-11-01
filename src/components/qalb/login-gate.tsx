@@ -189,7 +189,7 @@ export function LoginGate() {
       <div className="relative z-[1] flex h-full flex-col">
         {/* OFFICIAL LOGO — animated mark (patte breathe + dil dhadakta hai) */}
         <div className="flex flex-col items-center pt-[calc(env(safe-area-inset-top)+4.2rem)]">
-          <div className="relative w-64 overflow-hidden rounded-2xl bg-[#1f1f1d] px-4 py-5 shadow-[0_10px_34px_-10px_rgba(0,0,0,0.8)] ring-1 ring-red-600/30">
+          <div className="relative w-64 overflow-hidden rounded-2xl bg-[#1f1f1d] px-4 py-5 shadow-[0_10px_34px_-10px_rgba(0,0,0,0.8)] ring-1 ring-white/15">
             <QalbLogoMark className="w-full" />
           </div>
         </div>
