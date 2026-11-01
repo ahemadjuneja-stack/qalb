@@ -164,9 +164,22 @@ export function ItubeWatch({
   // ── next/prev ───────────────────────────────────────────────────
   const relatedRef = useRef(related)
   relatedRef.current = related
+  // v0.5.23 — LIVE feed refs (auto-next ab asli YT related → isi channel
+  // → shuruati list order me chunta hai, stale prop se nahi)
+  const ytRelRef = useRef(ytRel)
+  ytRelRef.current = ytRel
+  const chanVidsRef = useRef(chanVids)
+  chanVidsRef.current = chanVids
   const nextTrack = () => {
-    const r = relatedRef.current[0]
-    if (r) onPickRef.current(r)
+    const cur = curVidRef.current
+    const pools = [ytRelRef.current, chanVidsRef.current, relatedRef.current]
+    for (const pool of pools) {
+      const r = pool.find((t) => t.videoId && t.videoId !== cur)
+      if (r) {
+        onPickRef.current(r)
+        return
+      }
+    }
   }
   const prevTrack = () => {
     const h = historyRef.current
@@ -198,6 +211,24 @@ export function ItubeWatch({
     } else if (st === 0) {
       playingRef.current = false
       nextTrack() // video khatam — agla related (YouTube autoplay feel)
+      // v0.5.23 YT END-SCREEN SUPPRESSOR — video khatam hote hi YT iframe
+      // apna suggestions-grid overlay dikhata hai (usme click karne se
+      // YouTube app/site khulta tha). 1.4s me agla video load/shuru na
+      // hua to wahi video start par le aao (seek 0 + pause) — end-screen
+      // grid gayab, YouTube tak koi rasta nahi.
+      window.setTimeout(() => {
+        try {
+          const p = ytPlayerRef.current
+          if (p && p.getPlayerState() === 0) {
+            p.seekTo(0, true)
+            p.pauseVideo()
+            userPausedRef.current = true
+            pushNative(false)
+          }
+        } catch {
+          /* player gone */
+        }
+      }, 1400)
     }
   }
   useEffect(() => {
@@ -236,13 +267,47 @@ export function ItubeWatch({
     }
   }, [])
 
-  // ── YT.Player init (mount once) — naat engine jaisa single host ──
-  useEffect(() => {
-    let cancelled = false
-    loadYouTubeIframeApi()
+  // ── v0.5.23 YT PLAYER ENGINE — createPlayer + iframe self-heal ──
+  // YT.Player host div ko REPLACE kar deta hai — recreate ke liye outer
+  // wrapper (playerHostRef) har baar fresh inner div banata hai.
+  // IFRAME SELF-HEAL: YT embed ke andar end-screen card ya "Watch on
+  // YouTube" logo click karne par iframe khud youtube.com par navigate
+  // ho jata hai (wahi se YouTube app/site khulta tha). Iframe ke 'load'
+  // event se pakad kar player FORAN recreate — wahi video hamare app ke
+  // player me wapas chalu, YouTube ka page kabhi render hi nahi hota.
+  const healArmRef = useRef(false)
+  const createPlayerRef = useRef<() => void>(() => {})
+  const onIframeLoad = () => {
+    if (!healArmRef.current) return // pehla load = normal embed start
+    healArmRef.current = false
+    try {
+      ytPlayerRef.current?.destroy()
+    } catch {
+      /* gone */
+    }
+    ytPlayerRef.current = null
+    createPlayerRef.current()
+  }
+
+  const createPlayer = () => {
+    const wrap = playerHostRef.current
+    if (!wrap) return
+    try {
+      ytPlayerRef.current?.destroy()
+    } catch {
+      /* gone */
+    }
+    ytPlayerRef.current = null
+    healArmRef.current = false
+    wrap.innerHTML = ''
+    const inner = document.createElement('div')
+    inner.style.width = '100%'
+    inner.style.height = '100%'
+    wrap.appendChild(inner)
+    void loadYouTubeIframeApi()
       .then((YT) => {
-        if (cancelled || !playerHostRef.current || ytPlayerRef.current) return
-        const player = new YT.Player(playerHostRef.current, {
+        if (!inner.isConnected) return // screen band / recreate ho chuka
+        const player = new YT.Player(inner, {
           height: '100%',
           width: '100%',
           playerVars: {
@@ -263,6 +328,16 @@ export function ItubeWatch({
               } catch {
                 /* not ready */
               }
+              // self-heal guard: pehla load (embed start) ke baad arm —
+              // uske baad koi bhi load = iframe YT se bhaag gaya
+              try {
+                player.getIframe().addEventListener('load', onIframeLoad)
+              } catch {
+                /* iframe gone */
+              }
+              window.setTimeout(() => {
+                healArmRef.current = true
+              }, 4000)
             },
             onStateChange: (e) => stateHandlerRef.current?.(e.data),
             onError: () => {
@@ -276,8 +351,18 @@ export function ItubeWatch({
       .catch(() => {
         // YT API load fail — splash dikhta rahega (naat bhi tab na chalega)
       })
+  }
+  createPlayerRef.current = createPlayer
+
+  useEffect(() => {
+    createPlayer()
     return () => {
-      cancelled = true
+      try {
+        ytPlayerRef.current?.destroy()
+      } catch {
+        /* gone */
+      }
+      ytPlayerRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

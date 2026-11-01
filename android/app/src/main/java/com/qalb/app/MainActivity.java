@@ -35,6 +35,17 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(QalbNativePlugin.class);
         super.onCreate(savedInstanceState);
 
+        // v0.5.23 — YouTube APP/SITE GUARD: WebView ka koi bhi main-frame
+        // navigation youtube.com/youtu.be par jaane ki koshish kare (YT
+        // embed ke end-screen/logo links) to BLOCK + videoId JS ko — video
+        // Qalb ke andar chalegi, YouTube app kabhi nahi khulegi.
+        try {
+            if (bridge != null && bridge.getWebView() != null) {
+                bridge.setWebViewClient(new QalbWebViewClient(bridge));
+            }
+        } catch (Exception ignored) {
+        }
+
         // Back gesture/button → JS-driven navigation (har screen par kaam kare)
         try {
             getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

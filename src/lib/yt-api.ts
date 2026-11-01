@@ -14,6 +14,8 @@ export interface YTPlayer {
   getCurrentTime: () => number
   getDuration: () => number
   getPlayerState: () => number
+  /** embed ka iframe element — self-heal load-guard ke liye (v0.5.23) */
+  getIframe: () => HTMLIFrameElement
   destroy: () => void
 }
 

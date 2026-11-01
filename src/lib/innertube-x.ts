@@ -75,6 +75,34 @@ export function parseViews(text: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+/** v0.5.23 — lockup byline short-form views ("7.4K views", "1.2M views",
+ *  "10 lakh views") → number. parseViews sirf digits leta hai isliye
+ *  "7.4K views" = 74 ban jata tha — lockup format me short-form hi aata hai. */
+export function parseViewsShort(text: unknown): number {
+  if (typeof text !== 'string') return 0
+  const m = text
+    .toLowerCase()
+    .replace(/,/g, '')
+    .match(/([\d.]+)\s*(k|k|hazar|l|lac|lakh|m|mn|crore|cr|b|bn)?\s*(views|dekh|bar)?/)
+  if (!m) return parseViews(text)
+  const base = Number.parseFloat(m[1])
+  if (!Number.isFinite(base)) return parseViews(text)
+  const mult: Record<string, number> = {
+    k: 1e3,
+    hazar: 1e3,
+    l: 1e5,
+    lac: 1e5,
+    lakh: 1e5,
+    m: 1e6,
+    mn: 1e6,
+    crore: 1e7,
+    cr: 1e7,
+    b: 1e9,
+    bn: 1e9,
+  }
+  return Math.round(base * (mult[m[2]] ?? 1))
+}
+
 export function parseDuration(text: unknown): number {
   if (typeof text !== 'string') return 0
   const parts = text.split(':').map((p) => parseInt(p, 10))
@@ -160,6 +188,81 @@ export function collectVideosX(node: any, out: RawVideoX[], tokens: string[], de
         durationSec: dur,
         published: cvr.publishedTimeText?.simpleText ?? '',
       })
+    }
+  }
+
+  // v0.5.23 — lockupViewModel (YouTube ka NAYA 2026 format):
+  // channel browse (videos-tab) aur watch-page related ("next" endpoint)
+  // ab videoRenderer/compactVideoRenderer ki jagah lockupViewModel bhejte
+  // hain — isi liye channel page ki videos load nahi ho rahi thi.
+  // Structure (live-verified 2026-11):
+  //   contentId = videoId, contentType = LOCKUP_CONTENT_TYPE_VIDEO
+  //   metadata.lockupMetadataViewModel.title.content = title
+  //   ...metadata.contentMetadataViewModel.metadataRows[].metadataParts[]
+  //       .text.content = "7.4K views" / "3 hours ago" / channel-name
+  //   metadata...image.decoratedAvatarViewModel...browseEndpoint.browseId
+  //     = channel UC… (related feed me milta hai)
+  //   contentImage.thumbnailViewModel.overlays[].thumbnailBottomOverlay
+  //     ViewModel.badges[].thumbnailBadgeViewModel.text = "8:02" duration
+  const lv = node.lockupViewModel
+  if (lv && typeof lv === 'object' && typeof lv.contentId === 'string') {
+    const isVideo = lv.contentType === 'LOCKUP_CONTENT_TYPE_VIDEO'
+    const meta = lv.metadata?.lockupMetadataViewModel
+    const title = typeof meta?.title?.content === 'string' ? meta.title.content : null
+    if (isVideo && title) {
+      // byline rows flatten — views / published / channel classify
+      const parts: string[] = []
+      const rows = meta?.metadata?.contentMetadataViewModel?.metadataRows ?? []
+      for (const row of rows) {
+        for (const part of row?.metadataParts ?? []) {
+          const c = part?.text?.content
+          if (typeof c === 'string' && c.trim()) parts.push(c.trim())
+        }
+      }
+      let views = 0
+      let published = ''
+      let channel: string | null = null
+      for (const c of parts) {
+        const lc = c.toLowerCase()
+        if (!views && /\bviews?\b/.test(lc)) views = parseViewsShort(c)
+        else if (!views && /^[\d.,]+\s*(k|hazar|lac|lakh|mn?|crore|cr|bn?|b)?$/i.test(c))
+          views = parseViewsShort(c) // "1.1M" — bina 'views' word ke
+        else if (
+          !published &&
+          /\b(ago|min|hr|hour|day|week|month|year|mo|pehle)s?\b/.test(lc)
+        )
+          published = c
+        else if (!channel && c.length <= 80 && !/^\d+([:.]\d+)*\s*$/.test(c)) channel = c
+      }
+      // channelId — avatar ke "Go to channel" tap se (related feed)
+      const av = meta?.image?.decoratedAvatarViewModel
+      const channelId =
+        av?.rendererContext?.commandContext?.onTap?.innertubeCommand?.browseEndpoint?.browseId ??
+        null
+      const chanName =
+        channel ?? av?.a11yLabel?.replace(/^Go to channel\s*/i, '') ?? null
+      // duration — thumbnail badge text ("8:02"); live/shorts badge text
+      // time-pattern me nahi aata → dur 0 → skip (pehle jaisa rule)
+      let dur = 0
+      const overlays = lv.contentImage?.thumbnailViewModel?.overlays ?? []
+      for (const o of overlays) {
+        for (const b of o?.thumbnailBottomOverlayViewModel?.badges ?? []) {
+          const bt = b?.thumbnailBadgeViewModel?.text
+          if (typeof bt === 'string' && /^\d{1,2}(:\d{2}){1,2}$/.test(bt)) dur = parseDuration(bt)
+        }
+      }
+      if (dur > 0 && dur < 3 * 3600) {
+        out.push({
+          videoId: lv.contentId,
+          title,
+          channel: chanName || 'YouTube',
+          channelId: typeof channelId === 'string' ? channelId : null,
+          views,
+          viewsText: parts.find((c) => /\bviews?\b/i.test(c)) ?? '',
+          durationSec: dur,
+          published,
+        })
+      }
     }
   }
 

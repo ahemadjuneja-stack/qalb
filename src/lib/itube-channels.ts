@@ -131,9 +131,15 @@ export async function fetchChannelVideos(
 
   // Channel ki videos par strict islamic filter NAHI (user ne khud
   // channel chuna) — sirf blocked-content safety net
-  const tracks = videosToTracks(videos, 'itchan').filter(
-    (t) => !isBlockedResult(`${t.title} ${t.artist ?? ''}`.toLowerCase())
-  )
+  // v0.5.23: lockup format me channel-page videos ka byline sirf
+  // views/published hota hai (channel name ki row nahi) — artist khali
+  // ('YouTube') reh jaye to channel ka asli naam bhar do
+  const chanName = meta.title || fallbackName
+  const tracks = videosToTracks(videos, 'itchan')
+    .map((t) =>
+      !t.artist || t.artist === 'YouTube' ? { ...t, artist: chanName || t.artist } : t
+    )
+    .filter((t) => !isBlockedResult(`${t.title} ${t.artist ?? ''}`.toLowerCase()))
   return {
     tracks,
     continuation: tokens[0] ?? null,

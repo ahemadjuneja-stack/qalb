@@ -19,6 +19,7 @@ import { Bell, Check, ExternalLink, Loader2, Search, TriangleAlert, Users, X } f
 import { usePlayerStore } from '@/lib/player-store'
 import { viewsLabel } from '@/lib/innertube-x'
 import { useToast } from '@/hooks/use-toast'
+import { useViewBackHandler } from '@/lib/back-stack'
 import { isNativeApp, nativeOpenExternal } from '@/plugins/qalb-native'
 import {
   asChannelInfo,
@@ -508,6 +509,47 @@ export function ITubeView({ visible }: { visible: boolean }) {
       .then(() => setSubsTick((v) => v + 1))
       .catch(() => {})
   }, [])
+
+  // ── v0.5.23 BACK CHAIN (user request): channel/channels/search me se
+  // back dabane par iTube home (foryou) par wapas — seedha iPlayer tab
+  // par NAHI. iTube home par back dabane par shell ka tab-chain iPlayer
+  // par le jata hai (pehle jaisa).
+  // NOTE: watch overlay ka apna handler ('itube-watch') pehle chalta hai
+  // (mount order) — watch khula ho to pehle video band hogi, phir yahan.
+  useViewBackHandler('itube-mode', 'reels', () => {
+    if (watch) return false // watch overlay pehle band ho
+    if (mode.kind === 'foryou' || mode.kind === 'chip') return false
+    // channel page / channels tab / search — sab iTube home par
+    setMode({ kind: 'foryou' })
+    setInput('')
+    window.scrollTo({ top: 0 })
+    return true
+  })
+
+  // ── v0.5.23 native YT-GUARD event: YT embed ke andar koi link dabaya
+  // (end-screen / watch-on-youtube) jise native side ne block kar diya —
+  // videoId mila to video YAHIN hamare watch screen me chala dete hain.
+  // YouTube app/site kahin nahi khulti — sab videos app ke andar.
+  useEffect(() => {
+    const onYtLink = (e: Event) => {
+      const vid = (e as CustomEvent<{ videoId?: string }>).detail?.videoId
+      if (!vid || !visible) return
+      const known = [...feed, ...tracks].find((t) => t.videoId === vid)
+      usePlayerStore.getState().pause()
+      setWatch(
+        known ?? {
+          id: `itlink-${vid}`,
+          videoId: vid,
+          title: 'YouTube video',
+          artist: 'YouTube',
+          category: 'NAAT',
+          thumbnailUrl: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+        }
+      )
+    }
+    window.addEventListener('qalbYtLink', onYtLink)
+    return () => window.removeEventListener('qalbYtLink', onYtLink)
+  }, [visible, feed, tracks])
 
   const activeKey =
     mode.kind === 'foryou'
