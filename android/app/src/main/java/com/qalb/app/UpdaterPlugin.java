@@ -1,11 +1,15 @@
 package com.qalb.app;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
@@ -17,9 +21,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -38,6 +44,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @CapacitorPlugin(name = "UpdaterPlugin")
 public class UpdaterPlugin extends Plugin {
+
+    /** v0.5.20: PackageInstaller session status broadcast (silent/confirm install) */
+    private static final String INSTALL_ACTION = "com.qalb.app.INSTALL_STATUS";
+    private BroadcastReceiver installReceiver = null;
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean downloading = new AtomicBoolean(false);
@@ -190,7 +200,21 @@ public class UpdaterPlugin extends Plugin {
     }
 
     /** Install intent — pehli baar "unknown apps" permission chahiye ho to settings khud khul jati hai
-     *  (openSettings=false → sirf check, settings nahi kholte — auto-retry ke liye) */
+     *  (openSettings=false → sirf check, settings nahi kholte — auto-retry ke liye)
+     *
+     *  v0.5.20 UPGRADE — SCAN-FREE UPDATES: ab direct ACTION_INSTALL_PACKAGE intent
+     *  ki jagah PackageInstaller STREAMING SESSION use hota hai:
+     *    • A12+ + same-signer APK + UPDATE_PACKAGES_WITHOUT_USER_ACTION permission
+     *      → setRequireUserAction(false) = SILENT install — na installer dialog,
+     *      na Play Protect "App scan recommended" prompt (dusre sideloaded apps
+     *      ke scan-free in-app updates jaisa).
+     *    • Silent na ho sake (A9-11 / OEM quirk) → session system install-confirm
+     *      dialog deta hai (PENDING_USER_ACTION receiver se launch).
+     *    • PackageInstaller me koi bhi exception → purana ACTION_INSTALL_PACKAGE
+     *      path fallback (hamesha kuch na kuch karega).
+     *  NOTE: PEHLI install (app hi installed nahi) par system ka scan prompt
+     *  phir bhi aa sakta hai — wo Google ka device-level rule hai, bypass
+     *  app-side se possible nahi. Baad ke updates ab scan-free hain. */
     @PluginMethod
     public void installApk(PluginCall call) {
         String path = call.getString("path");
@@ -231,6 +255,15 @@ public class UpdaterPlugin extends Plugin {
                 }
             }
 
+            // ── v0.5.20 PRIMARY: PackageInstaller streaming session ──
+            try {
+                String mode = packageInstallerInstall(ctx, apk);
+                call.resolve(new JSObject().put("ok", true).put("mode", mode));
+                return;
+            } catch (Exception pex) {
+                // aage legacy path — koi bhi exception non-fatal hai
+            }
+
             Uri uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", apk);
 
             // ACTION_INSTALL_PACKAGE (explicit installer) — na mile to ACTION_VIEW fallback
@@ -250,10 +283,107 @@ public class UpdaterPlugin extends Plugin {
                 intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
                 ctx.startActivity(intent);
             }
-            call.resolve(new JSObject().put("ok", true));
+            call.resolve(new JSObject().put("ok", true).put("mode", "legacy"));
         } catch (Exception e) {
             call.reject("Install error: " + safeMsg(e));
         }
+    }
+
+    // ── v0.5.20 PackageInstaller streaming (scan-free silent update) ──────
+
+    /** APK ko PackageInstaller session me stream karke commit karo.
+     *  Return: "silent" (A12+, koi dialog nahi) ya "confirm" (system confirm dialog).
+     *  Throws: koi bhi problem — caller legacy intent par fallback karega. */
+    private String packageInstallerInstall(Context ctx, File apk) throws Exception {
+        PackageManager pm = ctx.getPackageManager();
+        PackageInstaller pi = pm.getPackageInstaller();
+
+        PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        // same package = SAME-SIGNER UPDATE session (silent ki shart)
+        params.setAppPackageName(ctx.getPackageName());
+        boolean silent = false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // A12+: manifest me UPDATE_PACKAGES_WITHOUT_USER_ACTION hai →
+            // ye flag same-signer update ko BINA user-action install karta hai
+            // (na installer dialog, na Play Protect scan prompt)
+            params.setRequireUserAction(false);
+            silent = true;
+        }
+
+        int sessionId = pi.createSession(params);
+        PackageInstaller.Session session = pi.openSession(sessionId);
+        try {
+            InputStream in = new BufferedInputStream(new FileInputStream(apk));
+            OutputStream out = session.openWrite("qalb-update.apk", 0, apk.length());
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                out.write(buf, 0, n);
+            }
+            session.fsync(out);
+            out.close();
+            in.close();
+
+            // status receiver pehle register (commit se pehle — race-safe)
+            registerInstallReceiver(ctx);
+
+            Intent statusIntent = new Intent(INSTALL_ACTION).setPackage(ctx.getPackageName());
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                flags |= PendingIntent.FLAG_MUTABLE; // system extras bharta hai (PENDING_USER_ACTION)
+            }
+            PendingIntent sti = PendingIntent.getBroadcast(ctx, sessionId, statusIntent, flags);
+            session.commit(sti.getIntentSender());
+        } finally {
+            session.close(); // commit ke baad resources release (install process me chalta rahega)
+        }
+        return silent ? "silent" : "confirm";
+    }
+
+    /** Session status broadcast — silent fail hua to confirm dialog khud launch,
+     *  final result JS ko installStatus event me. */
+    private void registerInstallReceiver(Context ctx) {
+        if (installReceiver != null) return; // pehle se active
+        installReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent intent) {
+                try {
+                    int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS,
+                            PackageInstaller.STATUS_FAILURE);
+                    if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                        // silent nahi hua (A9-11/OEM quirk) — system confirm dialog kholo
+                        @SuppressWarnings("deprecation")
+                        Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
+                        if (confirm != null) {
+                            confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            try {
+                                c.startActivity(confirm);
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        return; // final status ka intezaar
+                    }
+                    JSObject res = new JSObject();
+                    res.put("status", status == PackageInstaller.STATUS_SUCCESS ? "success" : "failed");
+                    if (status != PackageInstaller.STATUS_SUCCESS) {
+                        String msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                        res.put("message", msg != null ? msg : "install failed (" + status + ")");
+                    }
+                    notifyListeners("installStatus", res);
+                    try {
+                        c.unregisterReceiver(this);
+                    } catch (Exception ignored) {
+                    }
+                    installReceiver = null;
+                } catch (Exception ignored) {
+                    // receiver me crash app ko nahi tod sakta
+                }
+            }
+        };
+        androidx.core.content.ContextCompat.registerReceiver(ctx, installReceiver,
+                new IntentFilter(INSTALL_ACTION),
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     /** "Install unknown apps" permission wali system settings screen kholo */
@@ -529,6 +659,10 @@ public class UpdaterPlugin extends Plugin {
         HttpURLConnection c = activeConnection;
         if (c != null) {
             try { c.disconnect(); } catch (Exception ignored) {}
+        }
+        if (installReceiver != null) {
+            try { getContext().unregisterReceiver(installReceiver); } catch (Exception ignored) {}
+            installReceiver = null;
         }
     }
 

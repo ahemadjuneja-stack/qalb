@@ -56,6 +56,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- In-app auto updater: APK install intent (Android 8+ par user ek dafa allow karta hai) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- v0.5.20: SAME-SIGNER SILENT UPDATE (A12+) — in-app updates bina installer
+         dialog/bina Play Protect "App scan recommended" prompt ke (scan-free
+         updates, dusre sideloaded apps jaisa). Pehli install par system scan
+         prompt phir bhi aa sakta hai — wo Google ka app-level nahi hai. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Background playback: foreground service + wake lock + notification -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
