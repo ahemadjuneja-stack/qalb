@@ -119,7 +119,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
     const my = ++reqId.current
     setLoadingMore(true)
     try {
-      const res = await buildItubeFeed(nextSalt)
+      const res = await withTimeout(buildItubeFeed(nextSalt), ITUBE_WATCHDOG_MS)
       if (my !== reqId.current) return
       saltRef.current = nextSalt
       const have = new Set(feed.map((t) => t.videoId))
@@ -196,6 +196,33 @@ export function ITubeView({ visible }: { visible: boolean }) {
       void load(mode, null)
     }
   }, [mode.kind, mode.kind === 'chip' ? mode.chip.key : mode.kind === 'search' ? mode.query : 'fy', visible, load, loadForYou])
+
+  // ── UI WATCHDOG (v0.5.13 — skeleton-forever KILLER, layer-3 safety):
+  // request-level timeouts (15s) ke bawajood agar kisi bhi wajah se
+  // loading 18s se zyada atki (hang / reqId race / WebView stall) —
+  // force-fail + EK auto-retry. Skeleton kabhi forever stuck nahi.
+  const retryRef = useRef(0)
+  useEffect(() => {
+    retryRef.current = 0
+  }, [visible, mode])
+  useEffect(() => {
+    if (!loading || !visible) return
+    const timer = setTimeout(() => {
+      reqId.current += 1 // sab in-flight requests discard
+      if (retryRef.current < 1) {
+        retryRef.current += 1
+        if (mode.kind === 'foryou') void loadForYou(saltRef.current)
+        else void load(mode, null)
+      } else {
+        setFeed([])
+        setShown(0)
+        setTracks([])
+        setLoading(false)
+        setFailed(true)
+      }
+    }, 18000)
+    return () => clearTimeout(timer)
+  }, [loading, visible, mode, load, loadForYou])
 
   // infinite scroll — visible tab par hi scroll sunte hain
   useEffect(() => {

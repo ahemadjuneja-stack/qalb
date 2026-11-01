@@ -16,8 +16,10 @@ import type { QalbTrack } from '@/lib/types'
 
 // YouTube web client ki PUBLIC key — youtube.com ke source me embedded
 const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
+// v0.5.13: client version refresh — stale (2025) version par YouTube
+// kabhi-kabhi empty/stale response deta hai. Current-ish WEB version.
 const CLIENT_NAME = 'WEB'
-const CLIENT_VERSION = '2.20250101.00.00'
+const CLIENT_VERSION = '2.20261001.01.00'
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
@@ -102,6 +104,8 @@ async function httpPostJson(
     return null
   }
 }
+
+export { httpGetText as ytHttpGetText, extractYtInitialData as ytExtractInitialData }
 
 // reels.ts (v0.2.6) download bhi yahi helper use karta hai —
 // native par CapacitorHttp (CORS bypass), web par normal fetch

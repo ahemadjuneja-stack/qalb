@@ -12,12 +12,14 @@
 
 import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
-import { innertubePostJson } from '@/lib/youtube-search-source'
+import { innertubePostJson, ytHttpGetText, ytExtractInitialData } from '@/lib/youtube-search-source'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
-const CLIENT_VERSION = '2.20250101.00.00'
+// v0.5.13: client version refresh (stale 2025 version se YouTube empty
+// response de sakta hai) — youtube-search-source.ts ke saath synced
+const CLIENT_VERSION = '2.20261001.01.00'
 const DESKTOP_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 
@@ -132,12 +134,23 @@ export interface PageX {
   continuation: string | null
 }
 
-/** ENRICHED InnerTube search — query + filter params + continuation */
+/** ENRICHED InnerTube search — query + filter params + continuation
+ *  v0.5.13: JSON search fail/empty → HTML scrape fallback (youtube.com
+ *  /results ka ytInitialData — same parser). Feed kabhi network-layout
+ *  change se puri tarah na ruke. */
 export async function innertubeSearchX(
   query: string,
   params: string,
   continuation: string | null
 ): Promise<PageX | null> {
+  const parse = (data: any): PageX | null => {
+    if (!data || typeof data !== 'object') return null
+    const videos: RawVideoX[] = []
+    const tokens: string[] = []
+    collectVideosX(data, videos, tokens)
+    return { videos, continuation: tokens[0] ?? null }
+  }
+
   const body = continuation
     ? { ...INNERTUBE_CONTEXT, continuation }
     : { ...INNERTUBE_CONTEXT, query, params }
@@ -152,11 +165,28 @@ export async function innertubeSearchX(
     },
     body
   ).catch(() => null)
-  if (!data || typeof data !== 'object') return null
-  const videos: RawVideoX[] = []
-  const tokens: string[] = []
-  collectVideosX(data, videos, tokens)
-  return { videos, continuation: tokens[0] ?? null }
+  const parsed = parse(data)
+  if (parsed && parsed.videos.length) return parsed
+
+  // HTML scrape fallback — sirf pehla page (continuation support nahi)
+  if (continuation) return parsed
+  try {
+    const html = await ytHttpGetText(
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}${params ? `&sp=${params}` : ''}&hl=en&gl=IN`,
+      {
+        'User-Agent': DESKTOP_UA,
+        'Accept-Language': 'en-US,en;q=0.9,ur;q=0.8',
+        Cookie: 'SOCS=CAI; CONSENT=YES+cb',
+      }
+    )
+    if (html) {
+      const scraped = parse(ytExtractInitialData(html))
+      if (scraped && scraped.videos.length) return scraped
+    }
+  } catch {
+    /* ignore — caller fallback pool pe chalega */
+  }
+  return parsed
 }
 
 /** Title/channel se category infer — taste profile ko sahi category mile */
