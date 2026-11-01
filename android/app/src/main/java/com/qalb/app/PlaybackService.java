@@ -8,8 +8,6 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -18,29 +16,22 @@ import android.os.PowerManager;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
-import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
-
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Qalb — Playback Foreground Service (MediaSession + custom control bar)
  *
  * Naat chalte waqt ye service foreground mode me chalti hai:
  *  - MediaSessionCompat: lock screen + headset buttons par standard media controls
- *  - CUSTOM control bar (v0.5.17) — user request: EK row — left Previous,
- *    beech Play/Pause (emerald circle), right Next + right corner chhota close (×).
- *    KOI thumbnail NAHI. Compact = pure button bar (single row — Android 12+
- *    height-cap me bhi HAMESHA poora dikhega); expanded = bar + title/artist.
- *    (v0.5.16 ka MediaStyle hataya — Android 13 system-template par play/pause
- *    button OEM ROM ke hisaab se gayab ho raha tha.)
+ *  - MediaStyle notification (v0.5.18, WAPAS): custom RemoteViews (v0.5.17)
+ *    user ke device par render NAHI hui (notification + lock-screen card dono
+ *    gayab the) — MediaStyle PROVEN hai, wahi final. Buttons: addAction
+ *    (A12-) + PlaybackState actions (A13+ system template). FIX: session
+ *    state PEHLI notification se PEHLE set — A13 pehla render bhi buttons
+ *    ke sath. KOI thumbnail NAHI (user request): setLargeIcon + ALBUM_ART
+ *    + pura thumb-download chain hataya. 1s re-post loop bhi hata (sirf
+ *    session update) — SystemUI churn kam.
  *  - Notification button presses → QalbNativePlugin.emitMediaAction() →
  *    WebView JS player store control
  *  - PARTIAL_WAKE_LOCK hold karta hai taaki screen band hone par bhi
@@ -72,28 +63,21 @@ public class PlaybackService extends Service {
     public static final String EXTRA_DURATION = "duration";
 
     private static final long WAKELOCK_TIMEOUT_MS = 8L * 60 * 60 * 1000; // 8h safety cap
-    private static final int ART_SIZE = 256;
 
     // ── Light sage theme palette (app ke light theme se) ─────────────
     private static final int SAGE_ACCENT = 0xFF0F9163;  // emerald accent
     private static final int ACCENT = SAGE_ACCENT;      // system chrome accent
 
-    private final ExecutorService thumbExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-
-    /** Thumbnail cache (URL → downloaded bitmap) — thread-safe */
-    private static final Map<String, Bitmap> THUMB_CACHE = new ConcurrentHashMap<>();
 
     private PowerManager.WakeLock wakeLock;
     private MediaSessionCompat session;
 
     private String currentTitle;
     private String currentArtist;
-    private String currentThumb;
     private boolean playing;
     private double positionSec;
     private double durationSec;
-    private Bitmap artwork;
 
     /** Position interpolation ticker (1s) — MediaSession position/seek sync chalta rahe */
     private final Runnable tickRunnable = new Runnable() {
@@ -104,7 +88,6 @@ public class PlaybackService extends Service {
                 positionSec += 1.0;
                 if (durationSec > 0 && positionSec > durationSec) positionSec = durationSec;
                 updateSessionState();
-                pushNotification();
             } catch (Exception ignored) {
             } finally {
                 if (playing) {
@@ -186,6 +169,11 @@ public class PlaybackService extends Service {
             if (currentArtist == null) currentArtist = "Qalb";
         }
 
+        // v0.5.18 FIX — Android 13+ system media template buttons PlaybackState
+        // se banata hai: session state PEHLE set karo, phir notification post
+        // (pehli notification par play/pause button missing na rahe).
+        updateSessionState();
+
         Notification notification = buildNotification();
         // CRASH-SAFETY: startForeground fail ho (OEM permission/type quirks) to
         // service khud band — warna system "did not call startForeground" ANR crash
@@ -200,8 +188,6 @@ public class PlaybackService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
-
-        updateSessionState();
 
         if (playing) {
             acquireWakeLock();
@@ -276,7 +262,6 @@ public class PlaybackService extends Service {
         boolean found = false;
         String t = intent.getStringExtra(EXTRA_TITLE);
         String a = intent.getStringExtra(EXTRA_ARTIST);
-        String th = intent.getStringExtra(EXTRA_THUMB);
         if (t != null) {
             currentTitle = t;
             found = true;
@@ -285,17 +270,7 @@ public class PlaybackService extends Service {
             currentArtist = a;
             found = true;
         }
-        if (th != null && !th.isEmpty() && !th.equals(currentThumb)) {
-            currentThumb = th;
-            found = true;
-            Bitmap cached = THUMB_CACHE.get(th);
-            if (cached != null) {
-                artwork = cached;
-            } else {
-                artwork = null;
-                fetchThumb(th);
-            }
-        }
+        // EXTRA_THUMB ignore (v0.5.18) — thumbnail user ko nahi chahiye
         if (intent.hasExtra(EXTRA_PLAYING)) {
             playing = intent.getBooleanExtra(EXTRA_PLAYING, playing);
             found = true;
@@ -362,9 +337,8 @@ public class PlaybackService extends Service {
                     .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
                     .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Qalb — Naat & Sufi Kalam")
                     .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, (long) (durationSec * 1000));
-            if (artwork != null) {
-                mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork);
-            }
+            // v0.5.18 — ALBUM_ART nahi: user ko thumbnail nahi chahiye
+            // (lock-screen card + shade dono me artwork na dikhe)
             session.setMetadata(mb.build());
 
             long actions = PlaybackStateCompat.ACTION_PLAY
@@ -393,77 +367,7 @@ public class PlaybackService extends Service {
         }
     }
 
-    // ── thumbnail download ───────────────────────────────────────────
-
-    private void fetchThumb(final String url) {
-        thumbExecutor.execute(() -> {
-            Bitmap bmp = downloadBitmap(url);
-            if (bmp != null) {
-                if (THUMB_CACHE.size() > 12) THUMB_CACHE.clear(); // small safety cap
-                THUMB_CACHE.put(url, bmp);
-                artwork = bmp;
-                mainHandler.post(() -> {
-                    updateSessionState();
-                    pushNotification();
-                });
-            }
-        });
-    }
-
-    private Bitmap downloadBitmap(String urlStr) {
-        HttpURLConnection conn = null;
-        InputStream in = null;
-        try {
-            URL url = new URL(urlStr);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setConnectTimeout(8000);
-            conn.setReadTimeout(8000);
-            conn.setInstanceFollowRedirects(true);
-            in = conn.getInputStream();
-            Bitmap raw = BitmapFactory.decodeStream(in);
-            if (raw == null) return null;
-            return centerCropSquare(raw, ART_SIZE);
-        } catch (Exception e) {
-            return null;
-        } finally {
-            try {
-                if (in != null) in.close();
-            } catch (Exception ignored) {
-            }
-            if (conn != null) try {
-                conn.disconnect();
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    /** YouTube letterbox bars hata kar clean square art banao */
-    private static Bitmap centerCropSquare(Bitmap src, int size) {
-        try {
-            int w = src.getWidth();
-            int h = src.getHeight();
-            int side = Math.min(w, h);
-            int x = (w - side) / 2;
-            int y = (h - side) / 2;
-            Bitmap square = Bitmap.createBitmap(src, x, y, side, side);
-            if (square.getWidth() != size) {
-                square = Bitmap.createScaledBitmap(square, size, size, true);
-            }
-            return square;
-        } catch (Exception e) {
-            return src;
-        }
-    }
-
     // ── notification ─────────────────────────────────────────────────
-
-    private void pushNotification() {
-        try {
-            NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-            if (nm != null) nm.notify(NOTIFICATION_ID, buildNotification());
-        } catch (Exception ignored) {
-        }
-    }
 
     private PendingIntent actionPi(String action, int requestCode) {
         Intent i = baseIntent(this, action);
@@ -493,42 +397,28 @@ public class PlaybackService extends Service {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setColor(SAGE_ACCENT) // system chrome bits sage accent me
-                // v0.5.17 — CUSTOM control bar (user request): left Previous,
-                // beech Play/Pause, right Next, thumbnail NAHI. MediaStyle
-                // hataya — Android 13 ka system template play/pause button
-                // OEM par chhupa deta tha; apna layout har device par SAME.
-                .setCustomContentView(buildControlsViews()) // collapsed = button bar
-                .setCustomBigContentView(buildBigViews());  // expanded = bar + title
+                // ── MEDIA BUTTONS — addActions (A12-) + PlaybackState (A13+).
+                // v0.5.18: MediaStyle WAPAS (custom RemoteViews user ke device
+                // par render nahi hui) — lock-screen card + shade media template.
+                .addAction(R.drawable.ic_notif_prev, "Pichla", actionPi(ACTION_PREV, 11))
+                .addAction(playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play,
+                        playing ? "Pause" : "Play", actionPi(ACTION_TOGGLE, 12))
+                .addAction(R.drawable.ic_notif_next, "Agla", actionPi(ACTION_NEXT, 13))
+                .addAction(R.drawable.ic_notif_close, "Band", actionPi(ACTION_STOP, 14));
+
+        // MediaStyle — proper media notification: lock screen card (A11+) +
+        // Android 13+ system template jo buttons PlaybackState se banata hai.
+        // KOI thumbnail: setLargeIcon + ALBUM_ART dono removed (user request).
+        try {
+            if (session != null) {
+                b.setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
+                        .setMediaSession(session.getSessionToken())
+                        .setShowActionsInCompactView(0, 1, 2)); // prev • play/pause • next
+            }
+        } catch (Exception ignored) {
+        }
 
         return b.build();
-    }
-
-    /** Compact control bar: prev | play/pause | next + close — koi text/thumb nahi */
-    private RemoteViews buildControlsViews() {
-        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_controls);
-        rv.setImageViewResource(R.id.notif_toggle,
-                playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
-        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
-        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
-        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
-        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
-        return rv;
-    }
-
-    /** Expanded view: control bar upar + title/artist neeche — thumbnail NAHI */
-    private RemoteViews buildBigViews() {
-        RemoteViews rv = new RemoteViews(getPackageName(), R.layout.notification_player);
-        rv.setImageViewResource(R.id.notif_toggle,
-                playing ? R.drawable.ic_notif_pause : R.drawable.ic_notif_play);
-        rv.setOnClickPendingIntent(R.id.notif_prev, actionPi(ACTION_PREV, 11));
-        rv.setOnClickPendingIntent(R.id.notif_toggle, actionPi(ACTION_TOGGLE, 12));
-        rv.setOnClickPendingIntent(R.id.notif_next, actionPi(ACTION_NEXT, 13));
-        rv.setOnClickPendingIntent(R.id.notif_close, actionPi(ACTION_STOP, 14));
-        rv.setTextViewText(R.id.notif_title,
-                currentTitle != null ? currentTitle : "Naat chal rahi hai");
-        rv.setTextViewText(R.id.notif_artist,
-                (currentArtist != null ? currentArtist : "Qalb") + " • Qalb");
-        return rv;
     }
 
     // ── wake lock ────────────────────────────────────────────────────
