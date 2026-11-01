@@ -3,16 +3,15 @@
 // Qalb — Home Tab (JioSaavn-style FULL FEED)
 // ─────────────────────────────────────────────────────────────────
 // JioSaavn ke top-to-bottom dense layout par bana hua:
-//   1. Header — logo + avatar (login) + theme
-//   2. Search (top) + smart chips
-//   3. 🔥 Aaj ka Trending — daily rotation rank cards
-//   4. "Aur Suniye" chips — JioSaavn inline suggestions
-//   5. ⭐ {TopArtist} — Aap ki Pasand (SIRF play history bane par)
-//   6. 🎙️ Kalaamkar Stations — listeners count + personal badge
-//   7. 📿 Made For You — Daily Mix / Naya Suno / Aaj ka Genre (mosaic cards)
-//   8. 🎭 Moods & Genres — category gradient cards
-//   9. 🆕 Aaj ke Naye Kalaam — har roz naya fresh slice
-//  10. 💚 Aap ki Playlists + 🎧 Curated Playlists
+//   1. Search (top) + smart chips (banner/greeting section REMOVED — v0.5.7)
+//   2. 🔥 Aaj ka Trending — daily rotation rank cards
+//   3. "Aur Suniye" chips — JioSaavn inline suggestions
+//   4. ⭐ {TopArtist} — Aap ki Pasand (SIRF play history bane par)
+//   5. 🎙️ Kalaamkar Stations — listeners count + personal badge
+//   6. 📿 Made For You — Daily Mix / Naya Suno / Aaj ka Genre (mosaic cards)
+//   7. 🎭 Moods & Genres — category gradient cards
+//   8. 🆕 Aaj ke Naye Kalaam — har roz naya fresh slice
+//   9. 💚 Aap ki Playlists + 🎧 Curated Playlists
 // Har section algorithm se bhara — koi khaali jagah nahi (bhara bhara feel).
 // Personalization: lib/recommend.ts (play history → taste → feed).
 
@@ -22,11 +21,8 @@ import {
   Loader2,
   Play,
   ChevronDown,
-  Moon,
-  SunMedium,
   ListPlus,
   Trash2,
-  UserRound,
   Sparkles,
   Radio,
   Flame,
@@ -35,13 +31,11 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { TrackRow } from '@/components/qalb/track-row'
 import { QalbThumb } from '@/components/qalb/thumb-square'
-import { BannerEcg } from '@/components/qalb/banner-ecg'
 import { usePlayerStore } from '@/lib/player-store'
 import { fetchPlaylistsSmart } from '@/lib/remote-data'
 import { personalizePlaylists } from '@/lib/personalized-playlists'
 import { validateSmart, youtubeSearchSmart } from '@/lib/search-client'
 import { SEARCH_SUGGESTIONS } from '@/lib/qalb'
-import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import { todayLabel } from '@/lib/daily-trending'
 import {
   buildFeed,
@@ -142,7 +136,6 @@ export function HomeView() {
   const [strictMode, setStrictMode] = useState(false)
   const [playlists, setPlaylists] = useState<QalbPlaylist[]>([])
   const [userPlaylists, setUserPlaylists] = useState<UserPlaylist[]>([])
-  const [theme, setTheme] = useState<QalbTheme>('light')
 
   // har nayi search purani ko supersede karti hai (generation counter)
   const searchIdRef = useRef(0)
@@ -201,7 +194,6 @@ export function HomeView() {
     fetchPlaylistsSmart()
       .then((p) => setPlaylists(p))
       .catch(() => setPlaylists([]))
-    setTheme(getTheme())
     const t = setTimeout(() => setUserPlaylists(listUserPlaylists()), 0)
     // LIVE YouTube feed — trending top 10 + fresh uploads + mix sets
     // (2h cache — pehli call ke baad instant; fail par static pool chalta hai)
@@ -216,12 +208,6 @@ export function HomeView() {
     }
      
   }, [])
-
-  const switchTheme = () => {
-    const next: QalbTheme = theme === 'dark' ? 'light' : 'dark'
-    applyTheme(next)
-    setTheme(next)
-  }
 
   async function runSearch(rawQuery: string) {
     const q = rawQuery.trim()
@@ -326,59 +312,7 @@ export function HomeView() {
 
   return (
     <div className="space-y-7 px-4 pb-8 pt-5">
-      {/* OFFICIAL LOGO BANNER — naya red-white QALB + zinda dhadkan + shine */}
-      <div className="relative overflow-hidden rounded-2xl shadow-[0_10px_30px_-12px_rgba(187,0,0,0.5)] ring-1 ring-red-600/25">
-        <div className="relative flex h-32 items-center justify-center bg-[#bb0000] dark:bg-black">
-          {/* light theme: asli red logo (red bg strip me seamless) */}
-          <img src="/brand/qalb-logo.png" alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed" className="h-24 w-auto dark:hidden" />
-          {/* dark theme: black & white logo (YouTube noir) */}
-          <img src="/brand/qalb-logo-bw.png" alt="Qalb — Naat, Hamd, Sufi Qawwali, Nasheed" className="hidden h-24 w-auto dark:block" />
-          {/* animations — shine sweep + ECG dhadkan banner ke edge par */}
-          <div className="qalb-shine" aria-hidden="true" />
-          <div className="absolute inset-x-0 bottom-0 h-9">
-            <BannerEcg className="opacity-90" />
-          </div>
-        </div>
-      </div>
-
-      {/* greeting + actions — global QalbHeader (banner + section) shell me hai */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-emerald-300/80">
-            Assalam-o-Alaikum{user ? `, ${user.name}` : ''}
-          </p>
-          <p className="text-[11px] text-emerald-200/50">Naat • Hamd • Sufi Qawwali • Nasheed</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={switchTheme}
-            aria-label={theme === 'dark' ? 'Light theme on karein' : 'Dark theme on karein'}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-400/15 bg-emerald-400/5 text-emerald-300 transition hover:bg-emerald-400/15 active:scale-95"
-          >
-            {theme === 'dark' ? <SunMedium className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
-          {/* avatar / login — JioSaavn top-right profile */}
-          <button
-            type="button"
-            onClick={openLogin}
-            aria-label={user ? 'Aap ka account' : 'Login karein'}
-            className="gold-gradient flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl text-[15px] font-extrabold text-emerald-950 shadow-[0_0_24px_-6px_var(--glow)] transition active:scale-95"
-          >
-            {user ? (
-              user.photoUrl ? (
-                <img src={user.photoUrl} alt={user.name} className="h-full w-full object-cover" />
-              ) : (
-                user.name.charAt(0).toUpperCase()
-              )
-            ) : (
-              <UserRound className="h-5 w-5" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* search — music player style sab se upar */}
+      {/* search — music player style sab se upar (banner/greeting section REMOVED — user request) */}
       <section aria-label="Search">
         <form
           onSubmit={(e) => {
