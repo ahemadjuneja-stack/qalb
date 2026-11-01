@@ -42,6 +42,10 @@ public class MainActivity extends BridgeActivity {
         try {
             if (bridge != null && bridge.getWebView() != null) {
                 bridge.setWebViewClient(new QalbWebViewClient(bridge));
+                // v0.5.24 — HTML5/YT fullscreen support (YT embed ka
+                // fullscreen button + watch-screen ka apna button dono
+                // ke liye proper onShowCustomView/onHideCustomView)
+                bridge.getWebView().setWebChromeClient(new QalbWebChromeClient(bridge));
             }
         } catch (Exception ignored) {
         }

@@ -188,6 +188,17 @@ function QalbShellInner({
     let alive = true
     void onNativeBackButton(() => {
       try {
+        // 0. HTML5 fullscreen chalu (iTube fullscreen, v0.5.24)? → pehle
+        //    fullscreen exit (YouTube app jaisa back behaviour)
+        if (typeof document !== 'undefined' && document.fullscreenElement) {
+          try {
+            void document.exitFullscreen()
+          } catch {
+            /* ignore */
+          }
+          void nativeBackHandled()
+          return
+        }
         // 1. Full player modal khula? → band karo
         const p = usePlayerStore.getState()
         if (p.fullOpen) {

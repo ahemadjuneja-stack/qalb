@@ -27,7 +27,7 @@
 // Back button (Android) aur back-arrow dono screen band karte hain.
 
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Loader2, Share2, ThumbsUp, Users } from 'lucide-react'
+import { ChevronLeft, Loader2, Maximize, Minimize2, Share2, ThumbsUp, Users } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useViewBackHandler } from '@/lib/back-stack'
 import { viewsLabel } from '@/lib/innertube-x'
@@ -113,6 +113,14 @@ export function ItubeWatch({
 
   // ── v0.5.19 YT player engine refs ──────────────────────────────
   const playerHostRef = useRef<HTMLDivElement>(null)
+  // v0.5.24 — FULLSCREEN (YT jaisa): apna button + native custom-view path.
+  // Capacitor ka default fullscreen request REJECT karta tha (isi liye
+  // display cut thi + seekbar/timing nahi aate the) — ab native
+  // QalbWebChromeClient proper fullscreen deta hai (landscape + YT ke
+  // asli controls) aur ye wrapper usi element par requestFullscreen
+  // karta hai.
+  const fsWrapRef = useRef<HTMLDivElement>(null)
+  const [fsActive, setFsActive] = useState(false)
   const ytPlayerRef = useRef<YTPlayer | null>(null)
   const playingRef = useRef(false) // YT ka asli playing state
   const userPausedRef = useRef(false) // user ne khud pause kiya (bg auto-pause nahi)
@@ -240,6 +248,26 @@ export function ItubeWatch({
     onClose()
     return true // back handle ho gaya — chain yahin ruke
   })
+
+  // v0.5.24 — fullscreen state sync (YT embed ka apna fullscreen button
+  // ya hamara button — dono se document.fullscreenElement set hota hai)
+  useEffect(() => {
+    const onFs = () => setFsActive(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
+  }, [])
+
+  const toggleFullscreen = () => {
+    try {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen()
+      } else {
+        void fsWrapRef.current?.requestFullscreen()
+      }
+    } catch {
+      /* WebView support nahi — video waise hi chalti rahegi */
+    }
+  }
 
   // mount: body scroll lock (watch screen ka apna scroll hai)
   useEffect(() => {
@@ -718,45 +746,64 @@ export function ItubeWatch({
             neeche scroll karne par video upar chipka rahega, suggested
             videos uske neeche se guzregi — YouTube app ka exact feel ── */}
         <div className="sticky top-0 z-20 aspect-video w-full overflow-hidden bg-black">
-          {/* player host — background me naat-style 1x1 tiny ho jata hai
-              (visible-video ka surface-bind tootega hi nahi, audio chalta rahega) */}
-          <div
-            className={
-              bgTiny
-                ? 'pointer-events-none fixed bottom-0 right-0 z-0 h-1 w-1 overflow-hidden opacity-[0.02]'
-                : 'absolute inset-0 h-full w-full'
-            }
-          >
-            <div ref={playerHostRef} className="h-full w-full" />
-          </div>
-
-          {/* background mode message — video wapas aane tak */}
-          {bgTiny && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black">
-              <p className="text-[12.5px] font-semibold text-emerald-100/70">
-                🔒 Video background me chal rahi hai
-              </p>
-              <p className="text-[11px] text-emerald-200/45">
-                Lock screen par bhi sound aata rahega
-              </p>
-            </div>
-          )}
-
-          {/* buffering splash — YT ka apna spinner aane tak thumbnail */}
-          {!bgTiny && (
+          {/* v0.5.24 fullscreen wrapper — isi element par requestFullscreen
+              hota hai; native onShowCustomView ise screen-bhar black
+              container me dikhata hai (YT ke ASLI controls — seekbar line
+              + timing — isi iframe ke andar hote hain) */}
+          <div ref={fsWrapRef} className="absolute inset-0 bg-black">
+            {/* player host — background me naat-style 1x1 tiny ho jata hai
+                (visible-video ka surface-bind tootega hi nahi, audio chalta rahega) */}
             <div
-              className={`pointer-events-none absolute inset-0 transition-opacity duration-500 ${
-                readyVid === track.videoId ? 'opacity-0' : 'opacity-100'
-              }`}
+              className={
+                bgTiny
+                  ? 'pointer-events-none fixed bottom-0 right-0 z-0 h-1 w-1 overflow-hidden opacity-[0.02]'
+                  : 'h-full w-full'
+              }
             >
-              <img
-                src={track.thumbnailUrl ?? ''}
-                alt=""
-                className="h-full w-full object-cover opacity-70"
-              />
-              <Loader2 className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-spin text-white/80" />
+              <div ref={playerHostRef} className="h-full w-full" />
             </div>
-          )}
+
+            {/* background mode message — video wapas aane tak */}
+            {bgTiny && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black">
+                <p className="text-[12.5px] font-semibold text-emerald-100/70">
+                  🔒 Video background me chal rahi hai
+                </p>
+                <p className="text-[11px] text-emerald-200/45">
+                  Lock screen par bhi sound aata rahega
+                </p>
+              </div>
+            )}
+
+            {/* buffering splash — YT ka apna spinner aane tak thumbnail */}
+            {!bgTiny && (
+              <div
+                className={`pointer-events-none absolute inset-0 transition-opacity duration-500 ${
+                  readyVid === track.videoId ? 'opacity-0' : 'opacity-100'
+                }`}
+              >
+                <img
+                  src={track.thumbnailUrl ?? ''}
+                  alt=""
+                  className="h-full w-full object-cover opacity-70"
+                />
+                <Loader2 className="absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 animate-spin text-white/80" />
+              </div>
+            )}
+
+            {/* fullscreen toggle — top-right (YT app jaisa); YT ke controls
+                me bhi fullscreen button hai — dono kaam karenge */}
+            {!bgTiny && (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                aria-label={fsActive ? 'Fullscreen band karein' : 'Fullscreen karein'}
+                className="absolute right-3 top-2 z-10 rounded-full bg-black/45 p-2 text-white backdrop-blur-sm active:scale-90"
+              >
+                {fsActive ? <Minimize2 className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+              </button>
+            )}
+          </div>
 
           {/* back arrow — video ke upar top-left (YT app jaisa) */}
           <button

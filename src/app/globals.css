@@ -664,3 +664,15 @@
   width: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 16 / 9));
   height: max(106%, calc((100dvh - 3.5rem - env(safe-area-inset-bottom, 0px)) * 9 / 16));
 }
+
+/* iTube fullscreen (v0.5.24) — YT embed ka fullscreen button + watch-screen
+   ka apna button dono isi wrapper par requestFullscreen karte hain; native
+   onShowCustomView ise screen-bhar black container me dikhata hai. UA
+   :fullscreen styles ke saath ye insurance rules — width/height pakka
+   screen-bhar, koi clip/cut nahi. */
+.itube-fs-wrap:fullscreen,
+.itube-fs-wrap:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #000;
+}
