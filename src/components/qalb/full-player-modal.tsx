@@ -9,7 +9,6 @@
 // beech me tairte the — user report: "button niche ki side aane chahiye").
 // "Watch Video" labeled button music line (seekbar) ke UPAR.
 // ❤️ Favorite — qawwali/naat favorites list me (lib/favorites.ts)
-// Offline download — ASLI download (lib/downloads.ts) progress ke saath
 
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -24,14 +23,11 @@ import {
   Headphones,
   Video,
   Loader2,
-  Download,
-  Check,
   Heart,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { EcgSeekbar } from '@/components/qalb/ecg-seekbar'
 import { usePlayerStore, useCurrentTrack } from '@/lib/player-store'
-import { downloadTrack, isDownloaded } from '@/lib/downloads'
 import { useFavoritesStore, useIsFavorite } from '@/lib/favorites'
 import { useToast } from '@/hooks/use-toast'
 
@@ -104,10 +100,6 @@ export function FullPlayerModal() {
   const toggleAudioOnly = usePlayerStore((s) => s.toggleAudioOnly)
   const { toast } = useToast()
 
-  const [downloaded, setDownloaded] = useState<boolean>(false)
-  const [downloading, setDownloading] = useState(false)
-  const [dlProgress, setDlProgress] = useState<number | null>(null)
-
   const isFav = useIsFavorite(current?.videoId)
   const toggleFavorite = useFavoritesStore((s) => s.toggleFavorite)
   const loadFavorites = useFavoritesStore((s) => s.loadFavorites)
@@ -135,33 +127,6 @@ export function FullPlayerModal() {
           }
     )
   }
-
-  const handleDownload = async () => {
-    if (!current || downloading) return
-    setDownloading(true)
-    setDlProgress(0)
-    try {
-      await downloadTrack(current, (p) => setDlProgress(p))
-      setDownloaded(true)
-      toast({
-        title: 'Offline save ho gaya ✅',
-        description: `"${current.title}" device par saved — net ke bina bhi bajegi.`,
-      })
-    } catch (e) {
-      toast({
-        title: 'Download fail hua',
-        description:
-          e instanceof Error && e.message
-            ? e.message
-            : 'Dobara koshish karein.',
-      })
-    } finally {
-      setDownloading(false)
-      setDlProgress(null)
-    }
-  }
-
-  const alreadyDownloaded = downloaded || (current ? isDownloaded(current.id) : false)
 
   return (
     <AnimatePresence>
@@ -371,7 +336,7 @@ export function FullPlayerModal() {
             </button>
           </div>
 
-          {/* ── secondary actions — bottom row: ❤️ + Offline download ── */}
+          {/* ── secondary actions — bottom row: ❤️ Favorite ── */}
           <div className="mt-4 flex shrink-0 items-center justify-center gap-3 px-6">
             <button
               type="button"
@@ -385,32 +350,6 @@ export function FullPlayerModal() {
             >
               <Heart className={`h-4 w-4 ${isFav ? 'fill-current' : ''}`} />
               {isFav ? 'Favorited' : 'Favorite'}
-            </button>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={downloading || alreadyDownloaded}
-              className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition ${
-                alreadyDownloaded
-                  ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
-                  : 'border-emerald-400/20 text-emerald-200/80 hover:bg-emerald-400/10'
-              }`}
-            >
-              {alreadyDownloaded ? (
-                <>
-                  <Check className="h-4 w-4" /> Offline saved
-                </>
-              ) : downloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Download… {typeof dlProgress === 'number' ? `${dlProgress}%` : ''}
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  Offline download
-                </>
-              )}
             </button>
           </div>
 

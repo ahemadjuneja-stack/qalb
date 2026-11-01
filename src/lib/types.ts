@@ -99,13 +99,3 @@ export interface AppVersionInfo {
   webMinNative?: number
 }
 
-export interface SavedDownload {
-  trackId: string
-  videoId: string
-  title: string
-  artist: string
-  thumbnailUrl: string | null
-  savedAt: string
-  sizeMB: number
-  offline: boolean
-}

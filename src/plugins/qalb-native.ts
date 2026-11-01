@@ -10,12 +10,6 @@ import type { PluginListenerHandle } from '@capacitor/core'
 
 export type QalbMediaAction = 'play' | 'pause' | 'next' | 'prev' | 'stop' | `seek:${number}`
 
-export interface ReelDownloadProgress {
-  id: string
-  filename: string
-  percent: number
-}
-
 export interface QalbNativePluginInterface {
   startPlayback(options: {
     title: string
@@ -50,17 +44,6 @@ export interface QalbNativePluginInterface {
   getLastNativeCrash(): Promise<{ crash: string | null }>
   clearNativeCrash(): Promise<void>
   factoryResetWebView(): Promise<{ ok: boolean }>
-  // ── Reel offline download (v0.2.6) ──
-  downloadVideo(options: {
-    url: string
-    filename: string
-    id: string
-  }): Promise<{ ok: boolean; uri?: string; gallery?: boolean }>
-  cancelDownload(options: { id: string }): Promise<void>
-  addListener(
-    eventName: 'downloadProgress',
-    listenerFunc: (data: ReelDownloadProgress) => void
-  ): Promise<PluginListenerHandle> & PluginListenerHandle
   // ── App background media pause (v0.3.3) ──
   setBgPauseMedia(options: { pause: boolean }): Promise<void>
   // ── Google OAuth deep-link (v0.4.4) ──
@@ -277,49 +260,6 @@ export async function nativeFactoryResetWebView(): Promise<void> {
   if (!isNativeApp()) return
   try {
     await QalbNative.factoryResetWebView()
-  } catch {
-    /* non-fatal */
-  }
-}
-
-// ── Reel offline download (v0.2.6) ────────────────────────────────
-// Progressive mp4 ko native HTTP se download karke Gallery
-// (Movies/Qalb) me save — CORS WebView me block karta hai, native
-// me nahi. Progress events ke sath.
-
-/** Ek reel download (promise complete hone par resolve) */
-export async function nativeDownloadReel(
-  url: string,
-  filename: string,
-  id: string,
-  onProgress?: (percent: number) => void
-): Promise<{ ok: boolean; uri?: string; gallery?: boolean }> {
-  if (!isNativeApp()) throw new Error('download sirf app (APK) me available hai')
-  // progress listener pehle register (race — pehla event miss na ho)
-  let handle: PluginListenerHandle | null = null
-  try {
-    handle = await QalbNative.addListener('downloadProgress', (d) => {
-      if (d?.id === id && typeof d.percent === 'number') onProgress?.(d.percent)
-    })
-  } catch {
-    /* progress optional */
-  }
-  try {
-    return await QalbNative.downloadVideo({ url, filename, id })
-  } finally {
-    try {
-      await handle?.remove()
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
-/** Chalta hua reel download cancel karo */
-export async function nativeCancelReelDownload(id: string) {
-  if (!isNativeApp()) return
-  try {
-    await QalbNative.cancelDownload({ id })
   } catch {
     /* non-fatal */
   }

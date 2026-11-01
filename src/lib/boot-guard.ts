@@ -92,14 +92,12 @@ export async function fullResetAndReload(): Promise<void> {
   // poora hota hai. (User ne explicitly "logout" nahi kiya.)
   const preserveKeys: Record<string, string | null> = {}
   try {
-    // v0.5.28: favorites + downloads bhi — crash-reset me user ki pasand
-    // aur offline library udti nahi
+    // v0.5.28: favorites bhi — crash-reset me user ki pasand udti nahi
     const prefixKeys = [
       'qalb_auth_v1',
       'qalb_guest_v1',
       'qalb_user_playlists_v1',
       'qalb_favorites_v1',
-      'qalb_downloads_v1',
     ]
     const eventsPrefix = 'qalb_events_'
     for (let i = 0; i < window.localStorage.length; i++) {

@@ -2,7 +2,7 @@
 // Native side: android/app/src/main/java/com/qalb/app/UpdaterPlugin.java
 // Web/purane builds par null return hota hai — engine fallback use karta hai.
 
-import { isNativeCapacitor } from '@/lib/downloads'
+import { isNativeCapacitor } from '@/lib/capacitor'
 
 export interface UpdateProgressData {
   percent: number

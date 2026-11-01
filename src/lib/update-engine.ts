@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 import { QALB } from '@/lib/qalb'
 import { fetchAppVersionFromFirestore, withNetTimeout } from '@/lib/remote-data'
-import { isNativeCapacitor } from '@/lib/downloads'
+import { isNativeCapacitor } from '@/lib/capacitor'
 import { getUpdaterPlugin, onDownloadProgress } from '@/plugins/updater'
 import { maybeOtaUpdate } from '@/lib/ota'
 import type { AppVersionInfo } from '@/lib/types'

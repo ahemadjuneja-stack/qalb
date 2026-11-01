@@ -17,7 +17,7 @@
 
 import { create } from 'zustand'
 import { APP_BUILD } from '@/lib/app-build'
-import { isNativeCapacitor } from '@/lib/downloads'
+import { isNativeCapacitor } from '@/lib/capacitor'
 import { getUpdaterPlugin } from '@/plugins/updater'
 import type { AppVersionInfo } from '@/lib/types'
 

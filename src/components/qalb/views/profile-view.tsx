@@ -1,12 +1,11 @@
 'use client'
 
-// Qalb — Profile Tab: user settings, downloads, app update (Step 5 hook), about
+// Qalb — Profile Tab: user settings, app update (Step 5 hook), about
 
 import { useEffect, useState } from 'react'
 import {
   Pencil,
   Download,
-  Trash2,
   RefreshCw,
   CloudDownload,
   Info,
@@ -23,7 +22,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useAppUpdate } from '@/hooks/use-app-update'
-import { getDownloads, removeDownload, isNativeCapacitor } from '@/lib/downloads'
+import { isNativeCapacitor } from '@/lib/capacitor'
 import { useFavoritesStore } from '@/lib/favorites'
 import { usePlayerStore } from '@/lib/player-store'
 import { QALB } from '@/lib/qalb'
@@ -31,14 +30,13 @@ import { getTheme, applyTheme, type QalbTheme } from '@/lib/theme'
 import { useQalbAuth } from '@/lib/auth'
 import { getTasteProfile, useTasteStore } from '@/lib/recommend'
 import { useViewBackHandler } from '@/lib/back-stack'
-import type { QalbTrack, SavedDownload } from '@/lib/types'
+import type { QalbTrack } from '@/lib/types'
 
 const NAME_KEY = 'qalb_user_name'
 
 export function ProfileView() {
   const [name, setName] = useState('Zaire')
   const [editing, setEditing] = useState(false)
-  const [downloads, setDownloads] = useState<SavedDownload[]>([])
   const [showUpdateCard, setShowUpdateCard] = useState(false)
   const [theme, setTheme] = useState<QalbTheme>('light')
   // auth + algorithm
@@ -66,7 +64,6 @@ export function ProfileView() {
       } catch {
         /* defaults */
       }
-      setDownloads(getDownloads())
     }, 0)
     setTheme(getTheme())
     return () => clearTimeout(t)
@@ -128,12 +125,6 @@ export function ProfileView() {
   const handleInstall = async () => {
     await installUpdate()
     toast({ title: 'APK download shuru…', description: 'Install prompt aayega.' })
-  }
-
-  const handleRemove = async (trackId: string) => {
-    await removeDownload(trackId)
-    setDownloads(getDownloads())
-    toast({ title: 'Download remove ho gaya' })
   }
 
   const handleLogout = () => {
@@ -254,8 +245,8 @@ export function ProfileView() {
             <p className="text-[10px] text-emerald-200/50">Played</p>
           </div>
           <div className="rounded-2xl bg-emerald-400/5 py-2.5">
-            <p className="text-lg font-extrabold text-emerald-300">{downloads.length}</p>
-            <p className="text-[10px] text-emerald-200/50">Downloads</p>
+            <p className="text-lg font-extrabold text-emerald-300">{favorites.length}</p>
+            <p className="text-[10px] text-emerald-200/50">Favorites</p>
           </div>
           <div className="rounded-2xl bg-emerald-400/5 py-2.5">
             <p className="text-lg font-extrabold text-emerald-300">∞</p>
@@ -394,51 +385,6 @@ export function ProfileView() {
                   className="flex h-8 w-8 items-center justify-center rounded-full text-rose-300/80 transition hover:bg-rose-400/10 hover:text-rose-300"
                 >
                   <Heart className="h-4 w-4 fill-current" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* downloads */}
-      <section aria-label="Downloads">
-        <h2 className="mb-2 flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-emerald-300/80">
-          <Download className="h-4 w-4" /> Offline Downloads ({downloads.length})
-        </h2>
-        {downloads.length === 0 ? (
-          <div className="card-surface rounded-2xl p-5 text-center">
-            <p className="text-sm text-emerald-200/60">Abhi koi download nahi hua.</p>
-            <p className="mt-1 text-[11px] text-emerald-200/40">
-              Player me “Offline download” button se kalam save karein.
-            </p>
-          </div>
-        ) : (
-          <div className="card-surface thin-scrollbar max-h-80 overflow-y-auto rounded-2xl p-2">
-            {downloads.map((d) => (
-              <div key={d.trackId} className="flex items-center gap-3 rounded-xl px-2 py-2">
-                <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-emerald-950">
-                  {d.thumbnailUrl ? (
-                    <img src={d.thumbnailUrl} alt="" className="absolute left-1/2 top-1/2 h-[133.33%] w-auto max-w-none min-w-full -translate-x-1/2 -translate-y-1/2 object-cover" />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center">🕌</span>
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold text-emerald-50">
-                    {d.title}
-                  </span>
-                  <span className="block text-[10.5px] text-emerald-200/50">
-                    {d.artist} • {d.sizeMB} MB {d.offline ? '• device par saved' : '• demo save'}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => void handleRemove(d.trackId)}
-                  aria-label={`Remove ${d.title}`}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-red-300/70 transition hover:bg-red-400/10 hover:text-red-300"
-                >
-                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             ))}

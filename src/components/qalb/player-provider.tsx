@@ -5,8 +5,6 @@
 // • Audio-only mode: video offscreen, spinning cover art UI me dikhti hai
 // • v0.5.28 VIDEO-IN-PLACE: full-player video mode me host measured rect par
 //   baithta hai (walkman cover ki EXACT jagah — full-player-modal VideoAnchor)
-// • v0.5.28 OFFLINE PLAYBACK: downloaded track audio-only me local file
-//   (Documents/Qalb/{videoId}.m4a) se bajti hai — net ke bina bhi
 // • v0.5.28 NET OFF/ON FAST RECOVERY: net wapas aate hi video current
 //   position se reload — lambi "loading" khatam
 // • Media Session API: lock-screen / notification controls
@@ -16,7 +14,6 @@ import { useEffect, useRef } from 'react'
 import { usePlayerStore, ytBridge } from '@/lib/player-store'
 import { useToast } from '@/hooks/use-toast'
 import { loadYouTubeIframeApi, type YTNamespace } from '@/lib/yt-api'
-import { isNativeCapacitor, getLocalAudioSrc, getDownloadedByVideo } from '@/lib/downloads'
 import {
   nativeUpdatePlayback,
   nativeStopPlayback,
@@ -47,16 +44,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YTPlayer | null>(null)
   const { toast } = useToast()
-
-  // ── v0.5.28 local (offline) audio engine ─────────────────────
-  // Downloaded track audio-only mode me YT iframe ki jagah isi
-  // HTMLAudioElement se bajti hai — net ke bina bhi.
-  const localAudioRef = useRef<HTMLAudioElement | null>(null)
-  const localModeRef = useRef(false)
-  const pendingSeekRef = useRef<number | null>(null)
-  // app-apne-aap YT pause (local switch) ka PAUSED event store ko udana nahi
-  // chahiye — warna local audio bhi ruk jata (event race)
-  const suppressPauseEventRef = useRef(false)
 
   const queue = usePlayerStore((s) => s.queue)
   const currentIndex = usePlayerStore((s) => s.currentIndex)
@@ -93,11 +80,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
                 st.setBuffering(false)
                 if (!st.isPlaying) st.toggle() // store sync → true
               } else if (e.data === window.YT.PlayerState.PAUSED) {
-                if (suppressPauseEventRef.current) {
-                  // ye pause app khud kar rahi thi (local mode switch) —
-                  // store touch nahi, warna local audio bhi band ho jata
-                  suppressPauseEventRef.current = false
-                } else if (st.isPlaying && !st.isBuffering) {
+                if (st.isPlaying && !st.isBuffering) {
                   st.toggle() // store sync → false
                 }
               } else if (e.data === window.YT.PlayerState.BUFFERING) {
@@ -130,122 +113,35 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // ── local audio element (once) + events ────────────────────────
-  useEffect(() => {
-    const audio = new Audio()
-    audio.preload = 'metadata'
-    localAudioRef.current = audio
-
-    const onEnded = () => {
-      if (!localModeRef.current) return
-      usePlayerStore.getState().next(true) // auto-advance
-    }
-    const onLoadedMeta = () => {
-      const a = localAudioRef.current
-      if (!a) return
-      if (pendingSeekRef.current != null) {
-        try {
-          a.currentTime = pendingSeekRef.current
-        } catch {
-          /* ignore */
-        }
-        pendingSeekRef.current = null
-      }
-      if (Number.isFinite(a.duration) && a.duration > 0) {
-        usePlayerStore.getState().setDuration(a.duration)
-      }
-    }
-    const onError = () => {
-      if (!localModeRef.current) return
-      // local file kharab — chup-chaap YT par wapas
-      localModeRef.current = false
-      const st = usePlayerStore.getState()
-      const t = st.currentIndex >= 0 ? st.queue[st.currentIndex] : null
-      if (t && st.ytApiReady) {
-        loadedVideoRef.current = t.videoId
-        try {
-          playerRef.current?.loadVideoById(t.videoId, Math.floor(st.position))
-        } catch {
-          /* ignore */
-        }
-        if (st.isPlaying) playerRef.current?.playVideo()
-      }
-    }
-    audio.addEventListener('ended', onEnded)
-    audio.addEventListener('loadedmetadata', onLoadedMeta)
-    audio.addEventListener('error', onError)
-    return () => {
-      audio.removeEventListener('ended', onEnded)
-      audio.removeEventListener('loadedmetadata', onLoadedMeta)
-      audio.removeEventListener('error', onError)
-      try {
-        audio.pause()
-      } catch {
-        /* ignore */
-      }
-      localAudioRef.current = null
-    }
-  }, [])
-
-  // ── bridge store → player (YT ya local — localMode se route) ───
+  // ── bridge store → player ───────────────────────────────────────
   useEffect(() => {
     ytBridge.loadVideo = (videoId) => {
-      if (localModeRef.current) return // local me YT load nahi — double audio nahi
       playerRef.current?.loadVideoById(videoId)
     }
     ytBridge.play = () => {
-      if (localModeRef.current) {
-        void localAudioRef.current?.play().catch(() => undefined)
-        return
-      }
       playerRef.current?.playVideo()
     }
     ytBridge.pause = () => {
-      if (localModeRef.current) {
-        localAudioRef.current?.pause()
-        return
-      }
       playerRef.current?.pauseVideo()
     }
     ytBridge.seekTo = (s, allow = true) => {
-      if (localModeRef.current) {
-        const a = localAudioRef.current
-        if (!a) return
-        try {
-          if (a.readyState === 0) pendingSeekRef.current = s
-          else a.currentTime = s
-        } catch {
-          pendingSeekRef.current = s
-        }
-        return
-      }
       playerRef.current?.seekTo(s, allow)
     }
   }, [])
 
-  // ── v0.5.28 MODE ROUTER — video load YA local file ─────────────
-  // audioOnly + downloaded + native → local file; warna YT iframe.
-  // loadedVideoRef sirf tab set hota hai jab YT sach me load ho —
-  // local se wapas YT par aate hi load+position-restore hota hai.
+  // ── MODE SYNC — audioOnly toggle par YT iframe store ke saath sync ──
+  // (v0.5.33: local-file offline playback gaya — download feature removed.
+  //  loadedVideoRef ab sirf YT iframe ka current video track karta hai —
+  //  net-recovery isse use karta hai.)
   const loadedVideoRef = useRef<string | null>(null)
   useEffect(() => {
     if (!currentVideoId) return
     let cancelled = false
-    let unsub: (() => void) | null = null
 
-    const activateYt = (videoId: string) => {
+    const go = () => {
       if (cancelled) return
-      localModeRef.current = false
-      const a = localAudioRef.current
-      if (a && !a.paused) {
-        try {
-          a.pause()
-        } catch {
-          /* ignore */
-        }
-      }
       const wantPlay = usePlayerStore.getState().isPlaying
-      if (loadedVideoRef.current === videoId) {
+      if (loadedVideoRef.current === currentVideoId) {
         // video mode toggle — YT state store ke saath sync (warna video
         // mode me rukka hua reh jata tha jab isPlaying change nahi hota)
         try {
@@ -256,79 +152,25 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
         return
       }
-      loadedVideoRef.current = videoId
-      // local/walkman se aate hue position continue
+      loadedVideoRef.current = currentVideoId
       const pos = usePlayerStore.getState().position
       try {
         if (wantPlay) {
-          playerRef.current?.loadVideoById(videoId, pos > 2 ? Math.floor(pos) : undefined)
+          playerRef.current?.loadVideoById(currentVideoId, pos > 2 ? Math.floor(pos) : undefined)
         } else {
           // pause state me cue — autoplay-blip nahi
-          playerRef.current?.cueVideoById(videoId, pos > 2 ? Math.floor(pos) : undefined)
+          playerRef.current?.cueVideoById(currentVideoId, pos > 2 ? Math.floor(pos) : undefined)
         }
       } catch {
         /* not ready */
       }
     }
 
-    const go = () => {
-      if (cancelled) return
-      const st = usePlayerStore.getState()
-      const wantLocal =
-        st.audioOnly &&
-        isNativeCapacitor() &&
-        Boolean(getDownloadedByVideo(currentVideoId))
-      if (!wantLocal) {
-        activateYt(currentVideoId)
-        return
-      }
-      void getLocalAudioSrc(currentVideoId).then((src) => {
-        if (cancelled) return
-        const audio = localAudioRef.current
-        if (!src || !audio) {
-          activateYt(currentVideoId) // local file nahi mili — YT
-          return
-        }
-        // ── LOCAL ON ──
-        localModeRef.current = true
-        if (audio.src !== src) {
-          audio.src = src
-          audio.load()
-        }
-        const pos = usePlayerStore.getState().position
-        pendingSeekRef.current = pos > 1 ? pos : null
-        try {
-          if (pos > 1 && audio.readyState >= 1) {
-            audio.currentTime = pos
-            pendingSeekRef.current = null
-          }
-        } catch {
-          /* loadedmetadata par set hoga */
-        }
-        if (usePlayerStore.getState().isPlaying) {
-          const p = audio.play()
-          if (p) p.catch(() => usePlayerStore.setState({ isPlaying: false }))
-        } else {
-          audio.pause()
-        }
-        // YT chup — video+naat dono ek sath na bajen (PAUSED event ko
-        // suppress karo warna store isPlaying=false ho jata)
-        suppressPauseEventRef.current = true
-        window.setTimeout(() => {
-          suppressPauseEventRef.current = false
-        }, 1500)
-        try {
-          playerRef.current?.pauseVideo()
-        } catch {
-          /* not ready */
-        }
-      })
-    }
-
     if (usePlayerStore.getState().ytApiReady) {
       go()
     } else {
       // YT API abhi load ho rahi hai — ready hone pe ek hi dafa
+      let unsub: (() => void) | null = null
       unsub = usePlayerStore.subscribe((s) => {
         if (s.ytApiReady) {
           unsub?.()
@@ -336,26 +178,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           go()
         }
       })
+      return () => {
+        cancelled = true
+        unsub?.()
+      }
     }
     return () => {
       cancelled = true
-      unsub?.()
     }
   }, [currentVideoId, audioOnly])
 
-  // play/pause sync — localMode ho to local element, warna YT
+  // play/pause sync
   useEffect(() => {
-    if (localModeRef.current) {
-      const a = localAudioRef.current
-      if (!a) return
-      if (isPlaying) {
-        const p = a.play()
-        if (p) p.catch(() => undefined)
-      } else {
-        a.pause()
-      }
-      return
-    }
     if (!usePlayerStore.getState().ytApiReady || !currentVideoId) return
     if (isPlaying) ytBridge.play()
     else ytBridge.pause()
@@ -452,18 +286,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval)
   }, [])
 
-  // ── position polling — YT ya local element se ──────────────────
+  // ── position polling — YT iframe se ────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
-      if (localModeRef.current) {
-        const a = localAudioRef.current
-        if (!a) return
-        if (Number.isFinite(a.currentTime)) usePlayerStore.getState().setPosition(a.currentTime)
-        if (Number.isFinite(a.duration) && a.duration > 0) {
-          usePlayerStore.getState().setDuration(a.duration)
-        }
-        return
-      }
       const p = playerRef.current
       if (!p) return
       try {
@@ -487,7 +312,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const netResumeRef = { current: false }
 
     const onOffline = () => {
-      if (localModeRef.current) return // local file net se nahi chalti
       const st = usePlayerStore.getState()
       if (st.isPlaying) netResumeRef.current = true
       try {
@@ -499,14 +323,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
 
     const onOnline = () => {
-      if (localModeRef.current) return
       const st = usePlayerStore.getState()
       const t = st.currentIndex >= 0 ? st.queue[st.currentIndex] : null
       if (!t) return
       // 1s ruk kar — network stack settle (turant reload adhoora aata hai)
       window.setTimeout(() => {
         const cur = usePlayerStore.getState()
-        if (localModeRef.current) return
         const curT = cur.currentIndex >= 0 ? cur.queue[cur.currentIndex] : null
         if (!curT) return
         const resume = netResumeRef.current || cur.isPlaying
