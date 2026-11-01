@@ -18,12 +18,12 @@ import {
   innertubeSearchX,
   videosToTracks,
   fallbackTracksFor,
+  SP,
   type PageX,
 } from '@/lib/innertube-x'
 import {
-  filterSearchResults,
   hasIslamicMarker,
-  isBlockedResult,
+  isBlockedResultX,
 } from '@/lib/result-filter'
 import { QALB } from '@/lib/qalb'
 import { isNativeApp } from '@/plugins/qalb-native'
@@ -92,10 +92,12 @@ export function islamicOnly(tracks: QalbTrack[]): QalbTrack[] {
   if (!tracks.length) return tracks
   return tracks.filter((t) => {
     const text = `${t.title ?? ''} ${t.artist ?? ''}`.toLowerCase()
-    if (isBlockedResult(text)) return false
+    // v0.5.25 — series-aware filter: Ertugrul/Yousuf jaise islamic
+    // series/movies ke titles me 'movie/film' word ho to bhi pass
+    if (isBlockedResultX(text)) return false
     // curated queries (naat/qawwali...) se aaye results ka category
     // khud islamic hota hai — marker na bhi mile to category kaafi hai
-    if (['NAAT', 'HAMD', 'QAWWALI', 'NASHEED'].includes(t.category)) return true
+    if (['NAAT', 'HAMD', 'QAWWALI', 'NASHEED', 'MOVIES'].includes(t.category)) return true
     return hasIslamicMarker(text)
   })
 }
@@ -130,6 +132,12 @@ const CHIP_CAT: Record<string, string> = {
  *   • seeded shuffle + unseen-channel boost — har baar alag order,
  *     user ki dekhi channels halka neeche (discovery)
  *   • seen-ring filter — jo dikh chuke wo peeche hat jate hain
+ *
+ * v0.5.25 — FAMOUS-FIRST (user report: "famous qawwali/naat nahi aaraha,
+ * jo aaraha hai wo famous nahi hai"): pehle 50% weight RANDOM jitter ka
+ * tha — isse 10K views wala naat 120M wale Tajdar-e-Haram se UPAR aa
+ * jata tha. Ab views-quality dominant (0.72) — famous hamesha top, jitter
+ * sirf same-tier ordering ghumaane ke liye (0.2).
  */
 function chipOrder(tracks: QalbTrack[], salt: number): QalbTrack[] {
   const taste = getItubeTaste()
@@ -138,7 +146,7 @@ function chipOrder(tracks: QalbTrack[], salt: number): QalbTrack[] {
     const quality = Math.min(1, Math.log10((t.playCount ?? 0) + 1) / 9)
     const unseenChan = t.artist && chanSeen.has(t.artist) ? 0 : 1
     const jitter = mulberry32(hashStr(t.videoId + salt))()
-    const s = 0.3 * quality + 0.2 * unseenChan + 0.5 * jitter
+    const s = 0.72 * quality + 0.08 * unseenChan + 0.2 * jitter
     return { t, s }
   })
   scored.sort((a, b) => b.s - a.s)
@@ -182,8 +190,10 @@ export async function itubeFetch(
     const qb = variants[iB === iA ? (iA + 1) % variants.length : iB]
 
     const [pa, pb] = await Promise.all([
-      itubeSearchX(qa, '', null),
-      qb !== qa ? itubeSearchX(qb, '', null) : Promise.resolve(null),
+      // v0.5.25 — qa VIEWS-SORT (famous first — YouTube trending feel),
+      // qb videoOnly (naye/neutral results bhi pool me)
+      itubeSearchX(qa, SP.views, null),
+      qb !== qa ? itubeSearchX(qb, SP.videoOnly, null) : Promise.resolve(null),
     ])
 
     const byId = new Map<string, QalbTrack>()
@@ -201,7 +211,10 @@ export async function itubeFetch(
     return { tracks: rotateFallback(query, 12, salt), continuation: null }
   }
 
-  const page = await itubeSearchX(query, '', continuation)
+  // v0.5.25 — user free-text search: videoOnly params (channels/playlists
+  // results me nahi, sirf VIDEOS — Ertugrul/Yousuf jaise series ke
+  // EPISODES seedha milte hain; channels wali alag row upar hoti hai)
+  const page = await itubeSearchX(query, continuation ? '' : SP.videoOnly, continuation)
 
   // continuation pages par filter ke baad khali aa sake — 1 retry
   if (page && !page.videos.length && continuation) {

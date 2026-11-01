@@ -29,6 +29,7 @@
 import type { QalbTrack } from '@/lib/types'
 import { videosToTracks, fallbackTracksFor, SP, type PageX } from '@/lib/innertube-x'
 import { islamicOnly, itubeSearchX } from '@/lib/itube'
+import { fetchChannelVideos, fetchRelatedVideos } from '@/lib/itube-channels'
 import { mulberry32 } from '@/lib/daily-trending'
 
 // ── Categories (classification + query pools) ───────────────────
@@ -147,6 +148,7 @@ export interface ItubeEvent {
   a: string // channel
   t: number // epoch ms
   d?: number // seconds watched (close/switch par flush hota hai)
+  cid?: string // v0.5.25 — channel UC… (personalized feed usi channel ki videos laata hai)
 }
 
 const EVENTS_KEY = 'qalb_itube_events_v1'
@@ -185,6 +187,7 @@ export function recordItubeWatch(track: QalbTrack) {
     c: track.category || 'ISLAMIC',
     a: track.artist ?? '',
     t: Date.now(),
+    cid: track.tags?.match(/ch:(UC[\w-]+)/)?.[1],
   })
   writeJson(EVENTS_KEY, list.slice(-MAX_EVENTS))
 }
@@ -208,6 +211,16 @@ export function updateLastWatchDuration(seconds: number) {
 
 export function clearItubeEvents() {
   writeJson(EVENTS_KEY, [])
+}
+
+/** v0.5.25 — sabse aakhri watch event (personalized "usi hisaab se" feed
+ *  ke liye: us video ke LIVE YT-related + usi channel ki latest videos) */
+export function getLastWatchedEvent(): ItubeEvent | null {
+  const list = readJson<ItubeEvent[]>(EVENTS_KEY, [])
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i]?.v) return list[i]
+  }
+  return null
 }
 
 // ── Taste profile (recency-weighted) ────────────────────────────
@@ -310,12 +323,15 @@ function planQueries(taste: ItubeTaste, salt: number): Planned[] {
   const scored = taste.catScores.filter(([k]) => CAT_BY_KEY.has(k))
 
   if (taste.events < 5 || scored.length === 0) {
-    // COLD START — balanced explore: har baar alag 5 categories
+    // COLD START — balanced explore: har baar alag 5 categories.
+    // v0.5.25: aadhe plans views-sort (explore:false → SP.views) —
+    // naye user ko bhi FAMOUS content pehle dikhe (naat/qawwali ke
+    // legends), aadhe videoOnly (chhoti channels ka discovery bhi)
     const rot = [...ITUBE_CATS.keys()]
     const start = Math.floor(rnd() * rot.length)
     for (let i = 0; i < 5; i++) {
       const cat = ITUBE_CATS[(start + i * 2 + salt) % ITUBE_CATS.length].key
-      plans.push({ cat, query: pick(cat, i), explore: true })
+      plans.push({ cat, query: pick(cat, i), explore: i % 2 !== 0 })
     }
     return plans
   }
@@ -355,8 +371,12 @@ function scoreTracks(pool: QalbTrack[], taste: ItubeTaste, salt: number): QalbTr
     const explore = top3.has(t.category) || taste.events < 5 ? 0 : 0.5
     const chanFresh = taste.chanScores.some(([a]) => t.artist && a === t.artist) ? 0 : 0.08
     const jitter = mulberry32(hashStr(t.videoId + salt))()
+    // v0.5.25 — famous-first: quality 0.2 → 0.3, jitter 0.18 → 0.06.
+    // Pehle random-jitter zyada tha — isliye 10K-views wale naat famous
+    // 100M walo se upar aa jate the (user complaint). Ab views bhi
+    // quality ke barabar weight rakhti hai.
     const final =
-      0.55 * tasteScore + 0.2 * quality + 0.12 * recency + 0.13 * (explore + chanFresh) + 0.18 * jitter
+      0.5 * tasteScore + 0.3 * quality + 0.06 * recency + 0.08 * (explore + chanFresh) + 0.06 * jitter
     return { t, final }
   })
 
@@ -395,28 +415,80 @@ export interface ItubeFeedResult {
   tasteEvents: number
 }
 
+/** v0.5.25 — sabse zyada dekha gaya channel (cid wala) — personalized
+ *  feed usi channel ki latest videos bhi mila deta hai (YouTube-jaisa
+ *  "aap ke channels se") */
+function topWatchedChannel(): { cid: string; name: string } | null {
+  const events = readJson<ItubeEvent[]>(EVENTS_KEY, [])
+  const now = Date.now()
+  const score = new Map<string, { w: number; name: string }>()
+  for (const e of events) {
+    if (!e.cid) continue
+    const days = Math.max(0, (now - e.t) / 86_400_000)
+    const durF = e.d && e.d > 0 ? Math.min(2, 0.5 + e.d / 60) : 1
+    const w = Math.exp(-days / HALF_LIFE_DAYS) * durF
+    const prev = score.get(e.cid)
+    if (prev) prev.w += w
+    else score.set(e.cid, { w, name: e.a || '' })
+  }
+  let best: { cid: string; name: string; w: number } | null = null
+  for (const [cid, s] of score) {
+    if (!best || s.w > best.w) best = { cid, name: s.name, w: s.w }
+  }
+  return best ? { cid: best.cid, name: best.name } : null
+}
+
 /**
  * iTube "Aap ke liye" feed — HAR CALL par naya mix:
  * taste queries + exploration + fresh, classify → score → diversity.
  * Repeat-kill view-side markShown() se hota hai (yahan sirf ranking).
+ *
+ * v0.5.25 — ASLI PERSONALIZATION (user report: "jo hum dekh rahe hai
+ * contents us hisaab se nahi aaraha hai"). Generic taste-queries ke
+ * SAATH ab do real signals bhi:
+ *   (1) aakhri dekhi video ke LIVE YouTube related (next endpoint) —
+ *       "is video ke baad log ye dekhte hain"
+ *   (2) sabse zyada dekhe channel ki latest videos (browse endpoint)
+ * Warm taste-queries ab VIEWS-SORT se chalti hain — pasand ki category
+ * ke FAMOUS videos pehle aati hain.
  */
 export async function buildItubeFeed(salt = 0): Promise<ItubeFeedResult> {
   const taste = getItubeTaste()
   const plans = planQueries(taste, salt)
 
+  // v0.5.25 — warm queries views-sort (famous in taste), explore
+  // videoOnly, fresh week (pehle jaisa)
   const settled = await Promise.allSettled(
-    plans.map((p) => searchOnce(p.query, p.cat === 'ISLAMIC' ? SP.week : ''))
+    plans.map((p) =>
+      searchOnce(p.query, p.cat === 'ISLAMIC' ? SP.week : p.explore ? SP.videoOnly : SP.views)
+    )
   )
 
-  // sab queries merge + dedupe (zyada views wali entry rakho)
+  // v0.5.25 — personalization fetches (last watched related + top channel)
+  const lastEv = getLastWatchedEvent()
+  const topChan = topWatchedChannel()
+  const personal = await Promise.allSettled([
+    lastEv?.v ? fetchRelatedVideos(lastEv.v, null) : Promise.resolve(null),
+    topChan ? fetchChannelVideos(topChan.cid, null, topChan.name) : Promise.resolve(null),
+  ])
+
+  // sab fetches merge + dedupe (zyada views wali entry rakho)
   const byId = new Map<string, QalbTrack>()
-  for (const r of settled) {
-    if (r.status !== 'fulfilled' || !r.value) continue
-    for (const track of videosToTracks(r.value.videos, 'itube')) {
+  const mergeTracks = (tracks: QalbTrack[]) => {
+    for (const track of tracks) {
+      if (!track.videoId) continue
       const prev = byId.get(track.videoId)
       if (!prev || (track.playCount ?? 0) > (prev.playCount ?? 0)) byId.set(track.videoId, track)
     }
   }
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value) mergeTracks(videosToTracks(r.value.videos, 'itube'))
+  }
+  // personalized — aakhri video ke related (top 12) + top channel (top 8)
+  const rel = personal[0].status === 'fulfilled' ? personal[0].value : null
+  const chan = personal[1].status === 'fulfilled' ? personal[1].value : null
+  if (rel?.tracks.length) mergeTracks(rel.tracks.slice(0, 12))
+  if (chan?.tracks.length) mergeTracks(chan.tracks.slice(0, 8))
 
   // real category set karo + paak filter
   let pool = [...byId.values()].map((t) => ({

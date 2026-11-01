@@ -31,7 +31,7 @@ import {
   type RawChannelX,
 } from '@/lib/innertube-x'
 import { innertubePostJson } from '@/lib/youtube-search-source'
-import { isBlockedResult } from '@/lib/result-filter'
+import { isBlockedResultX } from '@/lib/result-filter'
 import { isNativeApp, nativeKvGet, nativeKvSet } from '@/plugins/qalb-native'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -77,7 +77,7 @@ export async function searchChannels(query: string, limit = 8): Promise<ChannelI
   const raw: RawChannelX[] = []
   collectChannelsX(data, raw)
   return raw
-    .filter((c) => !isBlockedResult(`${c.title} ${c.desc}`.toLowerCase()))
+    .filter((c) => !isBlockedResultX(`${c.title} ${c.desc}`.toLowerCase()))
     .slice(0, limit)
     .map((c) => ({
       id: c.channelId,
@@ -139,7 +139,9 @@ export async function fetchChannelVideos(
     .map((t) =>
       !t.artist || t.artist === 'YouTube' ? { ...t, artist: chanName || t.artist } : t
     )
-    .filter((t) => !isBlockedResult(`${t.title} ${t.artist ?? ''}`.toLowerCase()))
+    // v0.5.25 — series-aware filter (Ertugrul/Yousuf channel pages par
+    // 'movie/film' word wali episode titles block na ho)
+    .filter((t) => !isBlockedResultX(`${t.title} ${t.artist ?? ''}`.toLowerCase()))
   return {
     tracks,
     continuation: tokens[0] ?? null,

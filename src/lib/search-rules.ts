@@ -80,6 +80,8 @@ export const ENTERTAINMENT_BLOCK = [
 export const BLOCKED_TERMS = [...RELIGIOUS_BLOCK, ...ENTERTAINMENT_BLOCK]
 
 // ── L2: Islamic intent — query me ye word hai to STRICT mode OFF ──
+// v0.5.25: islamic series/movies bhi — Ertugrul/Kurulus/Yousuf jaise
+// searches strict-mode me neutral results khate the
 export const ISLAMIC_INTENT = [
   'naat', 'naats', 'hamd', 'hamad', 'qawwali', 'qawali', 'kawwali',
   'kawali', 'nasheed', 'nashid', 'noha', 'nauha', 'manqabat', 'marsiya',
@@ -92,7 +94,23 @@ export const ISLAMIC_INTENT = [
   'mohammad', 'mohammed', 'allah', 'allahu', 'rab', 'rabb', 'maula',
   'mawla', 'hussain', 'taqwa', 'iman', 'zakat', 'hajj', 'umrah',
   'quran', 'surah', 'ayat', 'dua', 'tasbih', 'jannah', 'aqeedah',
+  // v0.5.25 — islamic series/movies/history
+  'hazrat', 'ertugrul', 'ertrugrul', 'etrugrul', 'kurulus', 'osman',
+  'yousuf', 'yusuf', 'ghazi', 'salahuddin', 'ayubi', 'ayyubi',
+  'alp arslan', 'yunus emre', 'sahaba', 'seerat', 'seerah',
 ]
+
+// Generic film/series words — inka matlab context par depend karta hai:
+// "islamic movie", "hazrat yousuf full movie", "ertugrul ghazi series"
+// paak queries hain — in words ke BINA islamic-intent wali query me ye
+// khud block ka sabab nahi bante (v0.5.25). Baaki entertainment words
+// (bollywood, songs, celebrities, pop) hamesha block karte hain.
+export const FILM_WORD_RE =
+  /\b(movies?|films?|filmi|filmy|web series|series|trailer|teaser|box office)\b/gi
+
+export function stripFilmWords(text: string): string {
+  return text.replace(FILM_WORD_RE, ' ').replace(/\s+/g, ' ')
+}
 
 // ── compiled regex helpers (word-boundary — substring nahi, warna
 // "pyare nabi" me "pyar" match ho jata) ────────────────────────────
@@ -121,6 +139,15 @@ export function matchBlockedTerm(q: string): string | null {
     return m?.[0] ?? 'non-Islamic'
   }
   if (RE_ENTERTAINMENT.test(lower)) {
+    // v0.5.25 — islamic-intent queries ("islamic movie", "hazrat yousuf
+    // full movie", "ertugrul series") me generic film words strip karke
+    // dobara jaacho — bina unke paak query ka rasta khula
+    if (RE_INTENT.test(lower)) {
+      const soft = stripFilmWords(lower)
+      const m2 = soft.match(RE_ENTERTAINMENT)
+      if (!m2) return null
+      return m2[0] ?? 'non-Islamic'
+    }
     const m = lower.match(RE_ENTERTAINMENT)
     return m?.[0] ?? 'non-Islamic'
   }

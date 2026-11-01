@@ -21,6 +21,7 @@ import { filterSearchResults } from '@/lib/result-filter'
 import {
   innertubeSearchX,
   paramsFor,
+  SP,
   videosToTracks,
   fallbackTracksFor,
   type PageX,
@@ -214,13 +215,17 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
   }
 
   try {
-    // ── 1. TRENDING — is hafte ke sab se zyada dekhe gaye (4 parallel) ──
-    // FIX v0.5.4: pehle raw 'week' string sp me ja rahi thi (INVALID) →
-    // YouTube misc results deta tha (comedy waghera). Ab paramsFor se
-    // proper InnerTube sp token + STRICT islamic filter (islamicOnly).
-    const trendPages = await Promise.all(
-      TREND_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('', 'week'), null), 14000))
-    )
+    // ── 1. TRENDING — v0.5.25 FAMOUS-FIRST ──
+    // user report: "top trending me famous qawwali/naat nahi aaraha, aise
+    // naat aarahi hai jo famous nahi hai". Pehle sirf WEEK filter tha —
+    // is hafte upload hui videos hi aa sakti thi (WION news 41K views,
+    // random 10K naat — live-test me confirm). Ab ALL-TIME views-sort
+    // (CAMSAhAB) bhi pool me — Tajdar-e-Haram (79M), Nusrat (73M) jaise
+    // legends top par + week ke fresh hits bhi.
+    const trendPages = await Promise.all([
+      ...TREND_QUERIES.map((q) => timeoutPromise(searchX(q, SP.views, null), 14000)),
+      ...TREND_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('', 'week'), null), 14000)),
+    ])
     const weekTracks = videosToTracks(trendPages.flatMap((p) => p?.videos ?? []), 'tr')
     let trending = islamicOnly(weekTracks)
       .filter((t) => (t.playCount ?? 0) > 0)

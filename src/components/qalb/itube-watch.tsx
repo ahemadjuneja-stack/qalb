@@ -35,7 +35,7 @@ import { recordPlay } from '@/lib/recommend'
 import { recordItubeWatch, updateLastWatchDuration, rankRelated } from '@/lib/itube-brain'
 import { islamicOnly, trackPub } from '@/lib/itube'
 import { channelRefOf, fetchChannelVideos, fetchRelatedVideos } from '@/lib/itube-channels'
-import { isBlockedResult } from '@/lib/result-filter'
+import { isBlockedResultX } from '@/lib/result-filter'
 import { loadYouTubeIframeApi, type YTPlayer } from '@/lib/yt-api'
 import { usePlayerStore } from '@/lib/player-store'
 import {
@@ -462,7 +462,7 @@ export function ItubeWatch({
             .filter(
               (t) =>
                 t.videoId !== vid &&
-                !isBlockedResult(`${t.title} ${t.artist ?? ''}`.toLowerCase())
+                !isBlockedResultX(`${t.title} ${t.artist ?? ''}`.toLowerCase())
             )
             .slice(0, 6) // YouTube jitni — kuch same-channel videos pehle
         )

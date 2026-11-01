@@ -15,7 +15,7 @@
 // CLIENT-SAFE: koi server-only import nahi — APK + hosted dono use karte.
 
 import type { QalbTrack } from '@/lib/types'
-import { RELIGIOUS_BLOCK, ENTERTAINMENT_BLOCK } from '@/lib/search-rules'
+import { RELIGIOUS_BLOCK, ENTERTAINMENT_BLOCK, stripFilmWords } from '@/lib/search-rules'
 
 // Channel/label hard-block — ye channels film/pop/bhajan ka ghar hain
 // (NOTE: plain "t-series" BLOCK NAHI — T-Series par naats bhi hain;
@@ -66,6 +66,14 @@ const ISLAMIC_MARKERS = [
   'abdul basit', 'abdul rahman al sudais', 'sudais', 'qawwal',
   'naat khawan', 'naatkwan', 'alhaj', 'naat academy', 'naat studio',
   'islamic video', 'islamic status',
+  // v0.5.25 — islamic series/movies/history (Ertugrul, Kurulus Osman,
+  // Hazrat Yousuf, Salahuddin Ayubi…) — inke titles me 'islamic' word
+  // nahi hota, isi liye episodes/episodes-list filter me kho jati thi
+  'ertugrul', 'ertrugrul', 'etrugrul', 'kurulus', 'osman',
+  'alp arslan', 'yunus emre', 'salahuddin', 'ayubi', 'ayyubi',
+  'barbaros', 'yousuf', 'yusuf', 'hazrat', 'ghazi', 'sahaba',
+  'prophet', 'seerat', 'seerah', 'urdu drama', 'islamic movie',
+  'islamic series', 'islamic film',
 ]
 
 function escapeTerm(t: string): string {
@@ -86,6 +94,32 @@ export function isBlockedResult(text: string): boolean {
   return RE_RELIGIOUS.test(text) || RE_ENTERTAINMENT.test(text) || RE_CHANNEL.test(text)
 }
 
+// STRONG series/movie titles — sirf inke hone par generic film words
+// ('movie/film/series/trailer') block nahi bante. Bare 'sultan' JAAN
+// BOOJH KAR NAHI (Salman Khan ki Sultan movie) — 'salman khan' waise
+// bhi block hai, lekin double-safety.
+const STRONG_SERIES = [
+  'ertugrul', 'ertrugrul', 'etrugrul', 'kurulus', 'kurulus osman',
+  'alp arslan', 'yunus emre', 'salahuddin', 'ayubi', 'ayyubi',
+  'barbaros', 'yousuf', 'yusuf', 'hazrat yousuf', 'hazrat yusuf',
+  'ghazi', 'hazrat', 'islamic movie', 'islamic film', 'islamic series',
+  'the message', 'muhammad the messenger', 'omar series', 'farooq',
+]
+const RE_STRONG_SERIES = compileList(STRONG_SERIES)
+
+/** v0.5.25 — series-aware block jaicho:
+ *  "Ertugrul Ghazi Full Movie Urdu" / "Hazrat Yousuf Movie Episode 3"
+ *  jaise TITLES me 'movie/film/series' word ho to bhi paak series
+ *  pass ho — lekin bollywood/song/celebrity words phir bhi block. */
+export function isBlockedResultX(text: string): boolean {
+  if (RE_RELIGIOUS.test(text)) return true
+  if (RE_STRONG_SERIES.test(text)) {
+    const soft = stripFilmWords(text)
+    return RE_ENTERTAINMENT.test(soft) || RE_CHANNEL.test(soft)
+  }
+  return RE_ENTERTAINMENT.test(text) || RE_CHANNEL.test(text)
+}
+
 export function hasIslamicMarker(text: string): boolean {
   return RE_ISLAMIC.test(text)
 }
@@ -100,7 +134,7 @@ export function filterSearchResults(tracks: QalbTrack[], strict: boolean): QalbT
   if (!tracks.length) return tracks
   return tracks.filter((t) => {
     const text = `${t.title ?? ''} ${t.artist ?? ''}`.toLowerCase()
-    if (isBlockedResult(text)) return false
+    if (isBlockedResultX(text)) return false
     if (hasIslamicMarker(text)) return true
     return !strict
   })
