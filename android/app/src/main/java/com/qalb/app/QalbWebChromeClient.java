@@ -2,11 +2,19 @@ package com.qalb.app;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
+import android.os.Build;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeWebChromeClient;
 
@@ -22,6 +30,19 @@ import com.getcapacitor.BridgeWebChromeClient;
  * screen-size container me NAHI deta → hamare 16:9 box me clip ho jata
  * hai (display cut), aur YT ke controls (seekbar line + timing) iframe
  * ke bottom par hote hain jo clip ke bahar reh jate hain.
+ *
+ * v0.5.30 — USER REPORT: "YouTube play hone par notification bar hide
+ * aur full view milta hai; iTube me notification bar bhi hai, side ki
+ * alag border bhi dikh rahi hai." Screenshot analysis: fullscreen me
+ * (1) status bar dikhta rehta tha, (2) landscape me LEFT black strip —
+ * ye display-cutout ka LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT letterbox
+ * hai (punch-hole camera wali column ke aar-paar window nahi jaati).
+ * YouTube dono nahi dikhata kyunki wo immersive (bars hide) + cutout
+ * SHORT_EDGES use karta hai.
+ *
+ * FIX: onShowCustomView par IMMERSIVE (status+nav bars hide, swipe par
+ * transient) + cutout SHORT_EDGES — video poore screen ko palle-bhar
+ * leta hai (punch-hole ke aar-paar bhi). Exit par sab restore.
  *
  * FIX: proper onShowCustomView/onHideCustomView — fullscreen content ko
  * decor par MATCH_PARENT black container me daalo, WebView chhupao,
@@ -62,6 +83,10 @@ public class QalbWebChromeClient extends BridgeWebChromeClient {
             // YouTube jaisa: fullscreen me landscape
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
 
+            // v0.5.30 — YouTube ka asli full view: bars gayab + cutout ke
+            // aar-paar (left black-strip + status bar dono khatam)
+            enterImmersive(activity);
+
             fullscreenContainer = new FrameLayout(activity);
             fullscreenContainer.setBackgroundColor(0xFF000000);
             fullscreenContainer.addView(
@@ -97,9 +122,61 @@ public class QalbWebChromeClient extends BridgeWebChromeClient {
         super.onHideCustomView();
     }
 
+    /** fullscreen ke dauran system bars hide + cutout SHORT_EDGES (v0.5.30) */
+    private void enterImmersive(Activity activity) {
+        try {
+            Window window = activity.getWindow();
+            if (window == null || window.getDecorView() == null) return;
+            if (Build.VERSION.SDK_INT >= 28) {
+                try {
+                    WindowManager.LayoutParams lp = window.getAttributes();
+                    lp.layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                    window.setAttributes(lp);
+                } catch (Exception ignored) {
+                    // purani API par cutout mode optional
+                }
+            }
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller == null) return;
+            controller.setSystemBarsBehavior(
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            controller.hide(WindowInsetsCompat.Type.statusBars()
+                    | WindowInsetsCompat.Type.navigationBars());
+        } catch (Exception ignored) {
+            // cosmetic fail — fullscreen waise hi chalega
+        }
+    }
+
+    /** fullscreen exit — bars + cutout wapis (v0.5.30) */
+    private void exitImmersive(Activity activity) {
+        try {
+            Window window = activity.getWindow();
+            if (window == null || window.getDecorView() == null) return;
+            if (Build.VERSION.SDK_INT >= 28) {
+                try {
+                    WindowManager.LayoutParams lp = window.getAttributes();
+                    lp.layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+                    window.setAttributes(lp);
+                } catch (Exception ignored) {
+                }
+            }
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller == null) return;
+            controller.show(WindowInsetsCompat.Type.statusBars()
+                    | WindowInsetsCompat.Type.navigationBars());
+        } catch (Exception ignored) {
+        }
+    }
+
     private void teardownCustomView() {
         Activity activity = bridge.getActivity();
         try {
+            // v0.5.30 — pehle bars/cutout restore (activity null ho to bhi try)
+            if (activity != null) exitImmersive(activity);
             if (fullscreenContainer != null && fullscreenContainer.getParent() instanceof ViewGroup) {
                 ((ViewGroup) fullscreenContainer.getParent()).removeView(fullscreenContainer);
             }

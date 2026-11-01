@@ -32,6 +32,8 @@ export interface QalbNativePluginInterface {
   }): Promise<void>
   stopPlayback(): Promise<void>
   setStatusBarStyle(options: { dark: boolean }): Promise<void>
+  // v0.5.30 — immersive mode (YouTube-jaisa full view): bars hide/show
+  setImmersiveMode(options: { on: boolean; nav?: boolean }): Promise<void>
   addListener(
     eventName: 'mediaAction',
     listenerFunc: (data: { action: QalbMediaAction }) => void
@@ -212,6 +214,19 @@ export async function nativeSetStatusBar(darkTheme: boolean) {
     await QalbNative.setStatusBarStyle({ dark: darkTheme })
   } catch {
     /* non-fatal */
+  }
+}
+
+// ── v0.5.30 — IMMERSIVE MODE (video screens, YouTube-jaisa) ──────
+// on=true  → status bar hide (navToo=true → navigation bar bhi) +
+//            cutout SHORT_EDGES — punch-hole ke aar-paar full view.
+// on=false → bars wapis (screen band hote hi).
+export async function nativeSetImmersive(on: boolean, navToo = false) {
+  if (!isNativeApp()) return
+  try {
+    await QalbNative.setImmersiveMode({ on, nav: navToo })
+  } catch {
+    /* non-fatal — cosmetic feature */
   }
 }
 

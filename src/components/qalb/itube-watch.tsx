@@ -24,6 +24,16 @@
 //   • ENDED par auto-next related video; PREV session history se
 //   • Naat start hote hi iTube video chup (dono audio ek sath nahi)
 //
+// v0.5.30 — YOUTUBE-STYLE FULL VIEW (user report: "YouTube play hone
+//   par notification bar hide aur full view milta hai; iTube me
+//   notification bar bhi hai, side ki alag border bhi dikh rahi hai"):
+//   • Watch screen par STATUS BAR GAYAB (immersive) — player foran top
+//     se chipak kar poora 16:9 le leta hai, band karte hi bars wapis
+//   • Fullscreen me NAVIGATION bar bhi gayab (YouTube fullscreen jaisa);
+//     exit par wapas status-only immersive
+//   • Native chrome-client fullscreen me bhi cutout SHORT_EDGES —
+//     landscape ki left black-strip khatam, video poore screen par
+//
 // Back button (Android) aur back-arrow dono screen band karte hain.
 
 import { useEffect, useRef, useState } from 'react'
@@ -42,6 +52,7 @@ import {
   nativeUpdatePlayback,
   nativeStopPlayback,
   nativeSetBgPauseMedia,
+  nativeSetImmersive,
   onNativeMediaAction,
 } from '@/plugins/qalb-native'
 import type { QalbTrack } from '@/lib/types'
@@ -257,6 +268,15 @@ export function ItubeWatch({
     return () => document.removeEventListener('fullscreenchange', onFs)
   }, [])
 
+  // v0.5.30 — IMMERSIVE SYNC: watch screen par status bar gayab;
+  // fullscreen me navigation bar bhi gayab (YouTube fullscreen jaisa);
+  // fullscreen exit par wapas status-only immersive. Native chrome-client
+  // bhi apni taraf se hide/show karta hai — dono idempotent, double-fail
+  // safe. Mount par pehla run (fsActive=false) hi watch immersion de deta hai.
+  useEffect(() => {
+    void nativeSetImmersive(true, fsActive)
+  }, [fsActive])
+
   // ── v0.5.28 NET OFF/ON FAST RECOVERY ───────────────────────────
   // Net katte par YT iframe endless buffering me atak jata tha aur net
   // wapas aane par khud recover nahi karta (user: "loading zyada leta
@@ -332,12 +352,17 @@ export function ItubeWatch({
   // mount: itube session active + native bg-pause BYPASS + cleanup
   useEffect(() => {
     usePlayerStore.getState().setItubeActive(true)
+    // v0.5.30 — YouTube-style immersive watch: status bar GAYAB (band
+    // hote hi wapis). Foreground-wapas par dobara assert bhi — kahin
+    // system bars khud dikha gaya ho to bhi watch me nahi aayenge.
+    void nativeSetImmersive(true)
     // video watch khula — app background me WebView ka media NATIVELY
     // pause NAHI hoga (reels wala v0.3.3 pause is screen par bypass)
     void nativeSetBgPauseMedia(false)
     return () => {
       usePlayerStore.getState().setItubeActive(false)
       stopKeepAlive()
+      void nativeSetImmersive(false) // v0.5.30 — bars wapis
       try {
         ytPlayerRef.current?.pauseVideo()
       } catch {
@@ -597,6 +622,9 @@ export function ItubeWatch({
             /* not ready */
           }
         }
+        // v0.5.30 — foreground par immersive dobara assert (background
+        // jaate waqt system bars dikha deta hai; watch me wapis gayab)
+        void nativeSetImmersive(true, Boolean(document.fullscreenElement))
       }
     }
     const onBgEvt = (e: Event) => {

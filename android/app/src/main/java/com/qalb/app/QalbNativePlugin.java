@@ -20,6 +20,7 @@ import androidx.activity.result.ActivityResult;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.getcapacitor.JSObject;
@@ -278,6 +279,77 @@ public class QalbNativePlugin extends Plugin {
     private String safeMsg(Exception e) {
         String m = e.getMessage();
         return m != null ? m : e.getClass().getSimpleName();
+    }
+
+    // ── v0.5.30 IMMERSIVE MODE (YouTube-jaisa full view) ────────────
+    // User report: "itube me notification bar bhi hai, side ki alag
+    // border bhi dikh rahi hai — YouTube play hone par notification bar
+    // hide aur full view milta hai."
+    //
+    // on=true  → status bar (aur chaho to nav bar bhi) HIDE + swipe se
+    //            transient bars (YouTube fullscreen ka exact behaviour)
+    //            + display-cutout SHORT_EDGES (punch-hole camera ke aar-
+    //            paar content — landscape me left black-strip khatam).
+    // on=false → dono bars wapis + cutout DEFAULT restore.
+    // Video screens (iTube watch) mount/unmount par use karti hain.
+    @PluginMethod
+    public void setImmersiveMode(PluginCall call) {
+        try {
+            boolean on = Boolean.TRUE.equals(call.getBoolean("on"));
+            boolean navToo = Boolean.TRUE.equals(call.getBoolean("nav"));
+            Activity activity = getActivity();
+            if (activity == null || activity.isFinishing()) {
+                call.resolve();
+                return;
+            }
+            Window window = activity.getWindow();
+            if (window == null || window.getDecorView() == null) {
+                call.resolve();
+                return;
+            }
+            WindowInsetsControllerCompat controller =
+                    WindowCompat.getInsetsController(window, window.getDecorView());
+            if (controller == null) {
+                // kuch OEM ROMs pe insets controller null — cosmetic skip
+                call.resolve();
+                return;
+            }
+            if (on) {
+                controller.setSystemBarsBehavior(
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                int mask = WindowInsetsCompat.Type.statusBars();
+                if (navToo) mask |= WindowInsetsCompat.Type.navigationBars();
+                controller.hide(mask);
+                if (Build.VERSION.SDK_INT >= 28) {
+                    try {
+                        android.view.WindowManager.LayoutParams lp = window.getAttributes();
+                        lp.layoutInDisplayCutoutMode =
+                                android.view.WindowManager.LayoutParams
+                                        .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                        window.setAttributes(lp);
+                    } catch (Exception ignored) {
+                        // OEM quirk — cosmetic only
+                    }
+                }
+            } else {
+                controller.show(WindowInsetsCompat.Type.statusBars()
+                        | WindowInsetsCompat.Type.navigationBars());
+                if (Build.VERSION.SDK_INT >= 28) {
+                    try {
+                        android.view.WindowManager.LayoutParams lp = window.getAttributes();
+                        lp.layoutInDisplayCutoutMode =
+                                android.view.WindowManager.LayoutParams
+                                        .LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT;
+                        window.setAttributes(lp);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+            call.resolve();
+        } catch (Exception e) {
+            // immersive fail = cosmetic — app chalti rahegi
+            call.reject("immersive mode fail: " + safeMsg(e));
+        }
     }
 
     // ── Reel offline download (v0.2.6) ─────────────────────────────
