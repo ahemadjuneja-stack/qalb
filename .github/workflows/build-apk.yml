@@ -155,7 +155,11 @@ jobs:
           # chal raha hota.
           KEYTEST="${{ secrets.YT_API_KEY }}"
           [ -z "$KEYTEST" ] && KEYTEST="${{ vars.FIREBASE_WEB_API_KEY }}"
-          echo "self-test key: ${#KEYTEST} chars (YT_API_KEY secret ya FIREBASE_WEB_API_KEY var)"
+          # v0.5.39: authcfg ki tarah committed file bhi try karo (asli
+          # source yehi hai — login config: source=committed-file)
+          [ -z "$KEYTEST" ] && [ -f .firebase/web-apikey.txt ] && \
+            KEYTEST=$(head -1 .firebase/web-apikey.txt | tr -d '[:space:]')
+          echo "self-test key: ${#KEYTEST} chars (secret/var/committed-file)"
           CODE=$(curl -s -o /tmp/yt_test.json -w "%{http_code}" -m 20 \
             "https://www.googleapis.com/youtube/v3/search?part=snippet&q=naat&type=video&maxResults=1&key=$KEYTEST")
           echo "YT Data API self-test: HTTP $CODE"
