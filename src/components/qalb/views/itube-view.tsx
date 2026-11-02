@@ -128,6 +128,11 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 const ITUBE_WATCHDOG_MS = 15000
 
+// v0.5.42 — PULL-TO-REFRESH tuning (native app jaisi feel)
+const PTR_TRIGGER = 68 // itna kheencha (damped) to refresh fire
+const PTR_MAX = 132    // indicator rubber-band limit
+const PTR_DAMP = 0.42  // finger-pixel → indicator-pixel damping
+
 export function ITubeView({ visible }: { visible: boolean }) {
   const { toast } = useToast()
   const [watch, setWatch] = useState<QalbTrack | null>(null)
@@ -152,6 +157,11 @@ export function ITubeView({ visible }: { visible: boolean }) {
   const saltRef = useRef(0)
   const wasVisible = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // ── v0.5.42 pull-to-refresh state ──
+  const [pullPx, setPullPx] = useState(0)     // abhi kitna kheencha (damped)
+  const [refreshing, setRefreshing] = useState(false)
+  const pullPxRef = useRef(0)                 // touch-end par sync read ke liye
 
   // ── channels (v0.5.21) ──
   const [, setSubsTick] = useState(0) // subscribe toggle par re-render
@@ -330,6 +340,30 @@ export function ITubeView({ visible }: { visible: boolean }) {
     }
   }, [])
 
+  // ── v0.5.42: pull-to-refresh action — upar kheench ke FRESH content ──
+  // foryou: salt++ → naye queries + naya order; chip/search: salt++
+  // variant; channel: wahi channel dobara. channels tab par refresh
+  // nahi (wahan kuch load nahi hota).
+  const doRefresh = useCallback(async () => {
+    if (mode.kind === 'channels') return
+    window.scrollTo({ top: 0 })
+    setRefreshing(true)
+    try {
+      if (mode.kind === 'foryou') {
+        saltRef.current += 1
+        await loadForYou(saltRef.current)
+      } else if (mode.kind === 'channel') {
+        await loadChannel(mode.ch, null)
+      } else {
+        await load(mode, null)
+      }
+    } catch {
+      /* load fns failure khud handle karti hain (failed state) */
+    } finally {
+      setRefreshing(false)
+    }
+  }, [mode, loadForYou, loadChannel, load])
+
   // ── EK unified load-effect (v0.5.9 FIX — auto-load race khatam):
   // pehle DO alag effects the (mode-change + tab-revisit) — dono mount
   // par ek saath fire hote the → 2 parallel requests → agar naya wala
@@ -425,6 +459,75 @@ export function ITubeView({ visible }: { visible: boolean }) {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [visible, cont, loading, loadingMore, mode, load, loadMoreForYou, loadChannel])
+
+  // ── v0.5.42 PULL-TO-REFRESH — sirf top par (scrollY≈0) neeche drag ──
+  // touch se damped pull track karo, trigger cross to doRefresh().
+  // chips horizontal swipe / input cursor-drag hijack nahi hote.
+  useEffect(() => {
+    if (!visible || watch || refreshing) return
+    if (mode.kind === 'channels') return
+    let startX = 0
+    let startY = 0
+    let armed = false  // touch top par shuru hua
+    let pulling = false // vertical pull confirm ho gaya
+
+    const onStart = (e: TouchEvent) => {
+      armed = false
+      if (e.touches.length !== 1) return
+      if (window.scrollY > 2) return
+      const tgt = e.target as HTMLElement | null
+      if (tgt && tgt.closest('input, textarea, [contenteditable="true"]')) return
+      startY = e.touches[0].clientY
+      startX = e.touches[0].clientX
+      armed = true
+    }
+
+    const onMove = (e: TouchEvent) => {
+      if (!armed) return
+      const t = e.touches[0]
+      const dy = t.clientY - startY
+      const dx = t.clientX - startX
+      if (!pulling) {
+        // horizontal drag (chips row) — PTR cancel
+        if (Math.abs(dx) > Math.abs(dy) + 6) {
+          armed = false
+          return
+        }
+        // beech me scroll shuru ho gaya — PTR cancel
+        if (window.scrollY > 2) {
+          armed = false
+          return
+        }
+        if (dy < 14) return // pull confirm nahi hua abhi
+        pulling = true
+      }
+      const damped = Math.min(PTR_MAX, Math.max(0, dy * PTR_DAMP))
+      pullPxRef.current = damped
+      setPullPx(damped)
+      if (e.cancelable) e.preventDefault()
+    }
+
+    const onEnd = () => {
+      if (!armed) return
+      armed = false
+      const d = pullPxRef.current
+      pullPxRef.current = 0
+      setPullPx(0)
+      if (pulling && d >= PTR_TRIGGER) void doRefresh()
+      pulling = false
+    }
+
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd, { passive: true })
+    window.addEventListener('touchcancel', onEnd, { passive: true })
+    return () => {
+      window.removeEventListener('touchstart', onStart)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+      window.removeEventListener('touchcancel', onEnd)
+    }
+  }, [visible, watch, refreshing, mode, doRefresh])
 
   // tap → video watch screen (YouTube jaisa) — audio player pehle pause.
   // WATCH EVENT watch screen ke andar record hota hai (switch par bhi).
@@ -566,7 +669,51 @@ export function ITubeView({ visible }: { visible: boolean }) {
             : `search:${mode.query}`
 
   return (
-    <div className="pb-6" aria-label="iTube — Islamic videos">
+    <>
+      {/* ── v0.5.42 PULL-TO-REFRESH indicator (Chrome-style pill) ── */}
+      {pullPx > 0 || refreshing ? (
+        <div
+          aria-live="polite"
+          aria-label={refreshing ? 'Refresh ho raha hai' : 'Neeche kheench ke refresh'}
+          className="pointer-events-none fixed left-1/2 z-[80] -translate-x-1/2"
+          style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+        >
+          <div
+            className="flex items-center justify-center rounded-full border shadow-[0_10px_30px_-10px_rgba(0,0,0,0.85)]"
+            style={{
+              width: 40,
+              height: 40,
+              background: 'rgba(6, 24, 16, 0.96)',
+              borderColor:
+                pullPx >= PTR_TRIGGER || refreshing
+                  ? 'rgba(52, 211, 153, 0.55)'
+                  : 'rgba(52, 211, 153, 0.22)',
+              opacity: refreshing ? 1 : Math.min(1, pullPx / 40),
+              transform: `translateY(${refreshing ? 0 : Math.max(0, pullPx - 16)}px)`,
+              transition: 'opacity 140ms ease-out, transform 140ms ease-out, border-color 140ms',
+            }}
+          >
+            <Loader2
+              className={`h-5 w-5 text-emerald-300 ${refreshing ? 'animate-spin' : ''}`}
+              style={
+                refreshing
+                  ? undefined
+                  : { transform: `rotate(${Math.min(pullPx, PTR_TRIGGER) * 2.4}deg)` }
+              }
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className="pb-6"
+        aria-label="iTube — Islamic videos"
+        style={
+          pullPx > 0
+            ? { transform: `translateY(${Math.round(pullPx * 0.5)}px)`, transition: 'transform 120ms linear' }
+            : { transition: 'transform 200ms ease-out' }
+        }
+      >
       {/* ── search + chips (shell header ke neeche) ── */}
       <div className="px-0.5 pb-3 pt-1">
         <form onSubmit={submitSearch} className="relative">
@@ -961,7 +1108,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
 
         {!loading && !failed && listTracks.length > 0 && mode.kind !== 'channels' && (
           <p className="pb-2 pt-1 text-center text-[11px] font-semibold text-emerald-200/35">
-            Neeche scroll karte raho — naye videos aate rahenge 🌙
+            Upar kheench ke refresh karo, neeche scroll karte raho — naye videos aate rahenge 🌙
           </p>
         )}
       </div>
@@ -979,6 +1126,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
           }}
         />
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
