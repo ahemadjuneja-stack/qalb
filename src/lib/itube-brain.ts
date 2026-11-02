@@ -328,13 +328,14 @@ function planQueries(taste: ItubeTaste, salt: number): Planned[] {
   const scored = taste.catScores.filter(([k]) => CAT_BY_KEY.has(k))
 
   if (taste.events < 5 || scored.length === 0) {
-    // COLD START — balanced explore: har baar alag 5 categories.
+    // COLD START — balanced explore: har baar alag 4 categories.
     // v0.5.25: aadhe plans views-sort (explore:false → SP.views) —
     // naye user ko bhi FAMOUS content pehle dikhe (naat/qawwali ke
     // legends), aadhe videoOnly (chhoti channels ka discovery bhi)
+    // v0.5.38: 5 → 4 plans (quota — search=100 units, free 10k/day)
     const rot = [...ITUBE_CATS.keys()]
     const start = Math.floor(rnd() * rot.length)
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       const cat = ITUBE_CATS[(start + i * 2 + salt) % ITUBE_CATS.length].key
       plans.push({ cat, query: pick(cat, i), explore: i % 2 !== 0 })
     }
@@ -342,12 +343,9 @@ function planQueries(taste: ItubeTaste, salt: number): Planned[] {
   }
 
   // WARM — top categories user ki pasand se, variant rotate
-  const top = scored.slice(0, 3).map(([k]) => k)
+  // v0.5.38: top-3 + mid (4 searches) → top-2 (quota bachao)
+  const top = scored.slice(0, 2).map(([k]) => k)
   top.forEach((cat, i) => plans.push({ cat, query: pick(cat, i), explore: false }))
-
-  // +1 mid interest (rank 3-6)
-  const mid = scored[3 + (salt % 2)]?.[0]
-  if (mid && !top.includes(mid)) plans.push({ cat: mid, query: pick(mid, 3), explore: false })
 
   // +1 EXPLORATION — jo user ne kam/kabhi nahi dekha (watch time badhe)
   const known = new Set(scored.slice(0, 5).map(([k]) => k))
@@ -418,6 +416,9 @@ export interface ItubeFeedResult {
   tracks: QalbTrack[]
   /** kitne events (watch history) se personalized hua — 0 = cold start */
   tasteEvents: number
+  /** v0.5.38 — 'live' = Data API taaza mix, 'pool' = offline trending
+   *  fallback (net down / quota khatam) — UI badge isi se dikhta hai */
+  source: 'live' | 'pool'
 }
 
 /** v0.5.25 — sabse zyada dekha gaya channel (cid wala) — personalized
@@ -443,10 +444,47 @@ function topWatchedChannel(): { cid: string; name: string } | null {
   return best ? { cid: best.cid, name: best.name } : null
 }
 
+// ── POOL CACHE (v0.5.38 — sessionStorage, 10 min) ───────────────
+// Data API search = 100 units — buildItubeFeed me 4 searches (400 units).
+// Free quota 10k/day — 3-4 doston ke saath bhi din bhar chalna chahiye.
+// Isliye fetch hua pool 10 min sessionStorage me rakhte hain; HAR CALL par
+// fresh-random salt se RE-RANK hota hai (same pool, alag order/mix feel).
+// sessionStorage = app kill par dead — restart par bilkul naya pool.
+const POOL_KEY = 'qalb_itube_pool_s1'
+const POOL_TTL = 10 * 60 * 1000
+
+function readPoolCache(): QalbTrack[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(POOL_KEY)
+    if (!raw) return null
+    const c = JSON.parse(raw) as { t: number; items: QalbTrack[] }
+    if (!c?.t || Date.now() - c.t > POOL_TTL || !Array.isArray(c.items)) return null
+    return c.items.filter((t) => t && t.videoId)
+  } catch {
+    return null
+  }
+}
+
+function writePoolCache(pool: QalbTrack[]) {
+  if (typeof window === 'undefined' || !pool.length) return
+  try {
+    window.sessionStorage.setItem(
+      POOL_KEY,
+      JSON.stringify({ t: Date.now(), items: pool.slice(0, 120) })
+    )
+  } catch {
+    /* quota — ignore */
+  }
+}
+
 /**
  * iTube "Aap ke liye" feed — HAR CALL par naya mix:
  * taste queries + exploration + fresh, classify → score → diversity.
  * Repeat-kill view-side markShown() se hota hai (yahan sirf ranking).
+ *
+ * v0.5.38 — salt ab per-call RANDOM (pehle 0 fixed tha → jitter/rank
+ * bhi har call par waisa hi). Ab same pool par bhi har open ALAG order.
  *
  * v0.5.25 — ASLI PERSONALIZATION (user report: "jo hum dekh rahe hai
  * contents us hisaab se nahi aaraha hai"). Generic taste-queries ke
@@ -457,8 +495,19 @@ function topWatchedChannel(): { cid: string; name: string } | null {
  * Warm taste-queries ab VIEWS-SORT se chalti hain — pasand ki category
  * ke FAMOUS videos pehle aati hain.
  */
-export async function buildItubeFeed(salt = 0): Promise<ItubeFeedResult> {
+export async function buildItubeFeed(
+  salt = Math.floor(Math.random() * 1_000_000)
+): Promise<ItubeFeedResult> {
   const taste = getItubeTaste()
+
+  // v0.5.38 — pool cache hit → KOI Data API call nahi (quota bachao),
+  // seedha fresh-salt re-rank (order har baar alag)
+  const cached = readPoolCache()
+  if (cached && cached.length >= 8) {
+    const ranked = scoreTracks(islamicOnly(cached), taste, salt)
+    return { tracks: ranked, tasteEvents: taste.events, source: 'live' }
+  }
+
   const plans = planQueries(taste, salt)
 
   // v0.5.25 — warm queries views-sort (famous in taste), explore
@@ -505,10 +554,13 @@ export async function buildItubeFeed(salt = 0): Promise<ItubeFeedResult> {
   // network fail → trending pool fallback (app kabhi khali nahi)
   if (pool.length < 8) {
     pool = islamicOnly(fallbackTracksFor('islamic', 24))
+    const ranked = scoreTracks(pool, taste, salt)
+    return { tracks: ranked, tasteEvents: taste.events, source: 'pool' }
   }
 
+  writePoolCache(pool)
   const ranked = scoreTracks(pool, taste, salt)
-  return { tracks: ranked, tasteEvents: taste.events }
+  return { tracks: ranked, tasteEvents: taste.events, source: 'live' }
 }
 
 /**

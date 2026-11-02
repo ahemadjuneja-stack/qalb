@@ -137,6 +137,8 @@ export function ITubeView({ visible }: { visible: boolean }) {
   const [feed, setFeed] = useState<QalbTrack[]>([])
   const [shown, setShown] = useState(0) // kitne render ho chuke
   const [tasteInfo, setTasteInfo] = useState<number>(0)
+  // v0.5.38 — feed kahan se aaya: 'live' (Data API) ya 'pool' (offline)
+  const [feedSrc, setFeedSrc] = useState<'live' | 'pool'>('live')
 
   // chip/search/channel list
   const [tracks, setTracks] = useState<QalbTrack[]>([])
@@ -178,6 +180,7 @@ export function ITubeView({ visible }: { visible: boolean }) {
       if (!pool.length) pool = res.tracks // sab seen ho to bhi kuch dikhao
       setFeed(pool)
       setTasteInfo(res.tasteEvents)
+      setFeedSrc(res.source)
       setShown(Math.min(PAGE, pool.length))
       markShown(pool.slice(0, Math.min(PAGE, pool.length)).map((t) => t.videoId))
     } catch {
@@ -643,11 +646,17 @@ export function ITubeView({ visible }: { visible: boolean }) {
           })}
         </div>
 
-        {/* foryou personalize hint */}
-        {mode.kind === 'foryou' && tasteInfo > 4 ? (
-          <p className="mt-2 px-1 text-[10.5px] font-semibold text-gold/60">
-            Aap ki dekhne ki pasand ke hisab se mix taiyar hai — jitna dekhenge, utna behtar hoga
-          </p>
+        {/* v0.5.38 — LIVE/OFFLINE badge: feed Data API se aaya ya offline pool */}
+        {mode.kind === 'foryou' && !loading ? (
+          feedSrc === 'live' ? (
+            <p className="mt-2 px-1 text-[10.5px] font-semibold text-emerald-300/60">
+              ● LIVE — YouTube se taaza mix{tasteInfo > 4 ? ' · aap ki pasand ke hisab se' : ''}
+            </p>
+          ) : (
+            <p className="mt-2 px-1 text-[10.5px] font-semibold text-amber-300/80">
+              ● OFFLINE POOL — net/quota wapis aate hi naya mix aayega
+            </p>
+          )
         ) : null}
       </div>
 
