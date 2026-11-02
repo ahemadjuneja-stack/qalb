@@ -396,7 +396,11 @@ export function titleKeywords(title: string, maxWords = 8): string {
  *  v0.5.36: opts me order + publishedAfterDays — reels/iTube rotation
  *  ek hi query par Data API ka same top-40 na de, isliye date-window
  *  bhi ghumta hai (7/30/90/365 din → naye + purane famous, dono).
- *  Purana 2nd-arg `maxResults: number` calling style bhi supported. */
+ *  Purana 2nd-arg `maxResults: number` calling style bhi supported.
+ *  v0.5.37: deep=true par page-1 ke BAAD agla page bhi merge hota hai
+ *  (Data API page-1 har request par same hota hai — page-2/3 me kam-famous
+ *  naye videos milte hain = recommendation feel; +100 units tabhi jab
+ *  caller variety maange). maxResults 40 → 50 (same 100 units me zyada). */
 export async function ytShortsSearch(
   q: string,
   opts:
@@ -405,18 +409,29 @@ export async function ytShortsSearch(
         maxResults?: number
         order?: 'relevance' | 'date' | 'viewCount' | 'rating'
         publishedAfterDays?: number | null
+        deep?: boolean
       } = 30
 ): Promise<{ videoId: string; title: string; views: string }[]> {
   const o = typeof opts === 'number' ? { maxResults: opts } : opts
-  const page = await ytSearch(q, {
-    videoDuration: 'short',
+  const base = {
+    videoDuration: 'short' as const,
     order: o.order ?? 'viewCount',
     publishedAfterDays: o.publishedAfterDays ?? null,
-    maxResults: 40,
-  })
+    maxResults: 50,
+  }
+  const page = await ytSearch(q, base)
   if (!page) return []
-  return page.videos
+  let videos = page.videos
+  // v0.5.37 — DEEP PAGE: agla page bhi merge (caller ne manga ho to)
+  if (o.deep && page.nextPageToken) {
+    const p2 = await ytSearch(q, { ...base, pageToken: page.nextPageToken }).catch(() => null)
+    if (p2?.videos.length) {
+      const have = new Set(videos.map((v) => v.videoId))
+      videos = [...videos, ...p2.videos.filter((v) => !have.has(v.videoId))]
+    }
+  }
+  return videos
     .filter((v) => v.durationSec > 0 && v.durationSec <= 61)
-    .slice(0, o.maxResults ?? 30)
+    .slice(0, o.maxResults ?? 40)
     .map((v) => ({ videoId: v.videoId, title: v.title, views: v.viewsText || `${v.views} views` }))
 }

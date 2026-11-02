@@ -314,7 +314,12 @@ interface Planned {
 }
 
 function planQueries(taste: ItubeTaste, salt: number): Planned[] {
-  const rnd = mulberry32(Math.floor(Date.now() / 3_600_000) + salt * 7919)
+  // v0.5.37 — CRITICAL FIX: seed pehle hourly tha (Date.now()/3_600_000) →
+  // isi ghante me har app-restart par SAME categories + SAME queries →
+  // Data API/InnerTube wahi top results → "band karke kholo to wahi videos".
+  // salt mount par hamesha 0 hota hai, isliye hourly seed restart me repeat
+  // karta tha. Ab har call PAR-CALL RANDOM — har open naya mix.
+  const rnd = mulberry32(Math.floor(Math.random() * 1_000_000_000) + salt * 7919)
   const poolFor = (key: string) => CAT_BY_KEY.get(key)?.queries ?? ['islamic video']
   const pick = (key: string, i: number) =>
     poolFor(key)[Math.floor(rnd() * 1000 + i + salt) % poolFor(key).length]

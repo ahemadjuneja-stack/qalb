@@ -92,10 +92,12 @@ export async function GET(req: Request) {
         : undefined
       const pdRaw = searchParams.get('pd')
       const pdNum = pdRaw != null && pdRaw !== '' && !Number.isNaN(Number(pdRaw)) ? Number(pdRaw) : null
-      const sKey = cacheKey(['yt-shorts', q, od, pdNum ?? ''])
+      // v0.5.37 — dp=1 → page-2 bhi merge (deep variety, +100 units)
+      const dp = searchParams.get('dp') === '1'
+      const sKey = cacheKey(['yt-shorts', q, od, pdNum ?? '', dp ? 'deep' : ''])
       const sCached = cacheGet<RawShort[]>(sKey)
       if (sCached) return NextResponse.json({ shorts: sCached, source: 'cache' })
-      const shorts = await youtubeShortsSearch(q, { order, publishedAfterDays: pdNum })
+      const shorts = await youtubeShortsSearch(q, { order, publishedAfterDays: pdNum, deep: dp })
       cacheSet(sKey, shorts, CACHE_TTL)
       return NextResponse.json({
         shorts,

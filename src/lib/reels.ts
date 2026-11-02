@@ -71,13 +71,18 @@ const REEL_QUERIES: Record<string, string[]> = {
 
 const AUTO_PER_CATEGORY = 12
 const CACHE_KEY = 'qalb_reels_cache_v1'
-// v0.5.36 — 6h → 30 min: pool jaldi expire → har session me fresh
-// network pull (rotating queries + date-window = naya mix har baar)
-const CACHE_TTL_MS = 30 * 60 * 1000 // 30 minute
+// v0.5.37 — cache ab SESSION-SCOPED hai: naya WebView process = naya
+// SESSION_ID → purane session ka pool localStorage me pada ho to bhi IGNORE.
+// (v0.5.36 me sirf 30-min TTL tha — har loadMore cache ka ts REFRESH karta
+// tha isliye active user ke restart par hamesha wahi pool milta tha — "band
+// karne ke baad wahi sab aata hai". TTL ab sirf ISI session ki re-entry
+// fast rakhne ke liye hai — screen switch par instant.)
+const CACHE_TTL_MS = 30 * 60 * 1000 // 30 minute (in-session only)
 const SEEN_KEY = 'qalb_reel_seen_v1'
 const SEEN_CAP = 500
 const STATS_KEY = 'qalb_reel_watch_v1'
-const QROT_KEY = 'qalb_reel_qrot_v1'
+// module-load = naya session (app kill → WebView naya process)
+const SESSION_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 // v0.3.1: pichle session ke top reels — naye session me sabse NEECHE bhejte
 // hain (user rule: app kholte hi pehli reel hamesha nayi ho)
 const LAST_TOP_KEY = 'qalb_reel_lasttop_v1'
@@ -163,10 +168,11 @@ function toCuratedReel(raw: Record<string, unknown>): ReelItem | null {
 
 // ── auto reels (YouTube Shorts — guaranteed 9:16) ────────────────
 
-/** shorts rotation ke liye fetch-opts (order + date-window) */
+/** shorts rotation ke liye fetch-opts (order + date-window + deep-page) */
 interface ShortsFetchOpts {
   order?: 'relevance' | 'date' | 'viewCount' | 'rating'
   publishedAfterDays?: number | null
+  deep?: boolean
 }
 
 /**
@@ -185,6 +191,7 @@ async function shortsSearch(q: string, opts?: ShortsFetchOpts): Promise<RawShort
       const p = new URLSearchParams({ q })
       if (opts?.order) p.set('od', opts.order)
       if (opts?.publishedAfterDays != null) p.set('pd', String(opts.publishedAfterDays))
+      if (opts?.deep) p.set('dp', '1')
       const res = await withNetTimeout(
         fetch(`${QALB.apiBase}/api/youtube-search?shorts=1&${p.toString()}`, {
           cache: 'no-store',
@@ -203,46 +210,37 @@ async function shortsSearch(q: string, opts?: ShortsFetchOpts): Promise<RawShort
   return []
 }
 
-// query rotation — har fetch cycle me har category ki NEXT query
-function getRot(): number {
-  try {
-    return Number(localStorage.getItem(QROT_KEY) ?? '0') || 0
-  } catch {
-    return 0
-  }
-}
+// v0.5.36 — DATE-WINDOW pool (7/30/90/365 din / sab) — naye uploads +
+// famous purane dono aate hain. v0.5.37 — window RANDOM pick (pehle
+// rot-index sequential tha — restart par wahin se chalta tha).
+const ROT_DAYS: (number | null)[] = [7, 30, 90, 365, null]
+// v0.5.37 — RANDOM ROTATION: Data API ek hi (query, window, order) par
+// hamesha wahi top-50 deta hai. Ab HAR FETCH par teeno RANDOM:
+//   query (6) × window (5) × order (3) = 90 combos/category — same combo
+//   dobara aane ka chance sirf 1/90; deep-page se page-2 ke naye bhi.
+const ROT_ORDERS: ('viewCount' | 'relevance' | 'date')[] = ['viewCount', 'relevance', 'date']
 
-function bumpRot() {
-  try {
-    localStorage.setItem(QROT_KEY, String(getRot() + 1))
-  } catch {
-    /* private mode */
-  }
-}
-
-function rotatingQuery(category: string): string {
+function randomQuery(category: string): string {
   const pool = REEL_QUERIES[category] ?? []
   if (!pool.length) return ''
-  const idx = (getRot() + CATEGORIES.indexOf(category as (typeof CATEGORIES)[number])) % pool.length
-  return pool[idx] ?? pool[0]
+  return pool[Math.floor(Math.random() * pool.length)] ?? pool[0]
 }
-
-// v0.5.36 — FRESHNESS ROTATION: sirf query badalna kaafi nahi tha —
-// Data API ek hi query par (same order) hamesha wahi top-40 deta hai.
-// Ab rot-index se DATE-WINDOW bhi ghumta hai (7/30/90/365 din / sab) —
-// query × window = 25+ alag pools per category. Har refresh ka mix alag,
-// aur "algorithm feel" — naye uploads + famous purane dono aate hain.
-const ROT_DAYS: (number | null)[] = [7, 30, 90, 365, null]
 
 async function autoReelsForCategory(
   category: string,
   blocked: Set<string>,
-  exclude: Set<string>
+  exclude: Set<string>,
+  deep = false
 ): Promise<ReelItem[]> {
-  const q = rotatingQuery(category)
+  const q = randomQuery(category)
   if (!q) return []
-  const days = ROT_DAYS[getRot() % ROT_DAYS.length] ?? null
-  const shorts = await shortsSearch(q, { publishedAfterDays: days }).catch(() => [] as RawShort[])
+  const days = ROT_DAYS[Math.floor(Math.random() * ROT_DAYS.length)] ?? null
+  const order = ROT_ORDERS[Math.floor(Math.random() * ROT_ORDERS.length)]
+  const shorts = await shortsSearch(q, {
+    publishedAfterDays: days,
+    order,
+    deep,
+  }).catch(() => [] as RawShort[])
   const out: ReelItem[] = []
   for (const s of shorts) {
     if (out.length >= AUTO_PER_CATEGORY) break
@@ -379,6 +377,7 @@ function clearSeen() {
 
 interface ReelsCache {
   ts: number
+  sess: string
   items: ReelItem[]
 }
 
@@ -387,6 +386,8 @@ function readCache(): ReelItem[] | null {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const cached = JSON.parse(raw) as ReelsCache
+    // v0.5.37 — doosre (purane) session ka pool IGNORE — restart = fresh
+    if (cached?.sess !== SESSION_ID) return null
     if (cached?.ts && Date.now() - cached.ts < CACHE_TTL_MS && Array.isArray(cached.items)) {
       return cached.items
     }
@@ -397,16 +398,18 @@ function readCache(): ReelItem[] | null {
 }
 
 function writeCache(items: ReelItem[]) {
-  if (!items.length) return // KHAALI feed cache NAHI (failed load 6h tak na dikhe)
+  if (!items.length) return // KHAALI feed cache NAHI (failed load 30 min tak na dikhe)
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), items } satisfies ReelsCache))
+    localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ ts: Date.now(), sess: SESSION_ID, items } satisfies ReelsCache)
+    )
   } catch {
     /* storage full */
   }
 }
 
 async function fetchPool(seen: Set<string>): Promise<ReelItem[]> {
-  bumpRot() // agli baar ke liye queries rotate
   const blocked = await getBlockedIds()
   const [reelsDocs] = await Promise.all([fsList('reels').catch(() => [] as FSDoc[])])
   const curated = reelsDocs
@@ -422,7 +425,11 @@ async function fetchPool(seen: Set<string>): Promise<ReelItem[]> {
   const exclude = new Set<string>([...seen, ...blocked])
   for (const c of curated) exclude.add(c.videoId)
 
-  const groups = await Promise.all(CATEGORIES.map((c) => autoReelsForCategory(c, blocked, exclude)))
+  // v0.5.37 — initial pool DEEP (page-2 bhi merge) — pehli load me hi bada
+  // + naya mix; har category ka (query×window×order) alag-random hota hai.
+  const groups = await Promise.all(
+    CATEGORIES.map((c) => autoReelsForCategory(c, blocked, exclude, true))
+  )
   return dedupeById([...curated, ...groups.flat()])
 }
 
@@ -522,11 +529,19 @@ export async function loadMoreReels(current: ReelItem[]): Promise<ReelItem[]> {
   const seen = getSeenReels()
   const blocked = await getBlockedIds()
   const exclude = new Set<string>([...seen, ...blocked, ...current.map((i) => i.videoId)])
-  bumpRot()
   const groups = await Promise.all(CATEGORIES.map((c) => autoReelsForCategory(c, blocked, exclude)))
-  const more = dedupeById(groups.flat()).filter((m) => !exclude.has(m.videoId))
+  let more = dedupeById(groups.flat()).filter((m) => !exclude.has(m.videoId))
+  // v0.5.37 — kam aaye (seen/exclude ne kha liya) to EK aur round turant —
+  // har round ke combos random hote hain isliye round-2 me naye mil hi jate
+  // hain. (Scroll par "naya nahi aata" bug ka seedha ilaaj.)
+  if (more.length < 4) {
+    const groups2 = await Promise.all(
+      CATEGORIES.map((c) => autoReelsForCategory(c, blocked, exclude))
+    )
+    more = dedupeById([...more, ...groups2.flat()]).filter((m) => !exclude.has(m.videoId))
+  }
   if (more.length) {
-    // cache pool bhi badhao (agla boot isi pool se chalega)
+    // cache pool bhi badhao (ISI session ki re-entry instant rahe)
     const cached = readCache() ?? []
     writeCache(dedupeById([...cached, ...more]).slice(0, 150))
   }

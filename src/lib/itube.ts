@@ -55,6 +55,20 @@ export const ITUBE_CHIPS: ITubeChip[] = [
   { key: 'kids', label: 'Islamic Kids', query: 'islamic cartoons kids' },
 ]
 
+// v0.5.37 — 'All' chip ke liye dedicated variant-pool. Pehle CHIP_CAT me
+// 'all' missing tha → fallback SIRF [chip.query] (1 fixed query, views-order)
+// → iTube kholte hi HAMESHA wahi top-40. Ab random pair har fresh load par.
+const ALL_CHIP_VARIANTS = [
+  'islamic video naat qawwali bayan',
+  'best islamic video',
+  'naat qawwali collection',
+  'viral islamic video',
+  'beautiful quran tilawat',
+  'islamic bayan short',
+  'islamic status video',
+  'sufi kalam qawwali',
+]
+
 // ── InnerTube fetch (native direct / web hosted — searchX pattern) ──
 
 export async function itubeSearchX(
@@ -182,8 +196,10 @@ export async function itubeFetch(
   // ── FRESH CHIP LOAD — variants + parallel + shuffle (har click naya) ──
   if (!continuation && opts?.chipKey) {
     const cat = CHIP_CAT[opts.chipKey]
-    const variants =
-      ITUBE_CATS.find((c) => c.key === cat)?.queries ?? [query]
+    // v0.5.37 — 'all' (ya koi unmapped chip) → ALL_CHIP_VARIANTS (random pair)
+    const variants = cat
+      ? ITUBE_CATS.find((c) => c.key === cat)?.queries ?? [query]
+      : ALL_CHIP_VARIANTS
     // v0.5.36 — seed pehle hourly tha (Date.now()/3_600_000) → isi ghante
     // me har refresh SAME variants → Data API wahi top results → "sare
     // videos same". Ab har load RANDOM seed — har refresh naya pair.

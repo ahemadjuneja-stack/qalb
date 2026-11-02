@@ -76,6 +76,8 @@ export async function youtubeSearchPage(
 export interface ShortsOpts {
   order?: 'relevance' | 'date' | 'viewCount' | 'rating'
   publishedAfterDays?: number | null
+  /** v0.5.37 — page-1 ke baad agla page bhi merge (variety; +100 units) */
+  deep?: boolean
 }
 
 export async function youtubeShortsSearch(q: string, opts?: ShortsOpts): Promise<RawShort[]> {
