@@ -21,9 +21,6 @@ import {
   nativeSetStatusBar,
   onNativeMediaAction,
   isNativeApp,
-  nativeSetPipWanted,
-  onNativePipEvent,
-  type PipRect,
   type QalbMediaAction,
 } from '@/plugins/qalb-native'
 import { getTheme } from '@/lib/theme'
@@ -241,83 +238,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // ── v0.5.34 — PICTURE-IN-PICTURE SYNC (legal background playback) ──
-  // YT queue playback chal raha ho (reels/iTube watch NAHI) to native ko
-  // batao — app minimize par MainActivity PiP window kholta hai (Chrome
-  // jaisa VISIBLE floating video). Ye YouTube-compliant background hai:
-  // player chhupta nahi, sirf chhota ho jata hai. Screen lock / PiP band
-  // = playback pause (pipEvent closed se).
-  useEffect(() => {
-    if (!isNativeApp()) return
-    let lastSig = ''
-    const push = () => {
-      const s = usePlayerStore.getState()
-      const t = s.currentIndex >= 0 ? s.queue[s.currentIndex] : null
-      const want = Boolean(t && s.isPlaying && !s.itubeActive)
-      let rect: PipRect | null = null
-      if (want && hostRef.current) {
-        try {
-          const r = hostRef.current.getBoundingClientRect()
-          // sirf sahi-size visible rect bhejo (hidden 1px host skip)
-          if (
-            r.width > 60 &&
-            r.height > 40 &&
-            r.bottom > 0 &&
-            r.top < window.innerHeight
-          ) {
-            rect = { x: r.left, y: r.top, w: r.width, h: r.height }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-      const sig = `${want}|${
-        rect
-          ? `${Math.round(rect.x)},${Math.round(rect.y)},${Math.round(rect.w)},${Math.round(rect.h)}`
-          : '-'
-      }`
-      if (sig === lastSig) return
-      lastSig = sig
-      void nativeSetPipWanted(want, rect)
-    }
-    push()
-    const unsub = usePlayerStore.subscribe(push)
-    const iv = window.setInterval(push, 2000) // rect drift catch (scroll etc.)
-    return () => {
-      unsub()
-      window.clearInterval(iv)
-      lastSig = 'teardown'
-      void nativeSetPipWanted(false)
-    }
-  }, [])
-
-  // ── PiP lifecycle — entered: video dikhao, closed: pause ──────────
-  useEffect(() => {
-    let un: (() => void) | null = null
-    onNativePipEvent((kind) => {
-      if (kind === 'entered') {
-        // PiP window me VIDEO dikhe — audio-only walkman UI ki jagah
-        const s = usePlayerStore.getState()
-        if (s.fullOpen && s.audioOnly && s.currentIndex >= 0) {
-          usePlayerStore.setState({ audioOnly: false })
-        }
-      } else if (kind === 'closed') {
-        // PiP X-button / screen lock — player gayab = playback band
-        // (YouTube rule: invisible player ke saath playback nahi)
-        usePlayerStore.setState({ isPlaying: false })
-      }
-    }).then((fn) => {
-      un = fn
-    })
-    return () => {
-      un?.()
-    }
-  }, [])
+  // ── v0.5.35 — BACKGROUND PLAYBACK (user decision) ────────────────
+  // PiP jugad (v0.5.34) hata diya — background sunne ka rasta ab wahi
+  // proven setup hai: PlaybackService FGS + media card + wake lock
+  // (native) + KeepAliveWebView (visibility hack). Neeche wala store-
+  // subscribe har state change par nativeUpdatePlayback() bhejta hai —
+  // service start/update hoti hai, screen lock par audio chalta rehta
+  // hai, notification/lock-screen controls zinda rehte hain.
 
   // ── Foreground wapas — YT iframe re-sync ────────────────────────
-  // Compliance mode me background/screen-lock par Chromium media khud
-  // pause hota hai (KeepAlive hack gaya). Store isPlaying true rehta hai
-  // — wapas aate hi wahi se chalao (Chrome jaisa resume).
+  // Agar kisi OEM ROM ne background me media pause kar diya ho
+  // (KeepAlive ke bawajood) to store isPlaying true rehta hai — wapas
+  // aate hi wahi se chalao (Chrome jaisa resume).
   useEffect(() => {
     const onFg = () => {
       const s = usePlayerStore.getState()

@@ -36,10 +36,6 @@ export interface QalbNativePluginInterface {
     eventName: 'backButton',
     listenerFunc: () => void
   ): Promise<PluginListenerHandle> & PluginListenerHandle
-  addListener(
-    eventName: 'pipEvent',
-    listenerFunc: (data: { kind: QalbPipKind }) => void
-  ): Promise<PluginListenerHandle> & PluginListenerHandle
   backHandled(): Promise<void>
   minimizeApp(): Promise<void>
   // ── Crash Guard (boot health / recovery) ──
@@ -50,14 +46,6 @@ export interface QalbNativePluginInterface {
   factoryResetWebView(): Promise<{ ok: boolean }>
   // ── App background media pause (v0.3.3) ──
   setBgPauseMedia(options: { pause: boolean }): Promise<void>
-  // ── Picture-in-Picture (v0.5.34) — legal background playback ──
-  setPipWanted(options: {
-    on: boolean
-    x?: number
-    y?: number
-    w?: number
-    h?: number
-  }): Promise<void>
   // ── Google OAuth deep-link (v0.4.4) ──
   openExternal(options: { url: string }): Promise<void>
   consumeOauthRedirect(): Promise<{ url: string | null }>
@@ -288,51 +276,6 @@ export async function nativeSetBgPauseMedia(pause: boolean) {
     await QalbNative.setBgPauseMedia({ pause })
   } catch {
     /* purana APK — method nahi hai */
-  }
-}
-
-// ── Picture-in-Picture (v0.5.34) — LEGAL background playback ──────────
-// YouTube rule: player visible rehta hai to hi playback chalta hai.
-// PiP me chhota VISIBLE video window khulta hai (Chrome jaisa) — isliye
-// ye compliant hai. JS sirf YT queue playback ke waqt on=true bhejta hai
-// (reels/iTube watch par false — wo background me pause hote hain).
-// rect = video card ka viewport rect — PiP wahin se zoom-in khulta hai.
-export interface PipRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-export async function nativeSetPipWanted(on: boolean, rect?: PipRect | null) {
-  if (!isNativeApp()) return
-  try {
-    await QalbNative.setPipWanted({
-      on,
-      x: rect?.x,
-      y: rect?.y,
-      w: rect?.w,
-      h: rect?.h,
-    })
-  } catch {
-    /* purana APK / web — silent */
-  }
-}
-
-export type QalbPipKind = 'entered' | 'closed'
-
-/** MainActivity se PiP lifecycle events (window khula/band) */
-export async function onNativePipEvent(cb: (kind: QalbPipKind) => void) {
-  if (!isNativeApp()) return () => {}
-  try {
-    const handle = await QalbNative.addListener('pipEvent', (data) => {
-      if (data?.kind) cb(data.kind)
-    })
-    return () => {
-      handle.remove().catch(() => {})
-    }
-  } catch {
-    return () => {}
   }
 }
 

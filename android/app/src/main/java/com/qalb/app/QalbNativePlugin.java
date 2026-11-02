@@ -81,14 +81,8 @@ public class QalbNativePlugin extends Plugin {
         void onBack();
     }
 
-    /** PiP event (MainActivity) → JS player-provider bridge */
-    public interface PipEmitter {
-        void onPipEvent(String kind);
-    }
-
     private static volatile MediaActionEmitter mediaEmitter;
     private static volatile BackEmitter backEmitter;
-    private static volatile PipEmitter pipEmitter;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     // ── Back navigation fallback state (v0.2.2) ──────────────────────
@@ -97,21 +91,16 @@ public class QalbNativePlugin extends Plugin {
     private static final long BACK_FALLBACK_MS = 500L;
     private static volatile java.lang.ref.WeakReference<Activity> backActivityRef;
 
-    // ── v0.5.34 — MEDIA NOTIFICATION CARD: OFF (compliance mode) ─────
-    // YouTube content ab foreground-only (background ka legal jugad =
-    // Picture-in-Picture). FGS media card + wake lock + KeepAlive hack
-    // sab DISABLE — screen lock par playback khud ruk jata hai (YT rules).
-    // NOTE: sirf OWN-LICENSED audio engine (future) ke liye wapis true karna.
-    private static final boolean MEDIA_CARD_ENABLED = false;
+    // ── v0.5.35 — MEDIA NOTIFICATION CARD: ON (user decision) ────────
+    // User ka informed faisla (private app, sirf dosto ke beech):
+    // BACKGROUND PLAYBACK wapis ON — screen lock par naat/qawwali audio
+    // chalti rahe. FGS media card + wake lock + KeepAliveWebView sab
+    // active (pre-v0.5.34 proven setup). FGS ke liye Android notification
+    // card MANDATORY hai — card ke bina FGS exist nahi kar sakta.
+    private static final boolean MEDIA_CARD_ENABLED = true;
 
-    // ── v0.5.34 — PICTURE-IN-PICTURE state (JS → native) ───────────
-    // JS player-provider sirf YT queue playback ke waqt flag ON karta hai
-    // (reels / iTube watch par OFF). MainActivity.onUserLeaveHint isi se
-    // PiP me video VISIBLE rakh kar chalata hai — player chhupta nahi
-    // (YouTube embed rules ke mutabiq). pipRect = video card ka viewport
-    // rect [x, y, w, h] — PiP window usi jagah se khulta hai.
-    private static volatile boolean pipWanted = false;
-    private static volatile float[] pipRect = null;
+    /** Android 13+ notification permission — sirf EK dafa per session (spam-safe) */
+    private static volatile boolean notifPermAsked = false;
 
     @Override
     public void load() {
@@ -130,35 +119,6 @@ public class QalbNativePlugin extends Plugin {
             } catch (Exception ignored) {
             }
         });
-        pipEmitter = kind -> mainHandler.post(() -> {
-            try {
-                JSObject data = new JSObject();
-                data.put("kind", kind);
-                notifyListeners("pipEvent", data);
-            } catch (Exception ignored) {
-            }
-        });
-    }
-
-    /** PiP lifecycle event JS ko bhejo ("entered" | "closed") */
-    public static void emitPipEvent(String kind) {
-        PipEmitter e = pipEmitter;
-        if (e != null) {
-            try {
-                e.onPipEvent(kind);
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    /** MainActivity.onUserLeaveHint — PiP abhi enter karna hai? */
-    public static boolean isPipWanted() {
-        return pipWanted;
-    }
-
-    /** PiP source-rect hint [x, y, w, h] (viewport px) — null = poora window */
-    public static float[] pipSourceRect() {
-        return pipRect;
     }
 
 /** PlaybackService se button press forward karne ke liye (static entry) */
@@ -243,10 +203,25 @@ public class QalbNativePlugin extends Plugin {
         }
     }
 
+    /** Android 13+: notification permission (sirf pehli dafa) — audio isse affected nahi */
+    private void ensureNotifPermissionOnce() {
+        try {
+            if (notifPermAsked) return;
+            notifPermAsked = true;
+            Activity activity = getActivity();
+            if (activity != null && Build.VERSION.SDK_INT >= 33) {
+                if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+                        != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                            activity, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9101);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     @PluginMethod
     public void startPlayback(PluginCall call) {
-        // v0.5.34 — MEDIA CARD OFF (compliance mode): FGS/notification band.
-        // Background sunne ke liye legal jugad PiP hai (MainActivity).
         if (!MEDIA_CARD_ENABLED) {
             call.resolve();
             return;
@@ -258,15 +233,7 @@ public class QalbNativePlugin extends Plugin {
 
             PlaybackService.start(getContext(), title, artist, thumbUrl);
 
-            // Android 13+: notification permission (pehli dafa) — audio isse affected nahi
-            Activity activity = getActivity();
-            if (activity != null && Build.VERSION.SDK_INT >= 33) {
-                if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(
-                            activity, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 9101);
-                }
-            }
+            ensureNotifPermissionOnce();
             call.resolve();
         } catch (Exception e) {
             call.reject("playback start fail: " + safeMsg(e));
@@ -275,7 +242,6 @@ public class QalbNativePlugin extends Plugin {
 
     @PluginMethod
     public void updatePlayback(PluginCall call) {
-        // v0.5.34 — MEDIA CARD OFF — koi service/notification update nahi
         if (!MEDIA_CARD_ENABLED) {
             call.resolve();
             return;
@@ -288,6 +254,7 @@ public class QalbNativePlugin extends Plugin {
             double position = call.getDouble("position") != null ? call.getDouble("position") : 0d;
             double duration = call.getDouble("duration") != null ? call.getDouble("duration") : 0d;
 
+            ensureNotifPermissionOnce();
             PlaybackService.updateMeta(getContext(), title, artist, thumbUrl, isPlaying, position, duration);
             call.resolve();
         } catch (Exception e) {
@@ -302,29 +269,6 @@ public class QalbNativePlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("playback stop fail: " + safeMsg(e));
-        }
-    }
-
-    // ── v0.5.34 — PiP flag (JS → native) ─────────────────────────────
-    // JS har state change par bhejta hai: on=true sirf YT queue playback
-    // ke waqt. Rect (viewport px) video card / video anchor ka hota hai —
-    // PiP window wahin se khulta hai (source-rect hint).
-    @PluginMethod
-    public void setPipWanted(PluginCall call) {
-        try {
-            pipWanted = Boolean.TRUE.equals(call.getBoolean("on"));
-            Double x = call.getDouble("x");
-            Double y = call.getDouble("y");
-            Double w = call.getDouble("w");
-            Double h = call.getDouble("h");
-            if (x != null && y != null && w != null && h != null && w > 1 && h > 1) {
-                pipRect = new float[]{x.floatValue(), y.floatValue(), w.floatValue(), h.floatValue()};
-            } else {
-                pipRect = null;
-            }
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("pip flag fail: " + safeMsg(e));
         }
     }
 

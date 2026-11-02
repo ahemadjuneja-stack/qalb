@@ -9,19 +9,21 @@ import com.getcapacitor.CapacitorWebView;
 /**
  * Qalb — KeepAliveWebView
  *
- * v0.5.34 COMPLIANCE MODE — ye class ab INERT hai (kuch nahi karti).
+ * v0.5.35 — BACKGROUND PLAYBACK RESTORED (user decision)
  *
- * Pehle ye screen-lock/app-background par WebView ko HAMESHA VISIBLE
- * report karwata tha taaki YouTube IFrame ka audio background me chalta
- * rahe — wo YouTube ke rules ke khilaaf tha (player invisible + audio
- * chalta raha = Premium feature ka bypass).
+ * User ka informed faisla (private app, sirf dosto ke beech, offline
+ * download feature pehle hi poora removed): screen lock / app background
+ * par naat-qawwali audio chalta RAHE. Isliye ye class wapis apne asli
+ * kaam par — window/view visibility ko hamesha VISIBLE report karwata
+ * hai, warna Chromium (WebView) screen band hote hi YouTube IFrame ka
+ * media pause kar deta hai.
  *
- * Ab: real visibility pass-through hoti hai — screen band / app background
- * hote hi WebView ka media NATURALLY pause ho jata hai (YouTube rules ke
- * mutabiq). Background sunne ka legal jugad = Picture-in-Picture
- * (MainActivity.onUserLeaveHint) — player VISIBLE rehta hai.
- *
- * Class remove NAHI ki (koi purana layout/ref toot na jaye) — bas no-op.
+ * Saathi components (teenon milkar background playback banate hain):
+ *  1. PlaybackService  — foreground service (FGS) + notification card +
+ *     PARTIAL_WAKE_LOCK — process Doze/freezing se bacha rehta hai
+ *  2. KeepAliveWebView (ye class) — WebView ka media pipeline zinda
+ *  3. MainActivity.onPause — sirf reels ke waqt WebView pause karta hai
+ *     (bgPauseArmed flag), naat ke waqt NAHI
  */
 public class KeepAliveWebView extends CapacitorWebView {
 
@@ -36,12 +38,12 @@ public class KeepAliveWebView extends CapacitorWebView {
 
     @Override
     protected void onWindowVisibilityChanged(int visibility) {
-        // v0.5.34 — real visibility pass-through (compliance)
-        super.onWindowVisibilityChanged(visibility);
+        // Hamesha system ko VISIBLE batao — warna Chromium audio pause kar deta hai
+        super.onWindowVisibilityChanged(View.VISIBLE);
     }
 
     @Override
     protected void onVisibilityChanged(View changedView, int visibility) {
-        super.onVisibilityChanged(changedView, visibility);
+        super.onVisibilityChanged(changedView, View.VISIBLE);
     }
 }
