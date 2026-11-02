@@ -123,6 +123,40 @@ jobs:
           echo "FPID=$FPID" >> "$GITHUB_ENV"
           echo "Firebase project: $FPID"
 
+      # ── 3a. YouTube Data API — enable + self-test (v0.5.38) ───────
+      # v0.5.34 se app ka saara search official Data API se hai — lekin
+      # YT_API_KEY wale GCP project me API ENABLE hi nahi thi (403
+      # accessNotConfigured) → APK me live search 100% fail → static
+      # fallback pools → "sare videos same aaraha hai". Ye step:
+      #   (1) key kis project ki hai wo log karta hai,
+      #   (2) wahi project ho to API ENABLE karta hai (SA permission ho to),
+      #   (3) key ka live self-test kar ke build log me status dikhata hai.
+      - name: YouTube Data API — enable + self-test
+        continue-on-error: true
+        run: |
+          KEYNUM="276711179874" # YT_API_KEY ka project number (403 message)
+          PROJ=$(gcloud projects describe "$KEYNUM" --format='value(projectId)' 2>/dev/null || echo "?")
+          echo "YT key project-number=$KEYNUM → projectId=$PROJ | workflow FPID=$FPID"
+          if [ "$PROJ" = "$FPID" ]; then
+            if gcloud services enable youtube.googleapis.com --project="$FPID"; then
+              echo "✅ YouTube Data API v3 ENABLED ($FPID)"
+            else
+              echo "⚠️ SA se enable nahi hua — Google Cloud Console se manually karo"
+            fi
+          else
+            echo "⚠️ YT key doosre project ki hai ($PROJ) — API WAHAN enable hoga"
+          fi
+          sleep 25 # enable propagation
+          CODE=$(curl -s -o /tmp/yt_test.json -w "%{http_code}" -m 20 \
+            "https://www.googleapis.com/youtube/v3/search?part=snippet&q=naat&type=video&maxResults=1&key=${{ secrets.YT_API_KEY }}")
+          echo "YT Data API self-test: HTTP $CODE"
+          head -c 220 /tmp/yt_test.json; echo
+          if [ "$CODE" = "200" ]; then
+            echo "🎉 YT API ZINDA — app me live search chalega"
+          else
+            echo "❌ YT API ab bhi band — console.cloud.google.com pe enable karo"
+          fi
+
       # ── 3b. Login config (v0.4.1 FIX — "Login nahi ho rahaa") ─────
       # v0.4.0 build me NEXT_PUBLIC_FIREBASE_API_KEY khaali thi (GitHub
       # variable set nahi tha) → har login attempt 'auth-setup' error.
