@@ -118,7 +118,18 @@ export interface YtSearchOpts {
   videoCategoryId?: string | null
   maxResults?: number
   type?: 'video' | 'channel'
+  /** v0.5.40 — LANDSCAPE-ONLY feed: default par ytSearch durationSec ∈
+   *  (0, 180] (shorts/vertical) DROP karti hai — iTube me 9:16 na aaye
+   *  (user: 'sirf landscape video hi aane chahiye'). Sirf reels/shorts
+   *  feed includeShorts: true bhejta hai. */
+  includeShorts?: boolean
 }
+
+/** v0.5.40 — YouTube shorts ki max length (ab 3 min tak ho gaye hai).
+ *  Data API orientation/aspect-ratio NAHI deta (thumbnails bhi hamesha
+ *  16:9 aate hain — live-tested) — isliye duration hi filter hai:
+ *  naat/kalaam ki full videos 4+ min ki hoti hain, ≤3min mostly shorts. */
+export const SHORTS_MAX_SEC = 180
 
 // ── helpers ──────────────────────────────────────────────────────
 
@@ -359,7 +370,15 @@ export async function ytSearch(q: string, opts: YtSearchOpts = {}): Promise<YtSe
     }
   }
 
-  return { videos, channels, nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null }
+  // v0.5.40 — LANDSCAPE-ONLY (default): shorts/vertical ≤3min drop.
+  // durationSec=0 (live/unknown) rakhte hain — wo landscape hi hote hain.
+  // Reels (ytShortsSearch, includeShorts:true) is filter se exempt hai.
+  const videosOut =
+    type === 'video' && !opts.includeShorts
+      ? videos.filter((v) => !(v.durationSec > 0 && v.durationSec <= SHORTS_MAX_SEC))
+      : videos
+
+  return { videos: videosOut, channels, nextPageToken: typeof data.nextPageToken === 'string' ? data.nextPageToken : null }
 }
 
 /** Ek channel ki latest uploads (channel page) — order=date */
@@ -425,6 +444,8 @@ export async function ytShortsSearch(
   const o = typeof opts === 'number' ? { maxResults: opts } : opts
   const base = {
     videoDuration: 'short' as const,
+    // v0.5.40 — reels shorts MAANGTA hai — landscape-only default se exempt
+    includeShorts: true,
     order: o.order ?? 'viewCount',
     publishedAfterDays: o.publishedAfterDays ?? null,
     maxResults: 50,
