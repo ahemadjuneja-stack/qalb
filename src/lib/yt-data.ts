@@ -5,8 +5,14 @@
 // YouTube ki apni public API, ToS-compliant.
 //
 // API KEY (Google Cloud Console → "YouTube Data API v3" enable → API key):
-//   • NEXT_PUBLIC_YOUTUBE_API_KEY — APK/web build me bake (client direct)
-//   • YOUTUBE_API_KEY             — hosted server runtime (routes)
+//   • NEXT_PUBLIC_YOUTUBE_API_KEY   — APK/web build me bake (client direct)
+//   • YOUTUBE_API_KEY               — hosted server runtime (routes)
+//   • NEXT_PUBLIC_FIREBASE_API_KEY  — FALLBACK (v0.5.39): GitHub secret
+//     YT_API_KEY missing tha → HAR APK (0.5.34–0.5.38) key-ke-bina bana →
+//     live search dead → static pool → "same videos". Firebase web key har
+//     build me baked hoti hai (login ke liye) aur 2026-11-02 se wahi key
+//     YouTube Data API ke liye bhi unblocked hai (user ne console me
+//     restriction hata di) — usse fallback ke roop me use karte hain.
 // Free quota: 10,000 units/day (search = 100 units, lists = 1 unit) —
 // doston wali app ke liye kaafi.
 //
@@ -30,6 +36,10 @@ export function ytApiKey(): string {
     const k =
       process.env.NEXT_PUBLIC_YOUTUBE_API_KEY ||
       (process.env as Record<string, string | undefined>).YOUTUBE_API_KEY ||
+      // v0.5.39 fallback — Firebase web key har APK me baked hai aur ab
+      // YouTube Data API ke liye bhi allowed hai (console me unblock).
+      // NEXT_PUBLIC_ literal access hi rakhna — Next build-time inline.
+      process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
       ''
     return typeof k === 'string' ? k.trim() : ''
   } catch {

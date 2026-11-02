@@ -147,8 +147,17 @@ jobs:
             echo "⚠️ YT key doosre project ki hai ($PROJ) — API WAHAN enable hoga"
           fi
           sleep 25 # enable propagation
+          # v0.5.39 — APK asal me kaunsi key use karega, WAHI test karo:
+          # YT_API_KEY secret (agar set ho) → warna Firebase web key
+          # (jo har build me NEXT_PUBLIC_FIREBASE_API_KEY ke roop me bake
+          # hoti hai — yt-data.ts ytApiKey() fallback). Pehle secret khaali
+          # thi → self-test hamesha 403 dikhata tha jabki app-side fallback
+          # chal raha hota.
+          KEYTEST="${{ secrets.YT_API_KEY }}"
+          [ -z "$KEYTEST" ] && KEYTEST="${{ vars.FIREBASE_WEB_API_KEY }}"
+          echo "self-test key: ${#KEYTEST} chars (YT_API_KEY secret ya FIREBASE_WEB_API_KEY var)"
           CODE=$(curl -s -o /tmp/yt_test.json -w "%{http_code}" -m 20 \
-            "https://www.googleapis.com/youtube/v3/search?part=snippet&q=naat&type=video&maxResults=1&key=${{ secrets.YT_API_KEY }}")
+            "https://www.googleapis.com/youtube/v3/search?part=snippet&q=naat&type=video&maxResults=1&key=$KEYTEST")
           echo "YT Data API self-test: HTTP $CODE"
           head -c 220 /tmp/yt_test.json; echo
           if [ "$CODE" = "200" ]; then

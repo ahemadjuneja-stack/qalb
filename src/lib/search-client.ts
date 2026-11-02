@@ -26,6 +26,7 @@ import { filterSearchResults } from '@/lib/result-filter'
 import { searchTracksFromFirestore } from '@/lib/remote-data'
 import { searchBundledLibrary } from '@/lib/bundled-library'
 import { youtubeSearchPage } from '@/lib/youtube-search-source'
+import { ytApiKey } from '@/lib/yt-data'
 import type { QalbTrack, SearchValidationResult } from '@/lib/types'
 
 function isNative(): boolean {
@@ -92,7 +93,8 @@ interface YTSearchItem {
 }
 
 async function searchYouTubeDirect(q: string): Promise<QalbTrack[]> {
-  const key = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY
+  // v0.5.39 — ytApiKey() fallback (Firebase web key) bhi cover ho
+  const key = ytApiKey()
   if (!key) return []
   try {
     const url = new URL('https://www.googleapis.com/youtube/v3/search')
