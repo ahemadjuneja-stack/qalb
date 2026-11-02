@@ -70,12 +70,19 @@ export async function youtubeSearchPage(
  * Sirf YouTube SHORT-STYLE videos (≤60s) — Islamic Reels feed.
  * Data API vertical-detection nahi deta, isliye videoDuration=short +
  * duration filter — landscape chhoti videos bhi aa sakti hain (rare).
+ * v0.5.36: opts (order + publishedAfterDays) — rotation variety ke liye
+ * (reels.ts har fetch par date-window ghumata hai).
  */
-export async function youtubeShortsSearch(q: string): Promise<RawShort[]> {
+export interface ShortsOpts {
+  order?: 'relevance' | 'date' | 'viewCount' | 'rating'
+  publishedAfterDays?: number | null
+}
+
+export async function youtubeShortsSearch(q: string, opts?: ShortsOpts): Promise<RawShort[]> {
   const query = q.trim()
   if (!query) return []
   try {
-    return await dataShortsSearch(query)
+    return await dataShortsSearch(query, opts)
   } catch {
     return []
   }

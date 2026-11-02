@@ -392,15 +392,31 @@ export function titleKeywords(title: string, maxWords = 8): string {
   return cleaned.split(' ').slice(0, maxWords).join(' ') || title
 }
 
-/** Shorts-style short videos (≤60s) — search + duration filter */
+/** Shorts-style short videos (≤60s) — search + duration filter
+ *  v0.5.36: opts me order + publishedAfterDays — reels/iTube rotation
+ *  ek hi query par Data API ka same top-40 na de, isliye date-window
+ *  bhi ghumta hai (7/30/90/365 din → naye + purane famous, dono).
+ *  Purana 2nd-arg `maxResults: number` calling style bhi supported. */
 export async function ytShortsSearch(
   q: string,
-  maxResults = 30
+  opts:
+    | number
+    | {
+        maxResults?: number
+        order?: 'relevance' | 'date' | 'viewCount' | 'rating'
+        publishedAfterDays?: number | null
+      } = 30
 ): Promise<{ videoId: string; title: string; views: string }[]> {
-  const page = await ytSearch(q, { videoDuration: 'short', order: 'viewCount', maxResults: 40 })
+  const o = typeof opts === 'number' ? { maxResults: opts } : opts
+  const page = await ytSearch(q, {
+    videoDuration: 'short',
+    order: o.order ?? 'viewCount',
+    publishedAfterDays: o.publishedAfterDays ?? null,
+    maxResults: 40,
+  })
   if (!page) return []
   return page.videos
     .filter((v) => v.durationSec > 0 && v.durationSec <= 61)
-    .slice(0, maxResults)
+    .slice(0, o.maxResults ?? 30)
     .map((v) => ({ videoId: v.videoId, title: v.title, views: v.viewsText || `${v.views} views` }))
 }

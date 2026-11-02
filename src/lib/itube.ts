@@ -184,7 +184,10 @@ export async function itubeFetch(
     const cat = CHIP_CAT[opts.chipKey]
     const variants =
       ITUBE_CATS.find((c) => c.key === cat)?.queries ?? [query]
-    const seed = Math.floor(Date.now() / 3_600_000) + salt * 7919
+    // v0.5.36 — seed pehle hourly tha (Date.now()/3_600_000) → isi ghante
+    // me har refresh SAME variants → Data API wahi top results → "sare
+    // videos same". Ab har load RANDOM seed — har refresh naya pair.
+    const seed = Math.floor(Math.random() * 1_000_000_000) + salt * 7919
     const rnd = mulberry32(seed)
     const iA = Math.floor(rnd() * 1000 + salt) % variants.length
     const iB = (iA + 1 + Math.floor(rnd() * 7)) % variants.length
@@ -192,10 +195,13 @@ export async function itubeFetch(
     const qb = variants[iB === iA ? (iA + 1) % variants.length : iB]
 
     const [pa, pb] = await Promise.all([
-      // v0.5.25 — qa VIEWS-SORT (famous first — YouTube trending feel),
-      // qb videoOnly (naye/neutral results bhi pool me)
+      // v0.5.25 — qa VIEWS-SORT (famous first — YouTube trending feel)
       itubeSearchX(qa, SP.views, null),
-      qb !== qa ? itubeSearchX(qb, SP.videoOnly, null) : Promise.resolve(null),
+      // v0.5.36 — qb FRESH WINDOW (week/month viewCount): naye uploads
+      // bhi pool me — YouTube-algorithm feel (famous + fresh dono)
+      qb !== qa
+        ? itubeSearchX(qb, rnd() < 0.5 ? SP.week : SP.month, null)
+        : Promise.resolve(null),
     ])
 
     const byId = new Map<string, QalbTrack>()

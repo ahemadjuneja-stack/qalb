@@ -16,7 +16,7 @@ import { NextResponse } from 'next/server'
 import { cacheGet, cacheSet, cacheKey } from '@/lib/search-cache'
 import { innertubeSearchX, SP, type RawVideoX, type SpKey } from '@/lib/innertube-x'
 
-const CACHE_TTL = 30 * 60 * 1000 // 30 min — live content ko fresh rakhta hai
+const CACHE_TTL = 10 * 60 * 1000 // 10 min (v0.5.36 — pehle 30 min tha — "same videos" fix)
 
 export async function GET(req: Request) {
   try {

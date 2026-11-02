@@ -4,7 +4,9 @@
 // (pehle InnerTube primary tha — YouTube API Terms ke khilaaf).
 //   1) YouTube Data API v3 (yt-data.ts — key: YOUTUBE_API_KEY env)
 //   2) warna local verified library se keyword search (offline fallback)
-// Response 1h in-memory cache me save hota hai (quota bachata hai).
+// v0.5.36: cache TTL 1h → 10 min ("sare videos same" complaint — ab har
+// 10 min me Data API se naya mix) + shorts branch od/pd params (order +
+// publishedAfterDays — reels rotation ka server-side support).
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -13,7 +15,7 @@ import { youtubeSearchPage, youtubeShortsSearch, type RawShort } from '@/lib/you
 import { filterSearchResults } from '@/lib/result-filter'
 import type { QalbTrack } from '@/lib/types'
 
-const CACHE_TTL = 60 * 60 * 1000 // 1h
+const CACHE_TTL = 10 * 60 * 1000 // 10 min (v0.5.36 — pehle 1h tha)
 
 function tokens(q: string): string[] {
   return q
@@ -81,10 +83,19 @@ export async function GET(req: Request) {
     // (`reelConfig/blocked`) user control deta hai.
     if (searchParams.get('shorts') === '1') {
       if (!q) return NextResponse.json({ error: 'Missing q parameter' }, { status: 400 })
-      const sKey = cacheKey(['yt-shorts', q])
+      // v0.5.36 — rotation params: od = order, pd = publishedAfterDays
+      const od = searchParams.get('od') ?? ''
+      const order = (['relevance', 'date', 'viewCount', 'rating'] as const).includes(
+        od as 'relevance' | 'date' | 'viewCount' | 'rating'
+      )
+        ? (od as 'relevance' | 'date' | 'viewCount' | 'rating')
+        : undefined
+      const pdRaw = searchParams.get('pd')
+      const pdNum = pdRaw != null && pdRaw !== '' && !Number.isNaN(Number(pdRaw)) ? Number(pdRaw) : null
+      const sKey = cacheKey(['yt-shorts', q, od, pdNum ?? ''])
       const sCached = cacheGet<RawShort[]>(sKey)
       if (sCached) return NextResponse.json({ shorts: sCached, source: 'cache' })
-      const shorts = await youtubeShortsSearch(q)
+      const shorts = await youtubeShortsSearch(q, { order, publishedAfterDays: pdNum })
       cacheSet(sKey, shorts, CACHE_TTL)
       return NextResponse.json({
         shorts,

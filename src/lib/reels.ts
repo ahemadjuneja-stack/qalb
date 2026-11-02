@@ -71,7 +71,9 @@ const REEL_QUERIES: Record<string, string[]> = {
 
 const AUTO_PER_CATEGORY = 12
 const CACHE_KEY = 'qalb_reels_cache_v1'
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 ghante
+// v0.5.36 — 6h → 30 min: pool jaldi expire → har session me fresh
+// network pull (rotating queries + date-window = naya mix har baar)
+const CACHE_TTL_MS = 30 * 60 * 1000 // 30 minute
 const SEEN_KEY = 'qalb_reel_seen_v1'
 const SEEN_CAP = 500
 const STATS_KEY = 'qalb_reel_watch_v1'
@@ -161,21 +163,30 @@ function toCuratedReel(raw: Record<string, unknown>): ReelItem | null {
 
 // ── auto reels (YouTube Shorts — guaranteed 9:16) ────────────────
 
+/** shorts rotation ke liye fetch-opts (order + date-window) */
+interface ShortsFetchOpts {
+  order?: 'relevance' | 'date' | 'viewCount' | 'rating'
+  publishedAfterDays?: number | null
+}
+
 /**
  * Shorts search routing:
- *   native (APK) → direct InnerTube (CapacitorHttp — CORS bypass)
- *   web/hosted   → /api/youtube-search?shorts=1 (server-side InnerTube)
+ *   native (APK) → direct Data API (client key)
+ *   web/hosted   → /api/youtube-search?shorts=1 (server-side, od/pd params)
  *                  apiBase na ho (static preview) → direct (fail → [])
  */
-async function shortsSearch(q: string): Promise<RawShort[]> {
+async function shortsSearch(q: string, opts?: ShortsFetchOpts): Promise<RawShort[]> {
   if (isNativeApp()) {
-    const direct = await youtubeShortsSearch(q).catch(() => [] as RawShort[])
+    const direct = await youtubeShortsSearch(q, opts).catch(() => [] as RawShort[])
     if (direct.length) return direct
   }
   if (QALB.apiBase) {
     try {
+      const p = new URLSearchParams({ q })
+      if (opts?.order) p.set('od', opts.order)
+      if (opts?.publishedAfterDays != null) p.set('pd', String(opts.publishedAfterDays))
       const res = await withNetTimeout(
-        fetch(`${QALB.apiBase}/api/youtube-search?shorts=1&q=${encodeURIComponent(q)}`, {
+        fetch(`${QALB.apiBase}/api/youtube-search?shorts=1&${p.toString()}`, {
           cache: 'no-store',
         }),
         12_000
@@ -188,7 +199,7 @@ async function shortsSearch(q: string): Promise<RawShort[]> {
       /* fallback below */
     }
   }
-  if (!isNativeApp()) return youtubeShortsSearch(q)
+  if (!isNativeApp()) return youtubeShortsSearch(q, opts)
   return []
 }
 
@@ -216,6 +227,13 @@ function rotatingQuery(category: string): string {
   return pool[idx] ?? pool[0]
 }
 
+// v0.5.36 — FRESHNESS ROTATION: sirf query badalna kaafi nahi tha —
+// Data API ek hi query par (same order) hamesha wahi top-40 deta hai.
+// Ab rot-index se DATE-WINDOW bhi ghumta hai (7/30/90/365 din / sab) —
+// query × window = 25+ alag pools per category. Har refresh ka mix alag,
+// aur "algorithm feel" — naye uploads + famous purane dono aate hain.
+const ROT_DAYS: (number | null)[] = [7, 30, 90, 365, null]
+
 async function autoReelsForCategory(
   category: string,
   blocked: Set<string>,
@@ -223,7 +241,8 @@ async function autoReelsForCategory(
 ): Promise<ReelItem[]> {
   const q = rotatingQuery(category)
   if (!q) return []
-  const shorts = await shortsSearch(q).catch(() => [] as RawShort[])
+  const days = ROT_DAYS[getRot() % ROT_DAYS.length] ?? null
+  const shorts = await shortsSearch(q, { publishedAfterDays: days }).catch(() => [] as RawShort[])
   const out: ReelItem[] = []
   for (const s of shorts) {
     if (out.length >= AUTO_PER_CATEGORY) break
