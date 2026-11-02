@@ -444,23 +444,33 @@ function topWatchedChannel(): { cid: string; name: string } | null {
   return best ? { cid: best.cid, name: best.name } : null
 }
 
-// ── POOL CACHE (v0.5.38 — sessionStorage, 10 min) ───────────────
-// Data API search = 100 units — buildItubeFeed me 4 searches (400 units).
-// Free quota 10k/day — 3-4 doston ke saath bhi din bhar chalna chahiye.
-// Isliye fetch hua pool 10 min sessionStorage me rakhte hain; HAR CALL par
-// fresh-random salt se RE-RANK hota hai (same pool, alag order/mix feel).
-// sessionStorage = app kill par dead — restart par bilkul naya pool.
-const POOL_KEY = 'qalb_itube_pool_s1'
-const POOL_TTL = 10 * 60 * 1000
+// ── POOL CACHE (v0.5.41 — localStorage SWR: fresh 10m / stale 6h) ──
+// Data API search = 100 units — pool fetch me 6 calls (600 units).
+// v0.5.38 ka sessionStorage restart par dead tha → HAR app-open par cold
+// 2-wave fetch → ForYou "bahut loading" (user report v0.5.40, live API
+// chalne ke baad latency dikhti hai).
+// Ab localStorage (restart-proof) + stale-while-revalidate:
+//   • FRESH  (<10 min)         → instant re-rank, KOI network nahi
+//   • STALE  (10 min–6 ghante) → instant re-rank + BACKGROUND refresh
+//     (agla open naya pool) — user ko spinner kabhi nahi dikhta
+//   • DEAD   (>6h / pehli baar) → full fetch (sirf yahan loading)
+// Har paint par fresh-random salt se RE-RANK — same pool bhi alag mix.
+const POOL_KEY = 'qalb_itube_pool_s2'
+const POOL_FRESH_TTL = 10 * 60 * 1000
+const POOL_STALE_TTL = 6 * 60 * 60 * 1000
 
-function readPoolCache(): QalbTrack[] | null {
+function readPoolCache(): { items: QalbTrack[]; fresh: boolean } | null {
   if (typeof window === 'undefined') return null
   try {
-    const raw = window.sessionStorage.getItem(POOL_KEY)
+    const raw = window.localStorage.getItem(POOL_KEY)
     if (!raw) return null
     const c = JSON.parse(raw) as { t: number; items: QalbTrack[] }
-    if (!c?.t || Date.now() - c.t > POOL_TTL || !Array.isArray(c.items)) return null
-    return c.items.filter((t) => t && t.videoId)
+    if (!c?.t || !Array.isArray(c.items)) return null
+    const age = Date.now() - c.t
+    if (age > POOL_STALE_TTL) return null
+    const items = c.items.filter((t) => t && t.videoId)
+    if (items.length < 8) return null
+    return { items, fresh: age <= POOL_FRESH_TTL }
   } catch {
     return null
   }
@@ -469,7 +479,7 @@ function readPoolCache(): QalbTrack[] | null {
 function writePoolCache(pool: QalbTrack[]) {
   if (typeof window === 'undefined' || !pool.length) return
   try {
-    window.sessionStorage.setItem(
+    window.localStorage.setItem(
       POOL_KEY,
       JSON.stringify({ t: Date.now(), items: pool.slice(0, 120) })
     )
@@ -500,30 +510,50 @@ export async function buildItubeFeed(
 ): Promise<ItubeFeedResult> {
   const taste = getItubeTaste()
 
-  // v0.5.38 — pool cache hit → KOI Data API call nahi (quota bachao),
-  // seedha fresh-salt re-rank (order har baar alag)
+  // v0.5.41 — SWR: cache (fresh ya stale) → INSTANT paint, 0 network.
+  // Stale ho to saath me background refresh bhi (next open ko naya pool).
   const cached = readPoolCache()
-  if (cached && cached.length >= 8) {
-    const ranked = scoreTracks(islamicOnly(cached), taste, salt)
+  if (cached) {
+    if (!cached.fresh) void refreshPoolBg(taste)
+    const ranked = scoreTracks(islamicOnly(cached.items), taste, salt)
     return { tracks: ranked, tasteEvents: taste.events, source: 'live' }
   }
 
+  // dead cache / pehli baar — full fetch (foreground; yahin loading)
+  const { pool, live } = await fetchPool(taste, salt)
+  if (!live) {
+    // network fail → trending pool fallback (app kabhi khali nahi)
+    const ranked = scoreTracks(islamicOnly(fallbackTracksFor('islamic', 24)), taste, salt)
+    return { tracks: ranked, tasteEvents: taste.events, source: 'pool' }
+  }
+  writePoolCache(pool)
+  const ranked = scoreTracks(pool, taste, salt)
+  return { tracks: ranked, tasteEvents: taste.events, source: 'live' }
+}
+
+/**
+ * v0.5.41 — Full pool fetch, SAB 6 calls EK wave me parallel (pehle 2
+ * waves sequential the → latency = sum; ab latency = sirf sabse dheemi
+ * call). 4 taste-queries + related + top-channel.
+ */
+async function fetchPool(
+  taste: ItubeTaste,
+  salt: number
+): Promise<{ pool: QalbTrack[]; live: boolean }> {
   const plans = planQueries(taste, salt)
-
-  // v0.5.25 — warm queries views-sort (famous in taste), explore
-  // videoOnly, fresh week (pehle jaisa)
-  const settled = await Promise.allSettled(
-    plans.map((p) =>
-      searchOnce(p.query, p.cat === 'ISLAMIC' ? SP.week : p.explore ? SP.videoOnly : SP.views)
-    )
-  )
-
-  // v0.5.25 — personalization fetches (last watched related + top channel)
   const lastEv = getLastWatchedEvent()
   const topChan = topWatchedChannel()
-  const personal = await Promise.allSettled([
+
+  const searches: Promise<PageX | null>[] = plans.map((p) =>
+    searchOnce(p.query, p.cat === 'ISLAMIC' ? SP.week : p.explore ? SP.videoOnly : SP.views)
+  )
+  const personal: Promise<{ tracks: QalbTrack[] } | null>[] = [
     lastEv?.v ? fetchRelatedVideos(lastEv.v, null) : Promise.resolve(null),
     topChan ? fetchChannelVideos(topChan.cid, null, topChan.name) : Promise.resolve(null),
+  ]
+  const [searchRes, personalRes] = await Promise.all([
+    Promise.allSettled(searches),
+    Promise.allSettled(personal),
   ])
 
   // sab fetches merge + dedupe (zyada views wali entry rakho)
@@ -535,12 +565,12 @@ export async function buildItubeFeed(
       if (!prev || (track.playCount ?? 0) > (prev.playCount ?? 0)) byId.set(track.videoId, track)
     }
   }
-  for (const r of settled) {
+  for (const r of searchRes) {
     if (r.status === 'fulfilled' && r.value) mergeTracks(videosToTracks(r.value.videos, 'itube'))
   }
   // personalized — aakhri video ke related (top 12) + top channel (top 8)
-  const rel = personal[0].status === 'fulfilled' ? personal[0].value : null
-  const chan = personal[1].status === 'fulfilled' ? personal[1].value : null
+  const rel = personalRes[0].status === 'fulfilled' ? personalRes[0].value : null
+  const chan = personalRes[1].status === 'fulfilled' ? personalRes[1].value : null
   if (rel?.tracks.length) mergeTracks(rel.tracks.slice(0, 12))
   if (chan?.tracks.length) mergeTracks(chan.tracks.slice(0, 8))
 
@@ -550,17 +580,23 @@ export async function buildItubeFeed(
     category: classifyVideo(t.title, t.artist),
   }))
   pool = islamicOnly(pool)
+  return { pool, live: pool.length >= 8 }
+}
 
-  // network fail → trending pool fallback (app kabhi khali nahi)
-  if (pool.length < 8) {
-    pool = islamicOnly(fallbackTracksFor('islamic', 24))
-    const ranked = scoreTracks(pool, taste, salt)
-    return { tracks: ranked, tasteEvents: taste.events, source: 'pool' }
+/** v0.5.41 — background pool refresh — fire-and-forget + single-flight.
+ *  Fail ho to chup — stale pool hi chalta rehta hai. */
+let poolBgBusy = false
+async function refreshPoolBg(taste: ItubeTaste): Promise<void> {
+  if (poolBgBusy) return
+  poolBgBusy = true
+  try {
+    const { pool, live } = await fetchPool(taste, Math.floor(Math.random() * 1_000_000))
+    if (live) writePoolCache(pool)
+  } catch {
+    /* silent */
+  } finally {
+    poolBgBusy = false
   }
-
-  writePoolCache(pool)
-  const ranked = scoreTracks(pool, taste, salt)
-  return { tracks: ranked, tasteEvents: taste.events, source: 'live' }
 }
 
 /**
