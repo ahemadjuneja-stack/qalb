@@ -14,6 +14,7 @@
 
 import { Capacitor } from '@capacitor/core'
 import { QALB } from '@/lib/qalb'
+import { APP_BUILD } from '@/lib/app-build'
 import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
 import { islamicOnly } from '@/lib/itube'
@@ -86,7 +87,14 @@ interface CacheEntry {
   continuation: string | null
 }
 
-const CACHE_PREFIX = 'qalb_live_v1__'
+// v0.5.43 — feed LOGIC badla (famous-first trending) → v1 ka purana cache
+// invalid. USER REPORT: "update ke bavjud bhi same purana chal raha hai" —
+// wajah: naye bundle me bhi purani cached feed (2h TTL) dikhti thi.
+// FIX: prefix me FEED_LOGIC_VERSION (feed logic badalne par manual bump)
+// + APP_BUILD.versionCode (har naya build apna fresh cache leta hai —
+// OTA bundle lagte hi purana feed cache khud bypass ho jata hai).
+const FEED_LOGIC_VERSION = 2
+const CACHE_PREFIX = `qalb_live_v${FEED_LOGIC_VERSION}_${APP_BUILD.versionCode}__`
 
 function readCache(key: string, ttlMs: number): CacheEntry | null {
   if (typeof window === 'undefined') return null
