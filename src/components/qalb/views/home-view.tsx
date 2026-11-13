@@ -493,7 +493,7 @@ export function HomeView() {
                 title={feed.trendingLive ? 'YouTube Trending — Top 10' : 'Aaj ka Trending'}
                 sub={
                   feed.trendingLive
-                    ? '🔴 LIVE • YouTube ke is hafte ke sab se suniye gaye kalaam'
+                    ? '🔴 LIVE • Famous naat khwan ki nayi launches — YouTube trending ke hisaab se'
                     : `${todayLabel()} — roz naye kalaam`
                 }
                 onPlay={() => playNow(feed.trending, 0, 'Aaj ka trending')}
@@ -615,7 +615,7 @@ export function HomeView() {
                 title="Aaj ke Naye Kalaam"
                 sub={
                   live?.fresh?.length
-                    ? '🔴 LIVE • YouTube par bilkul naye uploads — roz badalta hai'
+                    ? '🔴 LIVE • Famous channels par nayi launches — roz badalta hai'
                     : 'Jo aap ne abhi tak nahi chuna — roz badalta hai'
                 }
                 onPlay={() => playNow(feed.fresh, 0, 'Naye kalaam')}

@@ -18,10 +18,10 @@ import type { QalbTrack } from '@/lib/types'
 import { TRENDING_POOL, poolToTrack } from '@/lib/trending-pool'
 import { islamicOnly } from '@/lib/itube'
 import { filterSearchResults } from '@/lib/result-filter'
+import { famousOnly, rankFamousFirst } from '@/lib/famous-channels'
 import {
   innertubeSearchX,
   paramsFor,
-  SP,
   videosToTracks,
   fallbackTracksFor,
   type PageX,
@@ -187,7 +187,22 @@ const CATEGORY_QUERIES: Array<{ cat: 'NAAT' | 'HAMD' | 'QAWWALI' | 'NASHEED'; q:
 ]
 
 const FRESH_QUERIES = ['new naat sharif', 'new qawwali', 'new nasheed']
-const TREND_QUERIES = ['naat sharif', 'qawwali', 'islamic nasheed', 'hamd']
+
+// v0.5.43 — FAMOUS naat khwan/legends ke DIRECT queries. Broad queries
+// (naat sharif/qawwali) month-window me bhi viral junk deti hain
+// (live-test: "The Voice India", Zara-Disco muqabla, cartoons) — famous
+// artists top 10 me ghaib. Ab har query ek famous naam target karti hai
+// → results = unhi ki nayi launches (YouTube trending ke hisaab se).
+const TREND_QUERIES = [
+  'owais raza qadri new naat',
+  'hafiz ahmed raza qadri new naat',
+  'farhan ali qadri new naat',
+  'milad raza qadri new naat',
+  'rahat fateh ali khan qawwali',
+  'nusrat fateh ali khan qawwali',
+  'amjad sabri qawwali',
+  'bukhari studio new naat',
+]
 
 /**
  * Poora live feed — parallel fetches, 2h cache, graceful fallback.
@@ -215,34 +230,44 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
   }
 
   try {
-    // ── 1. TRENDING — v0.5.25 FAMOUS-FIRST ──
-    // user report: "top trending me famous qawwali/naat nahi aaraha, aise
-    // naat aarahi hai jo famous nahi hai". Pehle sirf WEEK filter tha —
-    // is hafte upload hui videos hi aa sakti thi (WION news 41K views,
-    // random 10K naat — live-test me confirm). Ab ALL-TIME views-sort
-    // (CAMSAhAB) bhi pool me — Tajdar-e-Haram (79M), Nusrat (73M) jaise
-    // legends top par + week ke fresh hits bhi.
+    // ── 1. TRENDING — v0.5.43 FAMOUS-NEW-FIRST ──
+    // user report: "ek hi chal rahi hai, YouTube trending ke hisaab se
+    // nahi hai… sirf wahi naat aani chahiye jo famous channel par new
+    // launching hui ho".
+    //
+    // Pehle: all-time views-sort → hamesha wahi classics (Afreen Afreen
+    // 696M…) + broad queries ke month/week windows me viral junk (live
+    // test: "The Voice India", Zara-Disco muqabla, cartoon naat).
+    // Ab: har query ek famous naat khwan/legend DIRECT target karti hai
+    // (viewCount+30d) → results = unhi ki nayi launches, views ke
+    // hisaab se (YouTube trending ka proxy) + FAMOUS-FIRST ranking.
     const trendPages = await Promise.all([
-      ...TREND_QUERIES.map((q) => timeoutPromise(searchX(q, SP.views, null), 14000)),
-      ...TREND_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('', 'week'), null), 14000)),
+      ...TREND_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('', 'month'), null), 14000)),
     ])
-    const weekTracks = videosToTracks(trendPages.flatMap((p) => p?.videos ?? []), 'tr')
-    let trending = islamicOnly(weekTracks)
-      .filter((t) => (t.playCount ?? 0) > 0)
-      .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
-      .slice(0, 10)
+    const trendTracks = islamicOnly(
+      videosToTracks(trendPages.flatMap((p) => p?.videos ?? []), 'tr')
+    ).filter((t) => (t.playCount ?? 0) > 0)
 
-    // hafte kam pad jaye to month filter ka backup
+    // FAMOUS-FIRST — famous launches upar; famous < 8 ho to top-viewed
+    // islamic recent se fill (Top 10 poora rahe — junk last me hi)
+    const rankedAll = rankFamousFirst(trendTracks)
+    const famousRanked = famousOnly(rankedAll)
+    let trending = (famousRanked.length >= 8 ? famousRanked : rankedAll).slice(0, 10)
+
+    // month kam pad jaye to year window ka backup (famous launches rare
+    // weeks me — Urdu naat/qawwali supply na toote)
     if (trending.length < 8) {
-      const monthPages = await Promise.all(
-        TREND_QUERIES.slice(0, 2).map((q) => timeoutPromise(searchX(q, paramsFor('', 'month'), null), 14000))
+      const yearPages = await Promise.all(
+        TREND_QUERIES.slice(0, 4).map((q) => timeoutPromise(searchX(q, paramsFor('', 'year'), null), 14000))
       )
-      const monthTracks = videosToTracks(monthPages.flatMap((p) => p?.videos ?? []), 'tr')
-      const merged = islamicOnly(monthTracks)
-        .filter((t) => (t.playCount ?? 0) > 0)
-        .sort((a, b) => (b.playCount ?? 0) - (a.playCount ?? 0))
-        .slice(0, 10)
-      if (merged.length > trending.length) trending = merged
+      const yearTracks = islamicOnly(
+        videosToTracks(yearPages.flatMap((p) => p?.videos ?? []), 'tr')
+      ).filter((t) => (t.playCount ?? 0) > 0)
+      const merged = rankFamousFirst([...trendTracks, ...yearTracks])
+      const mergedFamous = famousOnly(merged)
+      if (merged.length > trending.length) {
+        trending = (mergedFamous.length >= 8 ? mergedFamous : merged).slice(0, 10)
+      }
     }
 
     // network bilkul fail → verified classics dikha do (kabhi khali nahi)
@@ -254,12 +279,17 @@ export async function getLiveFeed(topArtist: string | null): Promise<LiveFeedDat
         .map((e, i) => poolToTrack(e, i))
     }
 
-    // ── 2. FRESH — brand new uploads (date sort, 3 parallel) ──
+    // ── 2. FRESH — v0.5.43 SIRF famous-channel NEW launches ──
+    // user report: "aaj ke naye kalam me kuch bhi aajat hai" — generic
+    // date-sort random channels ke 0-view uploads la raha tha. Ab strict
+    // famous-only (koi junk fill nahi — 0 mile to section chhup jata hai
+    // aur buildFeed ka verified-pool fallback chalta hai).
     const freshPages = await Promise.all(
       FRESH_QUERIES.map((q) => timeoutPromise(searchX(q, paramsFor('date', ''), null), 14000))
     )
     const freshVideos = freshPages.flatMap((p) => p?.videos ?? [])
-    const fresh = islamicOnly(videosToTracks(freshVideos, 'fr')).slice(0, 30)
+    const freshAll = islamicOnly(videosToTracks(freshVideos, 'fr'))
+    const fresh = famousOnly(rankFamousFirst(freshAll)).slice(0, 30)
 
     // ── 3. CATEGORY SETS — mixes/moods ke liye (4 parallel, views sort) ──
     const catPages = await Promise.all(
